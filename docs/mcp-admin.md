@@ -1,63 +1,34 @@
 # MCP tools for competition administration
 
-Alongside the public, read-only [MCP tools](mcp.md) at `/mcp/`,
-`tournamentcontrol.competition` publishes a second
-[Model Context Protocol](https://modelcontextprotocol.io/) server for
-*competition administrators*, intended to be mounted at `/admin/mcp/`. It
-does the work an administrator does in the admin site: building a
-competition up from scratch, clubs, people and team squads, scheduling,
-result entry, referee appointments and live streaming. The read-only tools
-are available on it too, with
-administrator visibility (disabled competitions and draft divisions
-included).
+Alongside the public, read-only [MCP tools](mcp.md) at `/mcp/`, `tournamentcontrol.competition` publishes a second [Model Context Protocol](https://modelcontextprotocol.io/) server for *competition administrators*, intended to be mounted at `/admin/mcp/`. It does the work an administrator does in the admin site: building a competition up from scratch, clubs, people and team squads, scheduling, result entry, referee appointments and live streaming.
+The read-only tools are available on it too, with administrator visibility (disabled competitions and draft divisions included).
 
-The tools live in `tournamentcontrol/competition/mcp/admin/` and are served
-by `AdminMCPView` in `tournamentcontrol/competition/mcp/views.py`.
+The tools live in `tournamentcontrol/competition/mcp/admin/` and are served by `AdminMCPView` in `tournamentcontrol/competition/mcp/views.py`.
 
 ## Authentication
 
-The administration endpoint requires a signed-in **staff** user, the same
-gate as the admin site. A client identifies itself the way any other HTTP
-client of the site does:
+The administration endpoint requires a signed-in **staff** user, the same gate as the admin site.
+A client identifies itself the way any other HTTP client of the site does:
 
 - a Django **session cookie**, recognised by the authentication middleware;
-- an OAuth 2.0 **bearer token** in the `Authorization` header, handed to the
-  configured authentication backends with `django.contrib.auth.authenticate`
-  so a backend that understands access tokens can turn it into
-  `request.user`.
+- an OAuth 2.0 **bearer token** in the `Authorization` header, handed to the configured authentication backends with `django.contrib.auth.authenticate` so a backend that understands access tokens can turn it into `request.user`.
 
-An anonymous caller is answered with `401 Unauthorized` and a
-`WWW-Authenticate: Bearer resource_metadata="…"` challenge (RFC 9728). That
-header is what lets an MCP client find out, with no configuration beyond
-the URL, how to obtain a token:
+An anonymous caller is answered with `401 Unauthorized` and a `WWW-Authenticate: Bearer resource_metadata="…"` challenge (RFC 9728).
+That header is what lets an MCP client find out, with no configuration beyond the URL, how to obtain a token:
 
-1. it fetches the **protected resource metadata** named in the challenge
-   (`/.well-known/oauth-protected-resource/admin/mcp/`), which names the
-   authorization server;
-2. it fetches the **authorization server metadata** (RFC 8414) to find the
-   authorization, token and registration endpoints;
-3. it **registers itself** dynamically (RFC 7591) as a public client with
-   its redirect URL;
-4. it opens the browser on the **authorization endpoint**; the person signs
-   in to the site (the usual login page) and approves the client;
-5. it exchanges the code for an access token and a refresh token with
-   **PKCE** (RFC 7636), and retries the call with the token.
+1. it fetches the **protected resource metadata** named in the challenge (`/.well-known/oauth-protected-resource/admin/mcp/`), which names the authorization server;
+2. it fetches the **authorization server metadata** (RFC 8414) to find the authorization, token and registration endpoints;
+3. it **registers itself** dynamically (RFC 7591) as a public client with its redirect URL;
+4. it opens the browser on the **authorization endpoint**; the person signs in to the site (the usual login page) and approves the client;
+5. it exchanges the code for an access token and a refresh token with **PKCE** (RFC 7636), and retries the call with the token.
 
-This is the flow in the MCP authorization specification and it is what
-Claude Code, Claude.ai and ChatGPT connectors, Cursor and the MCP inspector
-all implement. Tokens are bound to the resource they were requested for
-(RFC 8707), so a token obtained for `/admin/mcp/` is not accepted anywhere
-else on the site.
+This is the flow in the MCP authorization specification and it is what Claude Code, Claude.ai and ChatGPT connectors, Cursor and the MCP inspector all implement.
+Tokens are bound to the resource they were requested for (RFC 8707), so a token obtained for `/admin/mcp/` is not accepted anywhere else on the site.
 
 ### The authorization server: django-oauth-toolkit
 
-Rather than ship a bespoke authorization server, the project relies on
-[django-oauth-toolkit](https://django-oauth-toolkit.readthedocs.io/) (3.4 or
-later), which implements everything the flow needs: PKCE, dynamic client
-registration, the RFC 8414 and RFC 9728 discovery documents, resource
-indicators, refresh token rotation and hashed-at-rest tokens, and gives
-users a page to review and revoke the clients they have authorised. It is
-installed with the `competition` extra.
+Rather than ship a bespoke authorization server, the project relies on [django-oauth-toolkit](https://django-oauth-toolkit.readthedocs.io/) (3.4 or later), which implements everything the flow needs: PKCE, dynamic client registration, the RFC 8414 and RFC 9728 discovery documents, resource indicators, refresh token rotation and hashed-at-rest tokens, and gives users a page to review and revoke the clients they have authorised.
+It is installed with the `competition` extra.
 
 1. Add the application and its authentication backend:
 
@@ -105,9 +76,8 @@ installed with the `competition` extra.
     }
     ```
 
-3. Route the endpoints. The discovery documents must be served from the
-   site root (`/.well-known/...`); the authorization server itself can live
-   under a prefix:
+3. Route the endpoints.
+   The discovery documents must be served from the site root (`/.well-known/...`); the authorization server itself can live under a prefix:
 
     ```python
     from oauth2_provider.urls import metadata_urlpatterns
@@ -127,16 +97,9 @@ installed with the `competition` extra.
     ]
     ```
 
-4. Run `migrate` to create the provider's tables, and serve the site over
-   HTTPS (the discovery documents and the token endpoint are only trusted
-   over `https`; `http` is accepted for `localhost` during development).
+4. Run `migrate` to create the provider's tables, and serve the site over HTTPS (the discovery documents and the token endpoint are only trusted over `https`; `http` is accepted for `localhost` during development).
 
-A person can see and revoke the clients they have authorised at
-`/o/authorized_tokens/`. The `OAUTH2_PROVIDER` setting is documented in
-full by django-oauth-toolkit; the `MCP_NAME`/`MCP_INSTRUCTIONS` settings of
-the public server have `TOURNAMENTCONTROL_MCP_ADMIN_NAME` and
-`TOURNAMENTCONTROL_MCP_ADMIN_INSTRUCTIONS` counterparts for this one (the
-instructions fall back to the public ones).
+A person can see and revoke the clients they have authorised at `/o/authorized_tokens/`. The `OAUTH2_PROVIDER` setting is documented in full by django-oauth-toolkit; the `MCP_NAME`/`MCP_INSTRUCTIONS` settings of the public server have `TOURNAMENTCONTROL_MCP_ADMIN_NAME` and `TOURNAMENTCONTROL_MCP_ADMIN_INSTRUCTIONS` counterparts for this one (the instructions fall back to the public ones).
 
 ### Connecting Claude Code
 
@@ -144,19 +107,12 @@ instructions fall back to the public ones).
 claude mcp add --transport http tournamentcontrol-admin https://example.com/admin/mcp/
 ```
 
-The first call is refused with the challenge above, and Claude Code offers
-to authenticate (`/mcp` → the server → *Authenticate*): it opens the
-browser on the site's login page, the person signs in and approves the
-client, and the token is stored for future sessions and refreshed as it
-expires. The same URL works as a custom connector in Claude.ai, where the
-flow is identical.
+The first call is refused with the challenge above, and Claude Code offers to authenticate (`/mcp` → the server → *Authenticate*): it opens the browser on the site's login page, the person signs in and approves the client, and the token is stored for future sessions and refreshed as it expires.
+The same URL works as a custom connector in Claude.ai, where the flow is identical.
 
 ## Authorization
 
-Being signed in is not enough: each tool checks the model permission the
-equivalent admin view checks, accepted either globally or on the specific
-record through django-guardian, exactly as `generic_edit` and
-`generic_delete` in `touchtechnology.common.sites` do.
+Being signed in is not enough: each tool checks the model permission the equivalent admin view checks, accepted either globally or on the specific record through django-guardian, exactly as `generic_edit` and `generic_delete` in `touchtechnology.common.sites` do.
 
 | Tools | Permission |
 | --- | --- |
@@ -170,16 +126,12 @@ record through django-guardian, exactly as `generic_edit` and
 | `list_people` (it reveals contact details) | `competition.change_person`, or `competition.change_club` for the club when `club_id` is given |
 | other `list_*` tools and the inherited read tools | a staff user |
 
-A superuser has every permission. Anyone else needs the permissions granted
-from the admin site's users and groups pages, or on individual
-competitions, seasons and teams from their permissions tab.
+A superuser has every permission.
+Anyone else needs the permissions granted from the admin site's users and groups pages, or on individual competitions, seasons and teams from their permissions tab.
 
 ## Tools
 
-Every tool that changes data returns `saved: true` with the record as
-saved; a tool that cannot proceed returns an error result whose message
-explains why (missing permission, record not found, a validation failure
-from the form, or a rule such as "the stream key is in use").
+Every tool that changes data returns `saved: true` with the record as saved; a tool that cannot proceed returns an error result whose message explains why (missing permission, record not found, a validation failure from the form, or a rule such as "the stream key is in use").
 
 ### Building a competition
 
@@ -197,14 +149,9 @@ from the form, or a rule such as "the stream key is in use").
 | `create_pool(stage_id, title)`, `update_pool(pool_id, team_ids, …)`, `delete_pool` | `StageGroupForm`; membership can only change while the pool has no matches. |
 | `create_match(stage_id, home_team_id, away_team_id, date, time, place_id, …)`, `update_match`, `delete_match` | `AgentMatchEditForm` (or `AgentMatchStreamForm` in a live streamed season), then the scheduling rules below for the date, time and place. A side can instead be an eval (`home_team_eval` "P1", "G2P3", "S1G1P2", or "W"/"L" with `home_team_eval_related_id`), validated as described under [Draws](#draws). `create_match(is_bye=true)` creates a bye (one team, no time or place); `update_match(is_bye=true, clear_away_team=true)` converts an unplayed match into a bye, releasing its time, ground and referees, and `update_match(is_bye=false, away_team_id=…)` turns an unprocessed bye back into an unscheduled match. |
 
-`get_team` on this server also lists the team's squad (see
-[Clubs, people and squads](#clubs-people-and-squads)).
+`get_team` on this server also lists the team's squad (see [Clubs, people and squads](#clubs-people-and-squads)).
 
-Only the arguments given to an `update_*` tool are changed: the form is
-bound to the record's current values with the changes laid over them, so
-the validation and side effects of a form submission from the admin site
-apply (for example changing a division's points formula recalculates its
-ladders, and changing a venue's time zone recomputes kick-off instants).
+Only the arguments given to an `update_*` tool are changed: the form is bound to the record's current values with the changes laid over them, so the validation and side effects of a form submission from the admin site apply (for example changing a division's points formula recalculates its ladders, and changing a venue's time zone recomputes kick-off instants).
 
 #### Bulk creation
 
@@ -219,26 +166,17 @@ Records of the same kind are best added in one call:
 | `create_pools(pools=[{stage_id, title, …}, …])` | Several pools, each with the arguments of `create_pool`. |
 | `create_people(people=[{club_id, first_name, last_name, gender, …}, …])` | Several people, each in the club it names (see [Clubs, people and squads](#clubs-people-and-squads)). |
 
-A bulk tool takes up to 50 items, each with the arguments of the
-single-record tool including its parent, so one call can fill several
-parents; an argument the single-record tool does not take is refused. The records are created in the order given (each ordered after
-those before it) through the same form as the single-record tool, in one
-transaction: if any item is refused nothing is saved, and the error names
-every item that failed and why. The response lists each record's id,
-title and slug, or the full record with `verbose=true`.
+A bulk tool takes up to 50 items, each with the arguments of the single-record tool including its parent, so one call can fill several parents; an argument the single-record tool does not take is refused.
+The records are created in the order given (each ordered after those before it) through the same form as the single-record tool, in one transaction: if any item is refused nothing is saved, and the error names every item that failed and why.
+The response lists each record's id, title and slug, or the full record with `verbose=true`.
 
-Titles, short titles, labels and names are stored as plain text and
-escaped when rendered, so "Hit & Run" is stored as typed (slug `hit-run`).
-The server never escapes them; some MCP clients HTML-escape the arguments
-they relay, so entities in these fields ("Hit &amp; Run") are decoded
-before saving.
+Titles, short titles, labels and names are stored as plain text and escaped when rendered, so "Hit & Run" is stored as typed (slug `hit-run`).
+The server never escapes them; some MCP clients HTML-escape the arguments they relay, so entities in these fields ("Hit &amp; Run") are decoded before saving.
 
 ### Clubs, people and squads
 
-A person belongs to a club (`Person.club`), a team's squad is drawn from the
-people of its club, and a team's club is one of its competition's clubs.
-These tools go through the forms the admin site and the club registration
-pages use, so the three agree on every rule.
+A person belongs to a club (`Person.club`), a team's squad is drawn from the people of its club, and a team's club is one of its competition's clubs.
+These tools go through the forms the admin site and the club registration pages use, so the three agree on every rule.
 
 | Tool | Does |
 | --- | --- |
@@ -253,72 +191,41 @@ pages use, so the three agree on every rule.
 | `set_team_squad(team_id, members, replace)` | Adds people to a team, or changes those already in it, through `TeamAssociationFormSet` (up to 100, all or none). A member is `{person_uuid, number, is_player, role_ids}`; `{first_name, last_name, gender, date_of_birth, email, mobile_phone}` in place of `person_uuid` creates the person in the team's club first. Only what is given changes for a person already in the team; `clear_number` takes their number away and an empty `role_ids` their roles. `replace=true` makes the squad exactly the members given. The response lists `people_created`, `added`, `updated`, `removed`, `club_created` and the squad as saved. |
 | `remove_team_member(team_id, person_uuid)` | Takes one person out of a team; the person is kept. |
 
-`update_team(club_id=…)` and `create_team(club_id=…)` are refused for a club
-that is not linked to the team's competition, with a message naming the
-`link_competition_clubs` call that fixes it.
+`update_team(club_id=…)` and `create_team(club_id=…)` are refused for a club that is not linked to the team's competition, with a message naming the `link_competition_clubs` call that fixes it.
 
 #### Rules shared with the admin site
 
-These live in the models and forms, so the admin site, the club registration
-pages and the tools apply the same ones:
+These live in the models and forms, so the admin site, the club registration pages and the tools apply the same ones:
 
-- **People come from the team's club.** `TeamAssociationForm` only offers
-  `team.club.members`; the tool names the person's own club when it refuses
-  one.
-- **A number is worn once in a team.** `TeamAssociationForm` checks a number
-  against the rest of the team, and `TeamAssociationFormSet` compares the
-  people saved together, so two people can exchange numbers in one
-  submission. Only a number that was changed is checked: a team that already
-  has a number twice can still be saved as it stands.
-- **A person with statistics for a team stays in it**
-  (`TeamAssociationQuerySet.removable()`). `set_team_squad(replace=true)`,
-  `remove_team_member`, the registration formset and the admin's delete view
-  all refuse to take them out.
+- **People come from the team's club.** `TeamAssociationForm` only offers `team.club.members`; the tool names the person's own club when it refuses one.
+- **A number is worn once in a team.** `TeamAssociationForm` checks a number against the rest of the team, and `TeamAssociationFormSet` compares the people saved together, so two people can exchange numbers in one submission.
+  Only a number that was changed is checked: a team that already has a number twice can still be saved as it stands.
+- **A person with statistics for a team stays in it** (`TeamAssociationQuerySet.removable()`). `set_team_squad(replace=true)`, `remove_team_member`, the registration formset and the admin's delete view all refuse to take them out.
 - **Roles belong to the competition** (`competition.team_roles`).
 
 #### Teams without a club
 
-A competition without clubs is valid (a social competition, where the team
-is all there is), but a person cannot exist without a club. A team without a
-club is therefore given one before it has people, by `Team.ensure_club()`:
+A competition without clubs is valid (a social competition, where the team is all there is), but a person cannot exist without a club.
+A team without a club is therefore given one before it has people, by `Team.ensure_club()`:
 
-1. the team takes the club of its competition that has its name (or the
-   address a club of its name would have), if there is one; otherwise
-2. a club named after the team is created, added to the competition's clubs
-   and given to the team.
+1. the team takes the club of its competition that has its name (or the address a club of its name would have), if there is one; otherwise
+2. a club named after the team is created, added to the competition's clubs and given to the team.
 
-A club is not created when a club outside the competition already has the
-name: the same people may have entered another competition, but that is not
-assumed. The error names that club and says to add it to the competition's
-clubs and give it to the team (`link_competition_clubs`, `update_team`), or
-to create a club of another name (`create_club`).
+A club is not created when a club outside the competition already has the name: the same people may have entered another competition, but that is not assumed.
+The error names that club and says to add it to the competition's clubs and give it to the team (`link_competition_clubs`, `update_team`), or to create a club of another name (`create_club`).
 
-`set_team_squad` does this in the same transaction as the squad, so
-"add these players to this team" is one call and nothing is kept if the
-squad is refused. In the admin site, adding a person to a team without a
-club leads to a page that offers to give the team its club; before, that
-page raised an error. Both ask `Team.ensure_club_permissions()` what it
-takes, which is what doing it by hand takes: `competition.change_team` on
-the team and, when a club has to be created, `competition.add_club` and
-`competition.change_competition`.
+`set_team_squad` does this in the same transaction as the squad, so "add these players to this team" is one call and nothing is kept if the squad is refused.
+In the admin site, adding a person to a team without a club leads to a page that offers to give the team its club; before, that page raised an error.
+Both ask `Team.ensure_club_permissions()` what it takes, which is what doing it by hand takes: `competition.change_team` on the team and, when a club has to be created, `competition.add_club` and `competition.change_competition`.
 
-Once a competition has a club it is a competition with clubs: the team form
-offers a club for every team in it (the name of a team is then optional and
-defaults to its club's), and the public site lists the club with the
-season's clubs.
+Once a competition has a club it is a competition with clubs: the team form offers a club for every team in it (the name of a team is then optional and defaults to its club's), and the public site lists the club with the season's clubs.
 
-This is a stopgap for the data model, in which a person has exactly one
-club; [#649](https://github.com/goodtune/vitriolic/issues/649) proposes
-people in teams without a club and membership of several clubs.
+This is a stopgap for the data model, in which a person has exactly one club; [#649](https://github.com/goodtune/vitriolic/issues/649) proposes people in teams without a club and membership of several clubs.
 
 ### Draws
 
-Rather than create a season's matches one call at a time, an agent sets up
-the same inputs an administrator gives the admin site's Draw Generation
-wizard and asks the server to build the draw. The wizard's form
-(`DrawGenerationForm`), the division structure builder and `build_draw`
-share `tournamentcontrol.competition.draw.services.generate_stage_draw`, so
-the same inputs always build the same matches.
+Rather than create a season's matches one call at a time, an agent sets up the same inputs an administrator gives the admin site's Draw Generation wizard and asks the server to build the draw.
+The wizard's form (`DrawGenerationForm`), the division structure builder and `build_draw` share `tournamentcontrol.competition.draw.services.generate_stage_draw`, so the same inputs always build the same matches.
 
 | Tool | Does |
 | --- | --- |
@@ -331,35 +238,20 @@ the same inputs always build the same matches.
 | `get_timeslots(season_id, date)` | The kick-off times the rules produce (`Season.get_timeslots`). |
 | `build_draw(builds, dry_run, replace_existing, verbose)` | Builds stages or pools from formats in one atomic call (up to 50). Each build gives `stage_id` or `pool_id`, `draw_format_id` or `draw_format_text`, `start_date`, `rounds` (repeating the format), `offset` and `alternate_home_away_on_repeat`. Dates follow the season's mode and skip excluded dates; W/L references are wired to `*_eval_related`. `dry_run` returns the plan (exactly what a real run saves) without saving; existing matches are refused unless `replace_existing`, which deletes those without results. |
 
-An eval on `create_match` / `update_match` (`AgentMatchEditForm`) is checked
-before it is saved: a side is one of a team, an undecided team or an eval;
-a positional eval must name an earlier stage (by default the one this stage
-follows), an existing pool and a position within its team count; a W or L
-eval needs a related match of the same division in an earlier stage or an
-earlier round of the same stage, which rules out self references and
-cycles. Placeholder sides are serialised with their eval:
-`{"id": null, "title": "Winner Semi 1", "eval": "W", "eval_related_id": 599}`,
-and a side with nothing to decide it is titled "TBA".
+An eval on `create_match` / `update_match` (`AgentMatchEditForm`) is checked before it is saved: a side is one of a team, an undecided team or an eval; a positional eval must name an earlier stage (by default the one this stage follows), an existing pool and a position within its team count; a W or L eval needs a related match of the same division in an earlier stage or an earlier round of the same stage, which rules out self references and cycles.
+Placeholder sides are serialised with their eval: `{"id": null, "title": "Winner Semi 1", "eval": "W", "eval_related_id": 599}`, and a side with nothing to decide it is titled "TBA".
 
 ### Scheduling
 
-Every tool that sets a match's date or time applies the same rules
-(`tournamentcontrol.competition.mcp.admin.scheduling.ScheduleValidator`):
+Every tool that sets a match's date or time applies the same rules (`tournamentcontrol.competition.mcp.admin.scheduling.ScheduleValidator`):
 
-1. the date is not before the season starts nor excluded for the season or
-   the division (`Match.clean`);
-2. when the season has time slot rules, the time is one of the date's slots
-   ("19:00 is not a time slot on 2026-10-14; valid: 18:40, 19:30, 20:20");
+1. the date is not before the season starts nor excluded for the season or the division (`Match.clean`);
+2. when the season has time slot rules, the time is one of the date's slots ("19:00 is not a time slot on 2026-10-14; valid: 18:40, 19:30, 20:20");
 3. the teams' time preferences are respected (`MatchScheduleForm`);
-4. unless `ignore_clashes`: no other match at the same place and time, no
-   team playing twice at the same time, and no declared team clash, checked
-   against the database and against the other matches of the same batch.
+4. unless `ignore_clashes`: no other match at the same place and time, no team playing twice at the same time, and no declared team clash, checked against the database and against the other matches of the same batch.
 
-`ignore_clashes` waives rules 3 and 4 only, as in the admin scheduler; it
-never waives an excluded date or a time slot. A match has no database
-constraint against two matches sharing a place and time, so the tools take a
-row lock on the season while they check clashes and save, and concurrent
-calls are applied one after the other.
+`ignore_clashes` waives rules 3 and 4 only, as in the admin scheduler; it never waives an excluded date or a time slot.
+A match has no database constraint against two matches sharing a place and time, so the tools take a row lock on the season while they check clashes and save, and concurrent calls are applied one after the other.
 
 | Tool | Does |
 | --- | --- |
@@ -368,9 +260,8 @@ calls are applied one after the other.
 | `auto_schedule(season_id, date, place_ids, stage_ids, ignore_clashes, dry_run)` | Fills a date's time slots × grounds grid with that date's unscheduled matches: matches in division, stage, pool, round and id order each take the first free cell, slots earliest first and grounds in the order given, skipping cells that break a rule for that match. |
 | `swap_match_allocations(match_id, other_match_id, ignore_clashes)` | Exchanges the date, time and place of two matches of the same season; every rule above applies to each match in its new slot. |
 
-A match that is live streamed is not moved off a streamed ground and is
-never swapped: remove its live stream first. Moving it between streamed
-grounds resynchronises its broadcast.
+A match that is live streamed is not moved off a streamed ground and is never swapped: remove its live stream first.
+Moving it between streamed grounds resynchronises its broadcast.
 
 ### Withdrawals
 
@@ -406,20 +297,12 @@ grounds resynchronises its broadcast.
 | `delete_season_stream_event(season_id, event_id)` | The broadcast is removed from YouTube first; one already gone counts as removed. |
 | `resync_season_stream_event(season_id, event_id)` | Runs `sync_live_stream_event` in the request: updates the broadcast's title, description, schedule and stream key binding, or removes it for a withdrawn event. Returns `action`, the broadcast id, link and bound stream; a rejection by YouTube is the error result. A broadcast that no longer exists on YouTube cannot be recreated under the event's id, which is reported as an error. Safe to repeat. |
 
-The YouTube side effects are the ones the admin views perform around the
-forms (`edit_ground`, `edit_livestreamkey`, `delete_livestreamkey`,
-`edit_livestreamevent`, `delete_livestreamevent`, `edit_match`,
-`resync_match_live_stream`); they need the season's YouTube credentials and
-authorisation, which are configured from the admin site. The `enable`,
-`disable`, `create` and `update` tools queue the broadcast synchronisation
-as the admin views do; the `resync` tools run it before answering so the
-outcome can be reported.
+The YouTube side effects are the ones the admin views perform around the forms (`edit_ground`, `edit_livestreamkey`, `delete_livestreamkey`, `edit_livestreamevent`, `delete_livestreamevent`, `edit_match`, `resync_match_live_stream`); they need the season's YouTube credentials and authorisation, which are configured from the admin site.
+The `enable`, `disable`, `create` and `update` tools queue the broadcast synchronisation as the admin views do; the `resync` tools run it before answering so the outcome can be reported.
 
 ### Compact responses
 
-`create_match`, `update_match`, `reschedule_match`, `record_match_result`
-and `create_team` take `verbose`. With `verbose=false` a match is returned
-as its identifiers and scheduling fields only:
+`create_match`, `update_match`, `reschedule_match`, `record_match_result` and `create_team` take `verbose`. With `verbose=false` a match is returned as its identifiers and scheduling fields only:
 
 ```json
 {"saved": true, "match": {"id": 451, "round": 1, "date": "2026-10-07",
@@ -427,69 +310,33 @@ as its identifiers and scheduling fields only:
  "status": "upcoming"}}
 ```
 
-`build_draw`, `schedule_matches` and `auto_schedule` are compact unless
-`verbose=true`.
+`build_draw`, `schedule_matches` and `auto_schedule` are compact unless `verbose=true`.
 
 ## Changelog
 
-- **Clubs, people and squads.** `list_clubs`, `create_club`, `update_club`,
-  `link_competition_clubs`, `unlink_competition_clubs`, `list_team_roles`,
-  `create_team_role`, `list_people`, `create_people`, `update_person`,
-  `delete_person`, `set_team_squad` and `remove_team_member`; `get_team`
-  lists the squad. A team without a club is given one when it gets a squad,
-  from the tools and from the admin site. Three rules are now applied by the
-  admin site as well as the tools: a number is worn once in a team, a person
-  with statistics for a team is not taken out of it, and a club cannot take
-  the address of another (see
-  [Clubs, people and squads](#clubs-people-and-squads)).
-- **Byes awaiting results.** `list_matches_awaiting_results`, the admin
-  dashboard's Awaiting Scores, the home page's "Enter results" task and the
-  season's set-up checklist share one definition of a match waiting for a
-  result. A processed bye is never listed, even one given a kick-off time,
-  and a bye not yet processed is listed once its own season has kicked off
-  a match on its day or later: the day of another season, or of the
-  server's clock, no longer counts.
-- **Bulk creation.** `create_grounds`, `create_divisions`, `create_teams`,
-  `create_stages` and `create_pools` add several records in one call, all
-  or none (see [Bulk creation](#bulk-creation)). Rebuilding the demo
-  competition takes 7 calls for its records instead of 40.
-- **Byes and withdrawals.** `create_match(is_bye=true)` creates a single
-  bye; `update_match` gained `is_bye`, `clear_home_team` and
-  `clear_away_team` to convert an unplayed match to a bye (releasing its
-  slot and referees) and an unprocessed bye back to a match; the new
-  `withdraw_team` turns a team's remaining matches into byes for the
-  opponents without rebuilding the draw. `delete_team` points to it.
-- **MySideline matches.** `list_matches_awaiting_results` (like the admin
-  dashboard's Awaiting Scores and the season results page) no longer lists
-  matches mirrored from MySideline, whose results come from MySideline. The
-  dashboard's Awaiting Detailed Results widget and the detailed results on
-  the season results page leave them out as well.
-- **Draw building and batch scheduling.** Draw format, exclusion date and
-  time slot tools, `build_draw`, `schedule_matches` and `auto_schedule`;
-  eval fields on `create_match` / `update_match`; time slot rules enforced on
-  every scheduling path; a team can no longer be scheduled twice at the same
-  time (unless `ignore_clashes`).
-- **Response size.** The match tools listed under
-  [Compact responses](#compact-responses) gained `verbose`. It defaults to
-  `true` (the full match, as before) for this release; the next release
-  will default it to `false`. Clients that read the full match from these
-  tools should pass `verbose=true` explicitly.
-- **Escaped titles.** Match titles rendered as HTML escape team and pool
-  titles (they were inserted with `|safe`, so markup in a title reached the
-  page); the plain-text forms (`get_home_team_plain`, the REST API and the
-  MCP tools) return titles as written.
-- **Placeholder titles.** A side of a match with no team, undecided team or
-  eval is titled "TBA" (it was the string "None") in the MCP tools, the REST
-  API and the web pages; an eval that cannot be read is shown as written.
+- **Clubs, people and squads.** `list_clubs`, `create_club`, `update_club`, `link_competition_clubs`, `unlink_competition_clubs`, `list_team_roles`, `create_team_role`, `list_people`, `create_people`, `update_person`, `delete_person`, `set_team_squad` and `remove_team_member`; `get_team` lists the squad.
+  A team without a club is given one when it gets a squad, from the tools and from the admin site.
+  Three rules are now applied by the admin site as well as the tools: a number is worn once in a team, a person with statistics for a team is not taken out of it, and a club cannot take the address of another (see [Clubs, people and squads](#clubs-people-and-squads)).
+- **Byes awaiting results.** `list_matches_awaiting_results`, the admin dashboard's Awaiting Scores, the home page's "Enter results" task and the season's set-up checklist share one definition of a match waiting for a result.
+  A processed bye is never listed, even one given a kick-off time, and a bye not yet processed is listed once its own season has kicked off a match on its day or later: the day of another season, or of the server's clock, no longer counts.
+- **Bulk creation.** `create_grounds`, `create_divisions`, `create_teams`, `create_stages` and `create_pools` add several records in one call, all or none (see [Bulk creation](#bulk-creation)).
+  Rebuilding the demo competition takes 7 calls for its records instead of 40.
+- **Byes and withdrawals.** `create_match(is_bye=true)` creates a single bye; `update_match` gained `is_bye`, `clear_home_team` and `clear_away_team` to convert an unplayed match to a bye (releasing its slot and referees) and an unprocessed bye back to a match; the new `withdraw_team` turns a team's remaining matches into byes for the opponents without rebuilding the draw. `delete_team` points to it.
+- **MySideline matches.** `list_matches_awaiting_results` (like the admin dashboard's Awaiting Scores and the season results page) no longer lists matches mirrored from MySideline, whose results come from MySideline.
+  The dashboard's Awaiting Detailed Results widget and the detailed results on the season results page leave them out as well.
+- **Draw building and batch scheduling.**
+  Draw format, exclusion date and time slot tools, `build_draw`, `schedule_matches` and `auto_schedule`; eval fields on `create_match` / `update_match`; time slot rules enforced on every scheduling path; a team can no longer be scheduled twice at the same time (unless `ignore_clashes`).
+- **Response size.**
+  The match tools listed under [Compact responses](#compact-responses) gained `verbose`. It defaults to `true` (the full match, as before) for this release; the next release will default it to `false`. Clients that read the full match from these tools should pass `verbose=true` explicitly.
+- **Escaped titles.**
+  Match titles rendered as HTML escape team and pool titles (they were inserted with `|safe`, so markup in a title reached the page); the plain-text forms (`get_home_team_plain`, the REST API and the MCP tools) return titles as written.
+- **Placeholder titles.**
+  A side of a match with no team, undecided team or eval is titled "TBA" (it was the string "None") in the MCP tools, the REST API and the web pages; an eval that cannot be read is shown as written.
 
 ## Tool annotations
 
-The read tools carry `readOnlyHint: true`; every tool that changes data is
-published with `readOnlyHint: false`, `destructiveHint: true` where it
-deletes or withdraws something, `idempotentHint: true` where repeating it
-has no further effect, and `openWorldHint: true` where it also acts on
-YouTube. Clients use these to decide when to ask the person before running
-a tool.
+The read tools carry `readOnlyHint: true`; every tool that changes data is published with `readOnlyHint: false`, `destructiveHint: true` where it deletes or withdraws something, `idempotentHint: true` where repeating it has no further effect, and `openWorldHint: true` where it also acts on YouTube.
+Clients use these to decide when to ask the person before running a tool.
 
 ## Testing
 
@@ -497,13 +344,4 @@ a tool.
 uvx tox -e dj52-py313 -- tournamentcontrol.competition.tests.test_mcp_admin tournamentcontrol.competition.tests.test_mcp_admin_draw tournamentcontrol.competition.tests.test_mcp_admin_people
 ```
 
-The tests call the toolset directly with a fake request, drive the tools
-over JSON-RPC through the HTTP endpoint with a session, and run the
-complete OAuth flow (registration, authorization with PKCE, token exchange,
-refresh) against django-oauth-toolkit before calling the tools with the
-bearer token. `tests/e2e/test_mcp_admin_client.py` rebuilds a demo
-competition (three divisions, 153 matches including finals) with the MCP
-client: 40 calls create its records one at a time (competition, season,
-venue, grounds, divisions, stages and teams), then 11 calls set up the time
-slots, exclusions and draw formats, build the draw and schedule it, where
-building and scheduling the matches one at a time took about 150.
+The tests call the toolset directly with a fake request, drive the tools over JSON-RPC through the HTTP endpoint with a session, and run the complete OAuth flow (registration, authorization with PKCE, token exchange, refresh) against django-oauth-toolkit before calling the tools with the bearer token. `tests/e2e/test_mcp_admin_client.py` rebuilds a demo competition (three divisions, 153 matches including finals) with the MCP client: 40 calls create its records one at a time (competition, season, venue, grounds, divisions, stages and teams), then 11 calls set up the time slots, exclusions and draw formats, build the draw and schedule it, where building and scheduling the matches one at a time took about 150.

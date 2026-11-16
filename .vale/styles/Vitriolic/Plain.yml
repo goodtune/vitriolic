@@ -1,0 +1,11 @@
+extends: substitution
+message: "Use '%s' instead of '%s'."
+level: error
+ignorecase: true
+swap:
+  "eg\\.": for example
+  "ie\\.": that is
+  in order to: to
+  leverag(?:e|es|ed|ing): use
+  make use of: use
+  utili[sz](?:e|es|ed|ing): use

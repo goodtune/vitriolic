@@ -2,21 +2,21 @@
 
 This directory is for the testing of this project and covers both unit tests and end-to-end (E2E) or system tests.
 
-## Test Types
+## Test types
 
-### Unit Tests
+### Unit tests
 
 - **Framework**: Django's built-in test framework with `django-test-plus`
 - **Location**: App tests are in the `touchtechnology` and `tournamentcontrol` directories, with `example_app` used to provide models and factories for testing the reusable components.
 - **Purpose**: Test individual components, models, views, and business logic
-- **Execution**: Run via `tox -e dj{version}-py{version}` (e.g., `tox -e dj52-py311`) for the full suite for a specific Django/Python combination
+- **Execution**: Run via `tox -e dj{version}-py{version}` (for example, `tox -e dj52-py311`) for the full suite for a specific Django/Python combination
 
-### End-to-End (E2E) Tests
+### End-to-end (E2E) tests
 
 - **Framework**: Playwright with `pytest-django`
 - **Location**: `tests/e2e/` directory for the test definitions
 - **Purpose**: Test perform end-to-end user flows, including admin functionality, competition management, and ensure performance is acceptable
-- **Execution**: Run via `tox -e e2e` - will run a single Django/Python combination (presently Django 5.2 with Python 3.13) with Chromium browser automation
+- **Execution**: Run via `tox -e e2e`, which runs a single Django/Python combination (presently Django 5.2 with Python 3.13) with Chromium browser automation
 
 ## Setup
 
@@ -24,7 +24,7 @@ This directory is for the testing of this project and covers both unit tests and
 
 - `uv` package manager
 
-## Running Tests
+## Running tests
 
 ### Run all unit combinations
 
@@ -68,28 +68,28 @@ uvx tox -e e2e -- --headed --slowmo=1000
 
 Tests automatically run in GitHub Actions via tox integration in the project's CI workflow.
 
-## Test Structure
+## Test structure
 
-### Unit Tests Structure
+### Unit tests structure
 
 Located in app-specific subdirectories:
 - `tests/example_app/tests/` - Example application unit tests
 - Unit tests for `touchtechnology.*` and `tournamentcontrol.*` modules
 - Use Django's standard test discovery and fixtures
 
-### E2E Tests Structure
+### E2E tests structure
 
 The test definitions for programming automated browser interactions are located in `tests/e2e/`.
 
 ## Configuration
 
-### Test Environment (Managed by tox-docker)
+### Test environment (managed by tox-docker)
 
 - **Django**: Test server using existing project settings specified in `tests/vitriolic/settings.py`
 - **PostgreSQL**: Database for test data
 - **Redis**: Cache and Celery broker
 
-### Browser Configuration
+### Browser configuration
 
 - **Default browser**: Chromium (headless in CI, can be headed locally)
 - **Viewport**: 1920x1080
@@ -103,7 +103,7 @@ The test definitions for programming automated browser interactions are located 
 
 ## Benefits of `tox` Integration
 
-### For Local Development
+### For local development
 
 - **Single command**: `tox -e e2e` handles everything
 - **No manual setup**: No `docker compose` or service management
@@ -118,32 +118,32 @@ The test definitions for programming automated browser interactions are located 
 - **Easier maintenance**: Follows project conventions
 - **Consistent results**: Same environment as local development
 
-### For the Codebase
+### For the codebase
 
 - **Django best practices**: Uses `pytest-django` fixtures properly
 - **Better maintainability**: Standard `pytest-django` patterns
 - **Scalable**: Easy to add more test environments
 
-## Extending Tests
+## Extending tests
 
-### Adding New Tests
+### Adding new tests
 
-#### New Unit Tests
+#### New unit tests
 
 1. Create test files in app-specific `tests/` directories
 2. Use Django's `TestCase` or `TransactionTestCase` classes
 3. Follow Django testing best practices and fixtures
 
-#### New E2E Tests
+#### New E2E tests
 
 1. Create test files in `tests/e2e/` following the pattern `test_*.py`
 2. Use Playwright's `Page` fixture for browser automation
 3. Use `live_server` fixture for Django test server
 4. Use `admin_user` fixture for authenticated admin access
 
-### Example Test Structures
+### Example test structures
 
-#### Unit Test Example
+#### Unit test example
 
 ```python
 from django.contrib.auth import get_user_model
@@ -176,7 +176,7 @@ class MyFeatureTestCase(TestCase):
         self.assertResponseContains("<h1>Protected Content</h1>")
 ```
 
-#### E2E Test Example
+#### E2E test example
 
 ```python
 from playwright.sync_api import Page, expect
@@ -204,7 +204,7 @@ def test_my_feature(page: Page, live_server, admin_user):
 4. **Port conflicts**: `tox-docker` uses available ports automatically
 5. **Failing `subTest` in a parallel run**: the unit tests run with `--parallel auto`. The test runner in `vitriolic/runner.py` (`TEST_RUNNER`) sends a failing `subTest` from the worker while it can still be pickled, so the parent reports the assertion and not `MaybeEncodingError`. Give `subTest(...)` plain values (strings, numbers, tuples of them), not model instances, users or responses.
 
-### Debug Mode
+### Debug mode
 
 Run tests with additional debugging:
 
@@ -218,7 +218,7 @@ uvx tox -e e2e -- --headed --slowmo=1000 -v --tb=long
 - **Database logs**: Check tox output for docker logs
 - **Playwright traces**: Available in CI artifacts when tests fail
 
-## Performance Considerations
+## Performance considerations
 
 The E2E tests are designed to help identify and address the Visual Scheduler performance issues mentioned in the original requirement:
 

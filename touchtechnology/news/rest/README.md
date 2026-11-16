@@ -2,7 +2,7 @@
 
 This module provides a REST API for the news functionality with the following endpoints:
 
-## API Endpoints
+## API endpoints
 
 The API is available at `/api/v1/news/` as part of the unified REST API structure and includes:
 
@@ -18,7 +18,7 @@ The API is available at `/api/v1/news/` as part of the unified REST API structur
 - `GET /api/v1/news/articles/{article_slug}/translations/` - List translations for an article
 - `GET /api/v1/news/articles/{article_slug}/translations/{locale}/` - Get translation details
 
-### API Root
+### API root
 - `GET /api/v1/news/` - API root view with available endpoints
 
 ## Features
@@ -29,9 +29,9 @@ The API is available at `/api/v1/news/` as part of the unified REST API structur
 - **Standard DRF responses**: All endpoints return standard DRF JSON responses
 - **Read-only API**: Currently provides read-only access to news data
 
-## Response Format
+## Response format
 
-### Category Response
+### Category response
 ```json
 {
   "title": "Technology News",
@@ -41,7 +41,7 @@ The API is available at `/api/v1/news/` as part of the unified REST API structur
 }
 ```
 
-### Article List Response
+### Article list response
 ```json
 [
   {
@@ -55,7 +55,7 @@ The API is available at `/api/v1/news/` as part of the unified REST API structur
 ]
 ```
 
-### Article Detail Response  
+### Article detail response
 ```json
 {
   "headline": "Django REST API Created",
@@ -81,7 +81,7 @@ The API follows Django REST Framework best practices:
 
 ## Testing
 
-The API includes comprehensive unit tests covering:
+The API has unit tests covering:
 - Endpoint functionality
 - Active/inactive filtering
 - Slug-based lookups

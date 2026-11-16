@@ -15,3 +15,8 @@ tests/screenshots/
 
 # Demo project uploads
 tests/media/
+
+# Vale packages, downloaded by `vale sync`; the house style and vocabulary are ours
+/.vale/styles/*
+!/.vale/styles/Vitriolic/
+!/.vale/styles/config/

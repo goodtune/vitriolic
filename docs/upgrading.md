@@ -2,10 +2,9 @@
 
 ## The admin has shells
 
-From 5.0 the admin is drawn by a *shell*: a complete set of templates, styles,
-scripts and icons. The Python that drives the admin is the same for every
-shell. The admin ships two, `workbook` (the default) and `explorer`. A
-deployment chooses one when it builds its site:
+From 5.0 the admin is drawn by a *shell*: a complete set of templates, styles, scripts and icons.
+The Python that drives the admin is the same for every shell.
+The admin ships two, `workbook` (the default) and `explorer`. A deployment chooses one when it builds its site:
 
 ```python
 from touchtechnology.admin.sites import AdminSite
@@ -17,18 +16,15 @@ The 4.x theme is gone. `touchtechnology/admin/shells.py` describes a shell.
 
 ## Admin templates moved into the shells
 
-In 4.x the pages of the admin were at names that did not depend on a theme,
-such as `touchtechnology/admin/list.html`. In 5.0 every page is in the folder
-of its shell, such as `touchtechnology/admin/workbook/list.html`. The old names
-are gone. A template that *extends* a page by its 4.x name fails with
-`TemplateDoesNotExist`, unless the name is one of the four below.
+In 4.x the pages of the admin were at names that did not depend on a theme, such as `touchtechnology/admin/list.html`. In 5.0 every page is in the folder of its shell, such as `touchtechnology/admin/workbook/list.html`. The old names are gone.
+A template that *extends* a page by its 4.x name fails with `TemplateDoesNotExist`, unless the name is one of the four below.
 
 ### Names that still work, for now
 
-These four names are kept as thin shims for a release or two. A shim holds no
-markup. It extends the page of the same name in the folder of the shell the
-admin wears. The shims will be removed in a later release, so change your
-templates to the new names (see "How to extend a page now") when you can.
+These four names are kept as thin shims for a release or two.
+A shim holds no markup.
+It extends the page of the same name in the folder of the shell the admin wears.
+The shims will be removed in a later release, so change your templates to the new names (see "How to extend a page now") when you can.
 
 | 4.x name                          | The shim extends                          |
 | --------------------------------- | ----------------------------------------- |
@@ -39,19 +35,16 @@ templates to the new names (see "How to extend a page now") when you can.
 
 `<shell>` is `workbook` or `explorer`.
 
-A shim finds the shell in the `shell` variable of the template context. The
-admin puts `shell` in the context of every page it renders itself: the pages of
-the components, the home page, the sign-in page and the wizards. The
-`touchtechnology.admin.context_processors.brand` context processor puts it in
-the context of every template. Add that processor if you extend `40x.html`
-from the error pages of your public site. When a template has no `shell`, the
-shim extends the page of the default shell, `workbook`, even if the site wears
-`explorer`.
+A shim finds the shell in the `shell` variable of the template context.
+The admin puts `shell` in the context of every page it renders itself: the pages of the components, the home page, the sign-in page and the wizards.
+The `touchtechnology.admin.context_processors.brand` context processor puts it in the context of every template.
+Add that processor if you extend `40x.html` from the error pages of your public site.
+When a template has no `shell`, the shim extends the page of the default shell, `workbook`, even if the site wears `explorer`.
 
 ### Names that are gone
 
-These pages have no shim. Each one is now in the folder of the shell, under the
-same name:
+These pages have no shim.
+Each one is now in the folder of the shell, under the same name:
 
 - `touchtechnology/admin/edit.multiple.html`
 - `touchtechnology/admin/edit.related.html`
@@ -63,28 +56,21 @@ same name:
 - `touchtechnology/admin/_htmx_tab_empty.html`
 - `touchtechnology/admin/_htmx_tab_related.html`
 
-For example, `touchtechnology/admin/edit.related.html` is now
-`touchtechnology/admin/workbook/edit.related.html` and
-`touchtechnology/admin/explorer/edit.related.html`. Two more changed:
+For example, `touchtechnology/admin/edit.related.html` is now `touchtechnology/admin/workbook/edit.related.html` and `touchtechnology/admin/explorer/edit.related.html`. Two more changed:
 
-- The `mvp` list templates were renamed. See "The `mvp` names are gone" below.
-- `touchtechnology/admin/_version.html` is gone. See "The `version_string` tag
-  is gone" below.
+- The `mvp` list templates were renamed.
+  See "The `mvp` names are gone" below.
+- `touchtechnology/admin/_version.html` is gone.
+  See "The `version_string` tag is gone" below.
 
-The pages of the components moved in the same way. The template base of a
-component is the folder of its admin pages, such as
-`tournamentcontrol/competition/admin`. A page that was at `<template base>/<name>`
-is now at `<template base>/<shell>/<name>`. For example,
-`tournamentcontrol/competition/admin/base.html` is now
-`tournamentcontrol/competition/admin/workbook/base.html` and
-`tournamentcontrol/competition/admin/explorer/base.html`. The same is true of
-`touchtechnology/content/admin/base.html`. The library keeps no copy at the old
-name.
+The pages of the components moved in the same way.
+The template base of a component is the folder of its admin pages, such as `tournamentcontrol/competition/admin`. A page that was at `<template base>/<name>` is now at `<template base>/<shell>/<name>`. For example, `tournamentcontrol/competition/admin/base.html` is now `tournamentcontrol/competition/admin/workbook/base.html` and `tournamentcontrol/competition/admin/explorer/base.html`. The same is true of `touchtechnology/content/admin/base.html`. The library keeps no copy at the old name.
 
 ### The `mvp` names are gone
 
-In 4.x the code that draws a list of related objects was named after the old
-theme. The theme is gone, so the names are gone. The code does the same work.
+In 4.x the code that draws a list of related objects was named after the old theme.
+The theme is gone, so the names are gone.
+The code does the same work.
 Change these names in your project:
 
 | 4.x | 5.0 |
@@ -97,48 +83,43 @@ Change these names in your project:
 | `mvp/list.split.inc.html` | `touchtechnology/admin/<shell>/list.split.inc.html` |
 | `_mvp_related`, `_mvp_select_related`, `_mvp_prefetch_related`, `_mvp_only` and `_mvp_annotate` on a model | `_list_related`, `_list_select_related`, `_list_prefetch_related`, `_list_only` and `_list_annotate` |
 
-The `related` filter keeps its name. The library keeps no copy at an old name.
-A template that loads `mvp_tags` fails with `TemplateSyntaxError`. A template
-that extends `mvp/list.inc.html` fails with `TemplateDoesNotExist`.
+The `related` filter keeps its name.
+The library keeps no copy at an old name.
+A template that loads `mvp_tags` fails with `TemplateSyntaxError`. A template that extends `mvp/list.inc.html` fails with `TemplateDoesNotExist`.
 
-A model that still has an `_mvp_*` method gets no error. The admin ignores the
-method, and the lists of that model run the untuned queries. Rename the
-methods.
+A model that still has an `_mvp_*` method gets no error.
+The admin ignores the method, and the lists of that model run the untuned queries.
+Rename the methods.
 
 ### Templates that replace a page
 
 A template of yours that *replaces* a page of the admin is a different case.
-Where the admin finds a page by searching, a template at the 4.x name still
-wins, for either shell. The admin searches the template folders of a component
-and then `touchtechnology/admin/`, so `tournamentcontrol/competition/admin/season/edit.html`
-in your project is still chosen. This is how the admin finds `list.html`,
-`list.inc.html`, `edit.html`, `edit.related.html` and `permissions.html`.
+Where the admin finds a page by searching, a template at the 4.x name still wins, for either shell.
+The admin searches the template folders of a component and then `touchtechnology/admin/`, so `tournamentcontrol/competition/admin/season/edit.html` in your project is still chosen.
+This is how the admin finds `list.html`, `list.inc.html`, `edit.html`, `edit.related.html` and `permissions.html`.
 
-The admin does not search for some pages. It asks for them by name, in the
-folder of the shell: the home page (`index.html`), the sign-in page, the HTMX
-tab fragments and the list wrapper (`_list.html`). A template of yours at the 4.x name of
-one of these no longer replaces it. Put your template in the folder of the
-shell.
+The admin does not search for some pages.
+It asks for them by name, in the folder of the shell: the home page (`index.html`), the sign-in page, the HTMX tab fragments and the list wrapper (`_list.html`).
+A template of yours at the 4.x name of one of these no longer replaces it.
+Put your template in the folder of the shell.
 
 ### How to extend a page now
 
-To change a page for both shells, put your template at the name the admin
-looks for, and extend the page of the shell in the context:
+To change a page for both shells, put your template at the name the admin looks for, and extend the page of the shell in the context:
 
 ```django
 {% extends shell.template_dir|add:"/list.html" %}
 ```
 
-`shell` is in the context when the admin renders the page (see above). For a
-page of a component, add the name of the shell to the folder:
+`shell` is in the context when the admin renders the page (see above).
+For a page of a component, add the name of the shell to the folder:
 
 ```django
 {% extends "tournamentcontrol/competition/admin/"|add:shell.name|add:"/base.html" %}
 ```
 
-To change a page for one shell, put your template at the name in the folder of
-that shell, and extend the page of the same name. Django finds the page of the
-library when a template extends its own name:
+To change a page for one shell, put your template at the name in the folder of that shell, and extend the page of the same name.
+Django finds the page of the library when a template extends its own name:
 
 ```django
 {# templates/touchtechnology/admin/explorer/list.html #}
@@ -147,42 +128,36 @@ library when a template extends its own name:
 
 ### Blocks
 
-Every block that the 4.x `base.html`, `list.html` and `edit.html` defined is
-still in both shells. What a block holds is now the markup of the shell, not
-Bootstrap 3, so check each template that fills a block in both shells. A block
-that a page does not define is ignored without an error.
+Every block that the 4.x `base.html`, `list.html` and `edit.html` defined is still in both shells.
+What a block holds is now the markup of the shell, not Bootstrap 3, so check each template that fills a block in both shells.
+A block that a page does not define is ignored without an error.
 
 The full notes for the change are in pull request #392.
 
 ## The `NODE_CACHE` setting is gone
 
-5.0 removes the `TOUCHTECHNOLOGY_NODE_CACHE` setting and the
-`Placeholder.invalidate_cache()` method. Nothing has written to that cache
-since 2018, when the sites of the application nodes stopped being cached.
-After an application node was edited, the content admin cleared the whole
-cache. With the default value, `"default"`, that cleared every key of the
-default cache, for every tenant.
+5.0 removes the `TOUCHTECHNOLOGY_NODE_CACHE` setting and the `Placeholder.invalidate_cache()` method.
+Nothing has written to that cache since 2018, when the sites of the application nodes stopped being cached.
+After an application node was edited, the content admin cleared the whole cache.
+With the default value, `"default"`, that cleared every key of the default cache, for every tenant.
 
-The cached URL tree of the sitemap is now thrown away for one tenant at a
-time. It is thrown away when a node, competition, season, club, division or
-team of that tenant is saved or deleted.
+The cached URL tree of the sitemap is now thrown away for one tenant at a time.
+It is thrown away when a node, competition, season, club, division or team of that tenant is saved or deleted.
 
-Remove `TOUCHTECHNOLOGY_NODE_CACHE` from your settings. If no other code uses
-the cache it named, remove that cache from `CACHES` too. The library ignores
-the setting if you keep it, and shows no error. Code that calls
-`invalidate_cache()` fails with `AttributeError`.
+Remove `TOUCHTECHNOLOGY_NODE_CACHE` from your settings.
+If no other code uses the cache it named, remove that cache from `CACHES` too.
+The library ignores the setting if you keep it, and shows no error.
+Code that calls `invalidate_cache()` fails with `AttributeError`.
 
 The full notes for the change are in pull request #422.
 
 ## The staff pages of the public site are gone
 
-In 4.x the public competition site (`CompetitionSite`) had pages for staff:
-result entry, per-player statistics, stage progression, live-stream control,
-runsheets and a page where a team member forfeits a match. 5.0 removes them.
+In 4.x the public competition site (`CompetitionSite`) had pages for staff: result entry, per-player statistics, stage progression, live-stream control, runsheets and a page where a team member forfeits a match. 5.0 removes them.
 Staff do this work in the admin and in CompOps.
 
-There are no redirects. Below the URL of a season, these paths are now unknown
-paths, and the site returns 404 for them:
+There are no redirects.
+Below the URL of a season, these paths are now unknown paths, and the site returns 404 for them:
 
 | Path | URL name | The page that is gone |
 | --- | --- | --- |
@@ -197,13 +172,10 @@ paths, and the site returns 404 for them:
 | `forfeit/` | `forfeit-list` | The matches a team member can forfeit |
 | `forfeit/<id>/` | `forfeit` | Forfeit a match |
 
-A template that reverses one of these names fails with `NoReverseMatch`. This
-is true for the full name, such as `{% url "competition:results" ... %}`, and
-for the name made from the application, such as
-`{% url application.name|add:":results" ... %}`. Remove the link.
+A template that reverses one of these names fails with `NoReverseMatch`. This is true for the full name, such as `{% url "competition:results" ... %}`, and for the name made from the application, such as `{% url application.name|add:":results" ... %}`. Remove the link.
 
-These templates are gone. A template of yours at one of these names is no
-longer used:
+These templates are gone.
+A template of yours at one of these names is no longer used:
 
 - `tournamentcontrol/competition/results.html`
 - `tournamentcontrol/competition/match_detail.html`
@@ -215,41 +187,26 @@ longer used:
 - `tournamentcontrol/competition/forfeit_list.html`
 - `tournamentcontrol/competition/forfeit.html`
 
-The admin's pages with the same file names are in
-`tournamentcontrol/competition/admin/<shell>/`. They stay.
+The admin's pages with the same file names are in `tournamentcontrol/competition/admin/<shell>/`. They stay.
 
 Three names are gone from the Python:
 
 - `StreamControlForm` in `tournamentcontrol.competition.forms`.
-- `permissions_required` in `tournamentcontrol.competition.sites`. Nothing in
-  the library called it. Code that imports it fails with `ImportError`. To
-  check a permission in a view of your own, call
-  `guardian.utils.get_40x_or_None`, which it wrapped, or give
-  `permission_required=True` to a `generic_*` view of an `Application`.
-- `CompetitionAdminMixin` in `tournamentcontrol.competition.sites`. The admin's
-  views `day_runsheet`, `match_results`, `edit_match_detail`,
-  `progression_list` and `progress_teams` are now methods of
-  `CompetitionAdminComponent` in `tournamentcontrol.competition.admin`. Their
-  URLs, permissions and templates in the admin did not change.
+- `permissions_required` in `tournamentcontrol.competition.sites`. Nothing in the library called it.
+  Code that imports it fails with `ImportError`. To check a permission in a view of your own, call `guardian.utils.get_40x_or_None`, which it wrapped, or give `permission_required=True` to a `generic_*` view of an `Application`.
+- `CompetitionAdminMixin` in `tournamentcontrol.competition.sites`. The admin's views `day_runsheet`, `match_results`, `edit_match_detail`, `progression_list` and `progress_teams` are now methods of `CompetitionAdminComponent` in `tournamentcontrol.competition.admin`. Their URLs, permissions and templates in the admin did not change.
 
-The decorator `competition_by_slug` (and `competition_by_slug_m`) in
-`tournamentcontrol.competition.decorators` no longer does two things that only
-the removed pages used:
+The decorator `competition_by_slug` (and `competition_by_slug_m`) in `tournamentcontrol.competition.decorators` no longer does two things that only the removed pages used:
 
-- It finds the `match` only when the URL also names the `division`. Before, a
-  URL with a season and a match, but no division, gave the view the match. Now
-  the view gets no `match`. This is what already happens to a `team` or a
-  `stage` without a division.
-- It does not change `timestr` into `time`. The view gets `timestr`, the
-  string from the URL.
+- It finds the `match` only when the URL also names the `division`. Before, a URL with a season and a match, but no division, gave the view the match.
+  Now the view gets no `match`. This is what already happens to a `team` or a `stage` without a division.
+- It does not change `timestr` into `time`. The view gets `timestr`, the string from the URL.
 
-If a subclass of `CompetitionSite` has URLs like these, its view must find the
-match or parse the time itself. Give the match URL argument a name other than
-`match`, or do not decorate that view with `competition_by_slug_m`, because
-the decorator removes `match` from the arguments.
+If a subclass of `CompetitionSite` has URLs like these, its view must find the match or parse the time itself.
+Give the match URL argument a name other than `match`, or do not decorate that view with `competition_by_slug_m`, because the decorator removes `match` from the arguments.
 
-Issue #310 lists the stream control page as one of the pages that raise an
-error when the YouTube authorisation of a season has expired. That part of
+Issue #310 lists the stream control page as one of the pages that raise an error when the YouTube authorisation of a season has expired.
+That part of
 #310 goes away with the page.
 
 ### Where staff do the work now
@@ -263,75 +220,57 @@ error when the YouTube authorisation of a season has expired. That part of
 | Runsheet | Yes. The run sheet of a day (`match-runsheet`), to print. | Yes. The day page. |
 | A team member forfeits a match | Partly. Staff can record a forfeit on the match. A team member has no page that calls `Match.forfeit()` and sends its notifications. | No. |
 
-The REST API can also start, test and stop a broadcast:
-`POST /api/v1/livestreams/<uuid>/transition/`, for a user with
-`competition.change_match`.
+The REST API can also start, test and stop a broadcast: `POST /api/v1/livestreams/<uuid>/transition/`, for a user with `competition.change_match`.
 
 There are two more gaps:
 
-- **Scorers who are not staff.** The public pages accepted a user with the
-  permission `competition.change_match`, for all matches or for one match
-  (with `django-guardian`). The user did not have to be staff. Result entry in
-  the admin and in CompOps needs staff status. A volunteer scorer who is not
-  staff can no longer enter results.
-- **CompOps is optional.** A project must mount CompOps (see `docs/compops.md`).
-  Until it does, staff have only the admin, and no page starts or stops a
-  live stream.
+- **Scorers who are not staff.**
+  The public pages accepted a user with the permission `competition.change_match`, for all matches or for one match (with `django-guardian`).
+  The user did not have to be staff.
+  Result entry in the admin and in CompOps needs staff status.
+  A volunteer scorer who is not staff can no longer enter results.
+- **CompOps is optional.**
+  A project must mount CompOps (see `docs/compops.md`).
+  Until it does, staff have only the admin, and no page starts or stops a live stream.
 
 The full notes for the change are in pull request #437.
 
 ## The home page asks each widget whether it has anything to show
 
-`DashboardWidget.show()` has always been part of the widget API, but in 4.x the
-home page never called it: every widget of a component was drawn, whatever
-`show()` returned. From 5.0 `AdminSite.dashboard()` calls `show()` on each
-widget class and leaves out a widget that returns a false value. The widget's
-template is not rendered and its `context` is not built.
+`DashboardWidget.show()` has always been part of the widget API, but in 4.x the home page never called it: every widget of a component was drawn, whatever `show()` returned.
+From 5.0 `AdminSite.dashboard()` calls `show()` on each widget class and leaves out a widget that returns a false value.
+The widget's template is not rendered and its `context` is not built.
 
-The competition's Awaiting Detailed Results widget is the one widget of the
-library with its own `show()`: it is drawn only while a match awaits a detailed
-result. The other widgets are drawn as before.
+The competition's Awaiting Detailed Results widget is the one widget of the library with its own `show()`: it is drawn only while a match awaits a detailed result.
+The other widgets are drawn as before.
 
-Check the `show()` of any widget of your own. It now runs on every view of the
-home page, for every person the menu shows its component to, so keep it cheap:
-ask the database with `exists()`, or not at all. A `show()` that raises takes
-the home page down; the guard that leaves out a widget whose `context` fails
-does not cover `show()`.
+Check the `show()` of any widget of your own.
+It now runs on every view of the home page, for every person the menu shows its component to, so keep it cheap: ask the database with `exists()`, or not at all.
+A `show()` that raises takes the home page down; the guard that leaves out a widget whose `context` fails does not cover `show()`.
 
 The full notes for the change are in pull request #531.
 
 ## The `en-AU` catalogues are gone
 
-The apps no longer ship `locale/en-AU`. Django never loaded those catalogues,
-because it looks for a directory named `en_AU`, and they held no translations.
-A project that offers `en-au` in `LANGUAGES` sees no change: these apps show
-their source strings, as before.
+The apps no longer ship `locale/en-AU`. Django never loaded those catalogues, because it looks for a directory named `en_AU`, and they held no translations.
+A project that offers `en-au` in `LANGUAGES` sees no change: these apps show their source strings, as before.
 
 ## The storage no longer looks for `tenant_schemas`
 
-`touchtechnology.common.storage.FileSystemStorage` no longer has
-`tenant_schemas.storage.TenantStorageMixin` among its bases. In 4.x the mixin
-was imported when `tenant_schemas` was installed and replaced with an empty
-class when it was not; `tenant_schemas` is not a dependency of this library.
-The bases are now `MakeDirectoryMixin`, `WalkMixin` and Django's
-`FileSystemStorage`. A project that keeps its media per tenant should mix
-`TenantStorageMixin` into its own storage class.
+`touchtechnology.common.storage.FileSystemStorage` no longer has `tenant_schemas.storage.TenantStorageMixin` among its bases.
+In 4.x the mixin was imported when `tenant_schemas` was installed and replaced with an empty class when it was not; `tenant_schemas` is not a dependency of this library.
+The bases are now `MakeDirectoryMixin`, `WalkMixin` and Django's `FileSystemStorage`. A project that keeps its media per tenant should mix `TenantStorageMixin` into its own storage class.
 
 ## The storage no longer has `mkdir` or `rmdir`
 
 `MakeDirectoryMixin` keeps `makedirs`, but its `mkdir` and `rmdir` are gone.
-The media admin makes and removes folders on any `FileSystemStorage` through
-Django's own API, so it no longer called them. A storage that is not a file
-system can still define `mkdir(name, path=None)` and `rmdir(path)`: the media
-admin calls them when they are there, and says the storage cannot make or
-remove folders when they are not.
+The media admin makes and removes folders on any `FileSystemStorage` through Django's own API, so it no longer called them.
+A storage that is not a file system can still define `mkdir(name, path=None)` and `rmdir(path)`: the media admin calls them when they are there, and says the storage cannot make or remove folders when they are not.
 
 ## Three method decorators are gone
 
-`touchtechnology.common.decorators` no longer has `cache_control_m`,
-`permission_required_m` or `user_passes_test_m`. Each wrapped a decorator
-*factory* in `method_decorator`, so it could not be given its arguments and
-never worked. Write the Django decorator at the call site instead:
+`touchtechnology.common.decorators` no longer has `cache_control_m`, `permission_required_m` or `user_passes_test_m`. Each wrapped a decorator *factory* in `method_decorator`, so it could not be given its arguments and never worked.
+Write the Django decorator at the call site instead:
 
 ```python
 from django.contrib.auth.decorators import permission_required
@@ -342,28 +281,19 @@ from django.utils.decorators import method_decorator
 def thing(self, request, *args, **kwargs): ...
 ```
 
-The decorators that take no arguments stay: `csrf_exempt_m`,
-`login_required_m`, `never_cache_m`, `staff_login_required_m`,
-`superuser_login_required_m`, `require_GET_m` and `require_POST_m`.
+The decorators that take no arguments stay: `csrf_exempt_m`, `login_required_m`, `never_cache_m`, `staff_login_required_m`, `superuser_login_required_m`, `require_GET_m` and `require_POST_m`.
 
 ## `ResizedImageFieldFile` is gone
 
-`touchtechnology.common.storage` no longer has `ResizedImageFieldFile`. Its
-`regenerate` method called `Image.ANTIALIAS` and `Image.tostring`, which
-Pillow removed, so it raised `AttributeError` the first time it ran. No field
-in this library used it. A project that imported it must make its resized
-copies with Pillow itself, for example `Image.thumbnail` with
-`Image.Resampling.LANCZOS`.
+`touchtechnology.common.storage` no longer has `ResizedImageFieldFile`. Its `regenerate` method called `Image.ANTIALIAS` and `Image.tostring`, which Pillow removed, so it raised `AttributeError` the first time it ran.
+No field in this library used it.
+A project that imported it must make its resized copies with Pillow itself, for example `Image.thumbnail` with `Image.Resampling.LANCZOS`.
 
 ## The `version_string` tag is gone
 
-The `admin` template library no longer has `{% version_string %}`, and
-`Application` no longer has a `version` property. Both looked for a
-`__version__` attribute that no package in this library defines. So
-`version` always returned the name of the application and nothing more, and
-logged a warning for each module it looked in. When the tag had no component,
-it raised `AttributeError`. No template in this library used them.
+The `admin` template library no longer has `{% version_string %}`, and `Application` no longer has a `version` property.
+Both looked for a `__version__` attribute that no package in this library defines.
+So `version` always returned the name of the application and nothing more, and logged a warning for each module it looked in.
+When the tag had no component, it raised `AttributeError`. No template in this library used them.
 
-To show the installed version, use the `{% version %}` tag from the `common`
-library, for example `{% version "vitriolic" %}`, or call
-`importlib.metadata.version("vitriolic")` in Python.
+To show the installed version, use the `{% version %}` tag from the `common` library, for example `{% version "vitriolic" %}`, or call `importlib.metadata.version("vitriolic")` in Python.
