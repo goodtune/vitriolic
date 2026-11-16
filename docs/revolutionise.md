@@ -28,7 +28,7 @@ No cookies, tokens or browser headers are required and no rate limiting has been
 | --- | --- |
 | `/<slug>/games` | the index: every competition currently published, as a heading with a *Download* link (`/reports/games/<competition>`) followed by its grades (`/games/<competition>/<grade>`) |
 | `/<slug>/games/<competition>/<grade>` | the grade: a heading "*competition* · *grade*", a *View ladder* button when the grade keeps a ladder, and one row per round linking to `/round/<n>` with the round's name and dates |
-| `/<slug>/games/<competition>/<grade>/round/<n>` | the round: a heading with the round's dates, one card per fixture, then a *BYEs* section naming the teams without a game |
+| `/<slug>/games/<competition>/<grade>/round/<n>` | the round: a heading with the round's dates, one card per fixture, then a `BYEs` section naming the teams without a game |
 | `/<slug>/pointscore/<competition>/<grade>` | the ladder: a table with Team, Played, Wins, Draws, Losses, Forfeits, For, Against, Diff. and Points |
 | `/<slug>/games/team/export/ical/<competition>/<team>` | a team's fixtures as iCalendar; `DTSTART;TZID=Australia/Sydney:...` is the only place the site states a time zone |
 | `/<slug>/game/<id>` | a fixture's page: the result or forfeit, date and time, venue with its street address, field, umpires and an embedded Google map whose URL carries the venue's coordinates (`!2d<lng>!3d<lat>`) when the organisation placed the venue on the map, or only its address otherwise |
@@ -87,7 +87,7 @@ A bye has no page or id of its own; it is identified by grade, round and team.
 | team | `Team` (`upstream_id`); the ladder's order gives the initial team order |
 | game | `Match` (`upstream_id`): round, date and time in the competition's time zone, venue and field, teams, scores, forfeit |
 | bye | `Match` with `is_bye`, dated by the round, `bye_processed` once the round has passed |
-| venue / field | `Venue` (with coordinates and address from a game page, time zone from the iCalendar feed) and `Ground` (the field's name as published, eg. "Elaine Johnston Pitch") |
+| venue / field | `Venue` (with coordinates and address from a game page, time zone from the iCalendar feed) and `Ground` (the field's name as published, for example "Elaine Johnston Pitch") |
 | ladder totals | the division's points formula and forfeit score when the division is created |
 
 ### Inferring the points scheme

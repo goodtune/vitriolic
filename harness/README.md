@@ -44,12 +44,12 @@ All scripts are in `harness/`. Every executable script starts with `set -euo pip
 | --- | --- |
 | `lib.sh` | Shared by the others; source it from bash, do not run it. `harness_env` exports everything the demo project needs for a name; `harness_db_check <name>` exits 3, naming the owner, unless the name's database belongs to this checkout. |
 | `pg.sh start\|stop\|status\|psql [name]` | A temporary PostgreSQL cluster in `pg/` in the state root, started with `pg_ctl`, never a service. `start` does nothing when the port already answers. `stop` stops only its own cluster. `psql` opens a shell on the server, or on the database of a name. |
-| `db.sh [--reset] <name>` | Creates `vitriolic_<name>` and records the checkout that owns it. Exit status 3 when another checkout owns it; `--reset` takes it over, drops it and its media, run directory and pid file, and creates it again (it refuses while the name has a live server: stop it first). Prints `DATABASE_URL`. |
+| `db.sh [--reset] <name>` | Creates `vitriolic_<name>` and records the checkout that owns it. Exit status 3 when another checkout owns it; `--reset` takes it over, drops it and its media, run directory and PID file, and creates it again (it refuses while the name has a live server: stop it first). Prints `DATABASE_URL`. |
 | `seed.sh <name>` | Migrates the database, then seeds it. Safe to run again: it adds only what is missing. About 20 seconds. Prints the number of rows of each model. |
-| `serve.sh <name> <port> [--brand B] [--shell workbook\|explorer] [--htmx-tabs]` | Runs `runserver --noreload` in the background and waits up to 30 seconds for the sign-in page. `--shell` (default `workbook`) sets `ADMIN_SHELL`, which the demo project hands to `AdminSite`. Refuses a port that is taken or a name that already has a server. Writes the pid file, which records the pid, port, brand, shell, tab mode and checkout. |
+| `serve.sh <name> <port> [--brand B] [--shell workbook\|explorer] [--htmx-tabs]` | Runs `runserver --noreload` in the background and waits up to 30 seconds for the sign-in page. `--shell` (default `workbook`) sets `ADMIN_SHELL`, which the demo project hands to `AdminSite`. Refuses a port that is taken or a name that already has a server. Writes the PID file, which records the PID, port, brand, shell, tab mode and checkout. |
 | `stop.sh <name>` | Stops the server of a name, and only while the process is still its `runserver`. Not running is not an error. |
 | `manage.sh <name> <args...>` | Runs the demo project's `manage.py` against the database of a name. |
-| `shots.sh --name N [--base URL] [--brand B] [--shell S] [--htmx-tabs] [--widths 1440,390] [--height 900] [--only a,b\|none] [--no-video] [--contact] [--out DIR]` | Screenshots every page, records the flow, writes `manifest.json`, then removes the flow's rows from the database. Without `--base`, finds the server in the pid file. The pid file decides the brand, the shell and the tab mode: a `--brand` or `--shell` that disagrees is refused (exit 64); with `--base` and no pid file for that server, `--brand` is required (and `--shell`, if it is not `workbook`). |
+| `shots.sh --name N [--base URL] [--brand B] [--shell S] [--htmx-tabs] [--widths 1440,390] [--height 900] [--only a,b\|none] [--no-video] [--contact] [--out DIR]` | Screenshots every page, records the flow, writes `manifest.json`, then removes the flow's rows from the database. Without `--base`, finds the server in the PID file. The PID file decides the brand, the shell and the tab mode: a `--brand` or `--shell` that disagrees is refused (exit 64); with `--base` and no PID file for that server, `--brand` is required (and `--shell`, if it is not `workbook`). |
 | `contact.sh <run-dir> [--width W] [--columns 4] [--tile-width 360] [--out FILE]` | Tiles a run's pictures at one width into one contact sheet. |
 | `test.sh <name> [unit\|e2e] [--] [args...]` | Runs the tests through tox against the harness PostgreSQL, with no Docker. The name's database must exist and be yours. |
 | `python -m harness seed\|pages\|unflow <stamp>` | The Python halves of `seed.sh` and `shots.sh`. Each checks the owner of the database first (exit 3). `unflow` deletes what one run of the flow made. |
@@ -62,7 +62,7 @@ It replaces an earlier run of its own, and it does so before anything else: a ru
 ## Brands
 
 The demo project can present the admin in three made-up brands.
-Choose one with `serve.sh --brand` (this sets `ADMIN_BRAND`). `shots.sh` reads the brand from the server's pid file.
+Choose one with `serve.sh --brand` (this sets `ADMIN_BRAND`). `shots.sh` reads the brand from the server's PID file.
 
 | Brand | Name | Primary | Secondary | Logo |
 | --- | --- | --- | --- | --- |
@@ -153,19 +153,19 @@ How it looks:
 What the flow expects of any admin, and so what an entry must keep: the sign-in form's `username` and `password` fields and a "Sign in" button; a "Save" button and a "Cancel" link; a `search` field on long lists; the menu entries "Tournament Control", "News", "Content" and "Enrolment"; the form field names of the models (which are frozen); and the URL paths.
 The steps, in order:
 
-1. **sign_in:** the sign-in page, then the index.
+1. **`sign_in`:** the sign-in page, then the index.
 2. **competition:** add a competition.
 3. **season:** add a season, with its time slots.
-4. **clubs_and_people:** add two clubs, add them to the competition, and add people.
-5. **divisions_and_teams:** bulk-create two divisions and their teams, and give a division a points formula.
+4. **`clubs_and_people`:** add two clubs, add them to the competition, and add people.
+5. **`divisions_and_teams`:** bulk-create two divisions and their teams, and give a division a points formula.
 6. **draw:** add a draw format, a stage, build the draw, then add a finals stage with a pool and an undecided team.
 7. **schedule:** allocate the day's matches to grounds and times with the Allocate form.
 8. **results:** enter two results and read them back.
-9. **undo_draw:** undo the draw of a stage.
+9. **`undo_draw`:** undo the draw of a stage.
 10. **content:** add a news category, an article with a picture and a translation, a redirect and a page.
 11. **enrolment:** a school year, a grade, a teacher, a class, students, attendance, an assessment and a report card.
-12. **delete_attendance:** delete an attendance record.
-13. **sign_out:** sign out from the menu.
+12. **`delete_attendance`:** delete an attendance record.
+13. **`sign_out`:** sign out from the menu.
 
 The flow checks what it saved: the titles are listed, the translation's headline, the undecided team's label, the allocation and the scores are read back from the forms, the marks of the assessment are on it when it is opened again, and the attendance record is gone after the delete.
 
@@ -232,7 +232,7 @@ The tests that seed write their pictures to the name's `media/` folder; give the
   Its page is photographed like any other, but dragging matches about is too fragile to record, so the flow uses the Allocate form.
 - **Other hosts are not blocked, and their failures are warnings.**
   Some pages load Leaflet, Bootstrap and jQuery from a CDN, so blocking the network made false errors.
-  On a machine with no network those pages (grounds, venues, the season report and summary) will report errors.
+  On a machine with no network those pages (grounds, venues, the season report and summary) report errors.
 - **A temporary cluster, not a service.** `pg.sh` starts a cluster under the state root with `pg_ctl` and leaves other PostgreSQL servers alone.
 - **One allowance.** `KNOWN_PAGE_ERRORS` in `flow.py` turns one uncaught page error into a warning, recorded with its text, so a recording reaches the end: `Cannot set properties of undefined (setting '_DT_CellIndex')`, matched against the whole text of the error and nothing else.
   The club edit page runs DataTables on a table whose only row is the empty-list message, and DataTables 1.10 cannot take that row.

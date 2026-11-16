@@ -1,12 +1,12 @@
-# Tournament Control Competition REST API
+# Tournament Control competition REST API
 
 This module provides REST API endpoints for managing tournament competitions, including live streaming capabilities for YouTube broadcasts.
 
-## API Endpoints
+## API endpoints
 
 The Competition API is accessible at `/api/v1/` as part of the unified REST API structure.
 
-### Core Competition Endpoints
+### Core competition endpoints
 
 #### Competitions
 - `GET /api/v1/competitions/` - List all competitions
@@ -20,18 +20,18 @@ The Competition API is accessible at `/api/v1/` as part of the unified REST API 
 - `GET /api/v1/clubs/` - List all clubs
 - `GET /api/v1/clubs/{slug}/` - Get club details
 
-### Live Streaming API
+### Live streaming API
 
 #### Overview
 The live streaming API provides standalone endpoints for managing YouTube live stream broadcasts for tournament matches.
 This API requires `change_match` permission and integrates with the Google YouTube Data API v3.
 
-#### Authentication & Permissions
+#### Authentication & permissions
 - **Authentication Required**: All endpoints require user authentication
 - **Permission Required**: Live streaming endpoints require `change_match` permission (not necessarily superuser)
 - **YouTube Integration**: Requires valid YouTube API credentials and live streaming setup
 
-#### Match Listing
+#### Match listing
 **Endpoint**: `GET /api/v1/livestreams/`
 
 Lists all matches with live streaming capabilities, grouped by date.
@@ -136,7 +136,7 @@ Lists all matches with live streaming capabilities, grouped by date.
 }
 ```
 
-#### Match Detail
+#### Match detail
 **Endpoint**: `GET /api/v1/livestreams/{uuid}/`
 
 Retrieves detailed information for a specific match by UUID.
@@ -146,7 +146,7 @@ Retrieves detailed information for a specific match by UUID.
 
 **Response**: Same format as individual match in listing endpoint.
 
-#### Stream Status Transition
+#### Stream status transition
 **Endpoint**: `POST /api/v1/livestreams/{uuid}/transition/`
 
 Transitions the live stream status of a specific match broadcast on YouTube.
@@ -222,24 +222,24 @@ Transitions the live stream status of a specific match broadcast on YouTube.
 }
 ```
 
-## Response Features
+## Response features
 
-### Nested Object Details
+### Nested object details
 All match responses include full nested details for related objects:
 - **Stage → Division → Season → Competition** hierarchy
 - **Team → Club** relationships with full club details including social media links
-- **Venue (play_at)** information with geographic coordinates
+- **Venue (`play_at`)** information with geographic coordinates
 
-### Date-Based Grouping
+### Date-based grouping
 The listing endpoint automatically groups matches by date for easy organization and display in tournament management interfaces.
 
-### Live Stream Integration
+### Live stream integration
 - **YouTube Integration**: Manages YouTube live broadcasts via Google APIs
 - **Stream Keys**: Provides RTMP stream keys for broadcast software
 - **Thumbnails**: Includes custom thumbnail images for broadcasts
 - **Status Management**: Supports full broadcast lifecycle (testing → live → complete)
 
-## URL Naming Patterns
+## URL naming patterns
 
 All endpoints use consistent Django URL naming:
 
@@ -264,25 +264,25 @@ reverse(
 
 ## Technical Implementation
 
-### ViewSet Architecture
+### ViewSet architecture
 - **Base Class**: `ReadOnlyModelViewSet` for list/detail operations
 - **Custom Actions**: `@action` decorator for transition endpoint
 - **Permissions**: `check_permissions` requires `IsAuthenticated` and the global `competition.change_match` permission
 - **Serialization**: Context-aware serializers for nested relationships
 
-### Query Optimization
+### Query optimization
 - **Select Related**: Optimized queries with `select_related()` for nested objects
 - **Filtering**: Efficient database filtering for date ranges and seasons
 - **UUID Lookup**: Fast UUID-based match identification
 
-### Error Handling
+### Error handling
 - **Graceful Degradation**: Handles missing YouTube credentials gracefully
 - **Warning System**: Captures and returns API warnings for invalid transitions
-- **Exception Handling**: Comprehensive error handling with appropriate HTTP status codes
+- **Exception Handling**: Errors are returned with the matching HTTP status codes
 
 ## Testing
 
-The live streaming API includes comprehensive test coverage:
+The live streaming API has tests covering:
 
 - **Authentication Testing**: Verifies superuser requirement enforcement
 - **CRUD Operations**: Tests all list, detail, and transition operations
@@ -296,15 +296,15 @@ The live streaming API includes comprehensive test coverage:
 tox -e dj52-py313 -- tournamentcontrol.competition.tests.test_livestream_api
 ```
 
-## Integration Requirements
+## Integration requirements
 
-### YouTube API Setup
+### YouTube API setup
 1. **Google Cloud Project**: Create project with YouTube Data API v3 enabled
 2. **OAuth 2.0 Credentials**: Configure OAuth client for server-to-server authentication  
 3. **Live Streaming**: Enable live streaming capability on YouTube channel
 4. **Match Configuration**: Set `external_identifier` field with YouTube broadcast ID
 
-### Django Settings
+### Django settings
 ```python
 # Required for live streaming functionality
 INSTALLED_APPS = [
@@ -319,13 +319,13 @@ YOUTUBE_CLIENT_ID = "your_oauth_client_id.apps.googleusercontent.com"
 YOUTUBE_CLIENT_SECRET = "your_oauth_client_secret"
 ```
 
-### Match Model Requirements
+### Match model requirements
 For matches to appear in live streaming endpoints:
 - `external_identifier` must be set (YouTube broadcast ID)
 - `external_identifier` cannot be empty or null
 - Match must belong to a season with `live_stream=True`
 
-## Security Considerations
+## Security considerations
 
 - **Permission Required**: All live streaming operations require `change_match` permission
 - **YouTube Integration**: API keys and OAuth credentials should be stored securely

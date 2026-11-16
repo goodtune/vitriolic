@@ -1,18 +1,18 @@
-# Claude Code Instructions
+# Claude Code instructions
 
-## Primary Context Source
+## Primary context source
 
-**Always read and follow the comprehensive project instructions in `.github/copilot-instructions.md`** which contains:
+**Always read and follow the project instructions in `.github/copilot-instructions.md`** which contains:
 
 - Repository structure overview (Django reusable apps for sporting clubs)
 - Development workflow and testing guidelines (`tox`)
 - Detailed Django best practices and patterns
-- Comprehensive test writing guidelines using `django-test-plus`
+- Test writing guidelines using `django-test-plus`
 - Security and permission testing requirements
 - Model field and admin view testing patterns
 - Import organization and positive assertion requirements
 
-## Key Project Context
+## Key project context
 
 This is a Django-based repository providing reusable applications for sporting club websites, including:
 
@@ -23,14 +23,14 @@ This is a Django-based repository providing reusable applications for sporting c
 - Competition management (`tournamentcontrol/competition`)
 - Tournament Ops site (`tournamentcontrol/competition/compops`, see `docs/compops.md`)
 
-## Test Structure
+## Test structure
 
 - **Unit tests**: Use Django test framework with `django-test-plus`, located within each module
 - **E2E tests**: Use Playwright with `pytest-django`, located in `tests/e2e/`
 - **E2E in CI**: runs on pushes to `main`, and on a pull request only while it carries the `e2e` label; add the label for changes a browser would notice
 - **Execution**: Run via `tox` for full suite or specific environments
 
-### Running Tests
+### Running tests
 
 - Run `tox -l` to list the environments.
   Pick the latest Django/Python combination.
@@ -38,9 +38,9 @@ This is a Django-based repository providing reusable applications for sporting c
 - Run `tox -e <env> -- tournamentcontrol.competition` to run all the tests for that module.
   You can add more modules.
 - Run `tox -e <env> -- tournamentcontrol.competition.tests.test_competition_admin.GoodViewTests.test_competition` to run a specific test.
-- You can combine various fragments, but always used full dotted address (ie. `package.module.Class.test_method`) and never path (ie. `package/module.py::Class::test_method`).
+- You can combine various fragments, but always use the full dotted address (for example `package.module.Class.test_method`) and never a path (such as `package/module.py::Class::test_method`).
 
-## Important Reminders
+## Important reminders
 
 - Follow existing code patterns and Django idioms
 - Always use named URLs and proper template path methods

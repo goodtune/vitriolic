@@ -64,7 +64,7 @@ The public site shares nothing with these; leave `touchtechnology/common/templat
 
 ## The demo project and the enrolment app
 
-The demo project is `tests/vitriolic` (settings, urls, `manage.py` in `tests/`), excluded from the wheel.
+The demo project is `tests/vitriolic` (settings, `urls.py`, `manage.py` in `tests/`), excluded from the wheel.
 It mounts the admin at `/admin/`, the accounts site, static files and media. `DJANGO_DB_WAIT=0` skips its start-up sleep when you run `manage.py` yourself.
 
 The enrolment app is `tests/enrolment`: a deployment-style `AdminComponent` registered from `EnrolmentConfig.ready`, namespace `admin:enrolment`. Models: `SchoolYear`, `Grade`, `Teacher`, `ClassGroup`, `Student`, `Enrolment`, `AttendanceRecord`, `Assessment`, `Score`, `ReportCard`. Nested URLs follow the hierarchy (`year/<year_id>/class/<pk>/…/enrolment/…/attendance|report/…`).
@@ -127,7 +127,7 @@ harness/stop.sh <name>
 harness/test.sh <name> unit               # tox without Docker; `e2e` for the browser suite
 ```
 
-- The run lands in `run/<name>/<brand>/` under the state root (`~/.local/state/vitriolic-harness` unless `VITRIOLIC_HARNESS_VAR` says otherwise; `run/<name>/<brand>-htmx/` for a server started with `--htmx-tabs`): one PNG per page and width, one more per tab on every page that has tabs, two fold shots at 1440, `flow-1440.webm`, `flow-390.webm`, `contact-1440.png`, `contact-390.png`, and `manifest.json` with every page's status, title, errors and warnings, every flow step's `via`, and the run's own metadata (`only`, `widths`, `expected_pages`, `checkout`, `commit`, `htmx_tabs`). `shots.sh` reads the brand from the server's pid file; a `--brand` that disagrees is refused.
+- The run lands in `run/<name>/<brand>/` under the state root (`~/.local/state/vitriolic-harness` unless `VITRIOLIC_HARNESS_VAR` says otherwise; `run/<name>/<brand>-htmx/` for a server started with `--htmx-tabs`): one PNG per page and width, one more per tab on every page that has tabs, two fold shots at 1440, `flow-1440.webm`, `flow-390.webm`, `contact-1440.png`, `contact-390.png`, and `manifest.json` with every page's status, title, errors and warnings, every flow step's `via`, and the run's own metadata (`only`, `widths`, `expected_pages`, `checkout`, `commit`, `htmx_tabs`). `shots.sh` reads the brand from the server's PID file; a `--brand` that disagrees is refused.
 - The sign-in page is captured first at each width, before signing in, with the same checks as every other page.
 - `shots.sh` exits 1 when any page errored, any flow step failed, or fewer pages were captured than discovery listed.
   Your entry must exit 0 on all three brands at both widths.

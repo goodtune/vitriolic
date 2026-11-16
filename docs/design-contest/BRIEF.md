@@ -13,7 +13,7 @@ The winner, or a fold of two entries, becomes the next major version of the admi
 
 This repository is public.
 Use only what is in it.
-Do not look up, name, link to or imitate any organisation that runs this software; every organisation, club, venue, person, school and colour you will see in the seeded data is invented, and anything you add must be invented too.
+Do not look up, name, link to or imitate any organisation that runs this software; every organisation, club, venue, person, school and colour you see in the seeded data is invented, and anything you add must be invented too.
 That applies to commit messages, templates, screenshots, the entry statement and any issue or PR text.
 
 ## Who uses it
@@ -57,7 +57,7 @@ The rest of the mark is craft:
 - Every page green in the screenshot run: no failed loads, no redirects to sign-in, no 4xx or 5xx, no console errors.
 - Your entry statement: direction, the structural changes you made, UX decisions per page type, fonts and how colours derive from the palette, proposals that would need model or deployment changes, rough edges.
 
-Not judged: the visual scheduler (below), the public site, the compops site, the MCP servers.
+Not judged: the visual scheduler (below), the public site, the Tournament Ops site, the MCP servers.
 The standalone print and report pages are judged for legibility and consistency with your system only, not for UX.
 
 ## The rule for an entry
@@ -74,7 +74,7 @@ Your branch is `admin/<slug>`. You may change:
   Migrate every in-repo user, including the enrolment app's custom template, and write a migration note in your statement saying what a deployment changes.
   Landing the winner is a major version bump.
 
-You may not change: models or migrations; any existing URL name or path (deployments reverse them; new names and paths are welcome); the MCP servers; the public site (`touchtechnology/common/templates/base.html` and the competition, content and news public pages); the compops site; the visual scheduler.
+You may not change: models or migrations; any existing URL name or path (deployments reverse them; new names and paths are welcome); the MCP servers; the public site (`touchtechnology/common/templates/base.html` and the competition, content and news public pages); the Tournament Ops site; the visual scheduler.
 
 `TOUCHTECHNOLOGY_HTMX_ADMIN_TABS` keeps being accepted.
 What it does under your structure is your call, written down in the statement.

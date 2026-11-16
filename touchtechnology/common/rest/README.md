@@ -2,7 +2,7 @@
 
 This module provides a unified REST API entrypoint that consolidates all application APIs under a consistent, version-first URL structure.
 
-## API Structure
+## API structure
 
 All APIs are accessible under the unified API endpoint (commonly `/api/` but project-configurable) with version-first organization:
 
@@ -34,7 +34,7 @@ Provides access to competition and tournament functionality.
 - `GET /api/v1/clubs/` - List clubs
 - `GET /api/v1/clubs/{slug}/` - Get club details
 
-### Live Streaming API (`/api/v1/`)
+### Live streaming API (`/api/v1/`)
 Provides standalone live streaming management for matches.
 
 **Live Streaming Endpoints:**
@@ -44,14 +44,14 @@ Provides standalone live streaming management for matches.
 
 ## Features
 
-### Dynamic API Discovery
+### Dynamic API discovery
 The unified API automatically discovers and mounts APIs based on installed Django applications:
 
 - **News API**: Mounted when `touchtechnology.news` is installed
 - **Competition API**: Mounted when `tournamentcontrol.competition` is installed
 - **Graceful degradation**: Missing applications don't break the API
 
-### Consistent URL Structure
+### Consistent URL structure
 All APIs follow a consistent, version-first pattern:
 ```
 /api/v{version}/{module}/{resource}/
@@ -63,23 +63,23 @@ This provides:
 - **User-friendly**: Slug-based lookups for all resources
 - **Namespace isolation**: Each module has its own namespace (`v1:news:`, `v1:competition:`)
 
-### Authentication & Permissions
+### Authentication & permissions
 - **Authentication**: Uses Django REST Framework's built-in authentication
 - **Permissions**: Module-specific permission classes
 - **Live Streaming**: Requires `change_match` permission for stream management
 
-## Response Format
+## Response format
 
 All API endpoints return standard Django REST Framework JSON responses with consistent error handling and status codes.
 
-### API Root Response (`/api/`)
+### API root response (`/api/`)
 ```json
 {
   "v1": "http://example.com/api/v1/"
 }
 ```
 
-### Version Root Response (`/api/v1/`)
+### Version root response (`/api/v1/`)
 ```json
 {
   "news": "http://example.com/api/v1/news/",
@@ -89,7 +89,7 @@ All API endpoints return standard Django REST Framework JSON responses with cons
 }
 ```
 
-## Live Streaming API
+## Live streaming API
 
 ### Overview
 The live streaming API provides endpoints for managing YouTube live stream broadcasts for tournament matches.
@@ -97,7 +97,7 @@ The live streaming API provides endpoints for managing YouTube live stream broad
 ### Authentication
 All live streaming endpoints require authentication and `change_match` permission.
 
-### Match Listing (`GET /livestreams/`)
+### Match listing (`GET /livestreams/`)
 Returns matches grouped by date with live streaming capabilities.
 
 **Query Parameters:**
@@ -163,7 +163,7 @@ Returns matches grouped by date with live streaming capabilities.
 }
 ```
 
-### Stream Transition (`POST /livestreams/{uuid}/transition/`)
+### Stream transition (`POST /livestreams/{uuid}/transition/`)
 Transitions the live stream status of a specific match.
 
 **Request Body:**
@@ -182,7 +182,7 @@ Transitions the live stream status of a specific match.
 - `400 Bad Request`: Invalid status or validation error
 - `403 Forbidden`: Insufficient permissions (`change_match` required)
 - `404 Not Found`: Match not found or doesn't have streaming capability
-- `500 Internal Server Error`: Unexpected error (e.g., YouTube API issues)
+- `500 Internal Server Error`: Unexpected error (for example, YouTube API issues)
 
 **Response:**
 ```json
@@ -201,13 +201,13 @@ Transitions the live stream status of a specific match.
 
 ## Architecture
 
-### Modular Design
+### Modular design
 - **Base URLs**: `touchtechnology/common/rest/urls.py` - Main entrypoint
 - **Version URLs**: `touchtechnology/common/rest/v1/urls.py` - Version 1 routing
 - **Module APIs**: Each module provides its own REST API namespace
 - **Dynamic mounting**: APIs are conditionally included based on installed apps
 
-### URL Naming Convention
+### URL naming convention
 All URLs use consistent namespacing:
 ```python
 # News API
@@ -223,7 +223,7 @@ reverse(
 ```
 
 ### Testing
-The unified API includes comprehensive test coverage:
+The unified API has tests covering:
 - **Dynamic discovery**: Tests API mounting with different app configurations
 - **URL resolution**: Validates all named URL patterns resolve correctly
 - **Response formats**: Ensures consistent JSON responses across all endpoints
@@ -235,13 +235,13 @@ tox -e dj52-py313 -- touchtechnology.common.tests.test_rest_api
 tox -e dj52-py313 -- tournamentcontrol.competition.tests.test_livestream_api
 ```
 
-## Migration from Old APIs
+## Migration from old APIs
 
-### Breaking Changes
+### Breaking changes
 - **URL Structure**: Changed from `/api/{module}/v1/` to `/api/v1/{module}/`
 - **Namespacing**: Updated from `v1:category-list` to `v1:news:category-list`
 
-### Update Your Code
+### Update your code
 ```python
 # Old pattern
 reverse("v1:category-list")

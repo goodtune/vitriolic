@@ -1,14 +1,14 @@
-# Live Stream Template Customization
+# Live stream template customization
 
 This feature allows customization of YouTube live stream titles and descriptions through Django templates rather than hardcoded Python strings.
 
-## Template Location
+## Template location
 
 Templates are located at:
 - `tournamentcontrol/competition/match/live_stream/title.txt`
 - `tournamentcontrol/competition/match/live_stream/description.txt`
 
-## Hierarchical Override
+## Hierarchical override
 
 Templates can be overridden at different levels of specificity:
 
@@ -18,7 +18,7 @@ Templates can be overridden at different levels of specificity:
 4. **Division**: `{competition_slug}/{season_slug}/{division_slug}/match/live_stream/title.txt`
 5. **Stage**: `{competition_slug}/{season_slug}/{division_slug}/{stage_slug}/match/live_stream/title.txt`
 
-## Available Context Variables
+## Available context variables
 
 - `match`: The Match object being streamed
 - `competition`: Competition object
@@ -28,7 +28,7 @@ Templates can be overridden at different levels of specificity:
 - `match_url`: Full URL to the match details page
 - `label_only`: True when the title should leave the teams out (see [Titles YouTube Rejects](#titles-youtube-rejects))
 
-## Titles YouTube Rejects
+## Titles YouTube rejects
 
 YouTube allows a broadcast title 100 characters and rejects a longer one as `invalidTitle` ("Title is invalid").
 A final between two teams still to be decided reaches that quickly:
@@ -56,23 +56,23 @@ A custom title template takes part in the label only form by testing `label_only
 {% autoescape off %}🏆 {{ division }} Championship | {% if match.label and label_only %}{{ match.label }}{% else %}{% if match.label %}{{ match.label }}: {% endif %}{{ match.get_home_team_plain }} vs {{ match.get_away_team_plain }}{% endif %} | {{ competition }} {{ season }}{% endautoescape %}
 ```
 
-## Plain Text Output
+## Plain text output
 
 The rendered title and description are sent to the YouTube API as plain text, so templates must wrap their content in `{% autoescape off %}...{% endautoescape %}`. Without it, Django's default HTML escaping turns apostrophes into `&#x27;` and ampersands into `&amp;` in the YouTube video metadata.
 
-## Example Templates
+## Example templates
 
-### Basic Title Template
+### Basic title template
 ```django
 {% autoescape off %}{% if match.label %}{{ division }} | {{ match.label }}{% if not label_only %}: {{ match.get_home_team_plain }} vs {{ match.get_away_team_plain }}{% endif %} | {{ competition }} {{ season }}{% else %}{{ division }} | {{ match.get_home_team_plain }} vs {{ match.get_away_team_plain }} | {{ competition }} {{ season }}{% endif %}{% endautoescape %}
 ```
 
-### Custom Competition Title
+### Custom competition title
 ```django
 {% autoescape off %}🏆 {{ division }} Championship | {% if match.label %}{{ match.label }}: {% endif %}{{ match.get_home_team_plain }} vs {{ match.get_away_team_plain }} | {{ competition }} {{ season }}{% endautoescape %}
 ```
 
-### Description Template
+### Description template
 ```django
 {% autoescape off %}Live stream of the {{ division }} division of {{ competition }} {{ season }} from {{ match.play_at.ground.venue }}.
 
@@ -83,7 +83,7 @@ Full match details are available at {{ match_url }}
 Subscribe to receive notifications of upcoming matches.{% endautoescape %}
 ```
 
-## Resyncing an Existing Broadcast
+## Resyncing an existing broadcast
 
 When an operator changes a match's division, teams, label, or schedule after the YouTube broadcast has been created, the public YouTube URL stays the same but the title/description on YouTube becomes stale.
 To push the current match data to an existing broadcast without creating a new URL, visit the match's `resync-live-stream` admin URL and confirm.

@@ -29,7 +29,7 @@ Both URLs are also exposed by the MCP administration tools (`create_competition`
 
 * **Admin**: linked seasons show a button named after the provider in the season list which leads to the *Synchronise with …* page and queues a synchronisation.
 * **Celery**: `tournamentcontrol.competition.tasks.synchronise_upstream` synchronises every enabled, incomplete linked season, isolating failures per season; `synchronise_upstream_season(season_pk)` does one.
-  Schedule the former with Celery beat in the deploying project, eg. every 15 minutes on match days.
+  Schedule the former with Celery beat in the deploying project, for example every 15 minutes on match days.
 * **Management command**: `synchronise_upstream [season_pk ...]`.
 * **Python**: `tournamentcontrol.competition.upstream.sync.synchronise_season`.
 
@@ -92,7 +92,7 @@ tournamentcontrol/competition/upstream/
 | season page | `Season` (`upstream_url`) |
 | competition | `Division` (`upstream_id`); title and slug follow the remote name unless it has been changed locally (see [Naming](#naming)) |
 | `Regular` rounds | `Stage` "Regular Season" |
-| `Final` rounds | `Stage` "Finals" with `keep_ladder` off (created only when finals fixtures exist; `Match.label` carries the round's name, eg. "Grand Final") |
+| `Final` rounds | `Stage` "Finals" with `keep_ladder` off (created only when finals fixtures exist; `Match.label` carries the round's name, for example "Grand Final") |
 | pool | `StageGroup` on the regular stage; `Team.stage_group` and, for intra-pool matches, `Match.stage_group` |
 | team | `Team` (`upstream_id`); title and slug follow the remote name unless it has been changed locally |
 | match | `Match` (`upstream_id`): round number, date/time in the venue's time zone (falling back to the season's), `play_at`, teams, scores, bye, forfeit |
@@ -107,7 +107,7 @@ A division or team created by hand with the same title as a remote one is *adopt
 ## Naming
 
 The provider is authoritative for everything *except* the names of divisions and teams.
-Upstream naming is frequently unwieldy -- Central Coast Touch publishes a division on MySideline as "Born 2014 & 2013 u14 Boys" where "14 Boys" is what should appear on the website -- so the `title` of a linked `Division` or `Team` may be edited in the admin and the synchronisation will keep it.
+Upstream naming is frequently unwieldy -- Central Coast Touch publishes a division on MySideline as "Born 2014 & 2013 u14 Boys" where "14 Boys" is what should appear on the website -- so the `title` of a linked `Division` or `Team` may be edited in the admin and the synchronisation keeps it.
 
 Because the local name may be ours or theirs, and either side can change it without telling the other, two copies of the remote name are kept beside our own (both non-editable, set only by the synchronisation and the admin form):
 

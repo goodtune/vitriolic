@@ -6,6 +6,7 @@
 Bayside
 canonicalise
 CCHA
+Claude Code
 Cloudinary
 CompOps
 Datastar
@@ -31,6 +32,7 @@ Lucide
 memoised
 Mens
 msgid
+MySideline
 Netball
 PID
 Plex
@@ -46,9 +48,13 @@ slimscroll
 slugify
 statelessly
 subprojects
+Tournament Control
+Tournament Ops
 tox
 undos
 URLconf
 uvicorn
+ViewSet
 wiktionary
 Womens
+YouTube

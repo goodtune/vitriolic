@@ -41,7 +41,7 @@ Every colour derives in `oklch()` from the brand properties: text colours cap th
 - Templates live under `.../admin/explorer/`. Extend `touchtechnology/admin/explorer/list.inc.html`; blocks are unchanged, but `row-buttons-items` holds links and forms, not `<li>`.
 - A template at the old, shell-neutral path (for example `tournamentcontrol/competition/admin/season/edit.html`) still overrides the shell's page at that level, and wins over it.
 - A tab: `{% include "touchtechnology/admin/explorer/_tab.html" with name=… label=… %}` in `tab-links`; its pane `<section class="pane" data-tab-panel role="tabpanel" id="<name>-tab">` in `tab-panes`, as the student page does.
-- Tags are in `{% load admin_explorer %}` (`icon`, `explorer_tree`, `widget`, `admin_media`, `initials`...); `{% load admin %}` keeps only the neutral `allowed`, `brand_logo_url`, `admin_brand` and `version_string`.
+- Tags are in `{% load admin_explorer %}` (`icon`, `explorer_tree`, `widget`, `admin_media`, `initials` and the rest); `{% load admin %}` keeps only the neutral `allowed`, `brand_logo_url`, `admin_brand` and `version_string`.
 - `bootstrap3` and `django_gravatar` are no longer needed; listed, they are harmless.
 - `TOUCHTECHNOLOGY_HTMX_ADMIN_TABS` still fetches a pane when first shown.
 - Edit pages no longer offer Delete; rows do.
