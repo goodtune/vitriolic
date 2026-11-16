@@ -2408,9 +2408,73 @@ class BaseClubAssociationFormSet(UserMixin, ConstructFormMixin, BaseInlineFormSe
         return {"user": self.user, "club": self.instance}
 
 
+def number_worn_error(number, person):
+    """A team's number can be worn by one of its people at a time."""
+    return forms.ValidationError(
+        _("Number %(number)s is already worn by %(person)s."),
+        params={"number": number, "person": person},
+    )
+
+
+def has_statistics_error(association):
+    """A person with statistics for a team stays in it (see ``removable``)."""
+    return forms.ValidationError(
+        _(
+            "%(person)s has statistics for %(team)s and cannot be removed "
+            "from the team."
+        ),
+        params={"person": association.person, "team": association.team},
+    )
+
+
 class BaseTeamAssociationFormSet(UserMixin, ConstructFormMixin, BaseInlineFormSet):
     def get_defaults(self):
-        return {"user": self.user, "team": self.instance}
+        return {
+            "user": self.user,
+            "team": self.instance,
+            # The forms are compared with each other in ``clean``, so that
+            # two people can exchange numbers in one submission.
+            "saved_together": self.get_queryset(),
+        }
+
+    def clean(self):
+        super().clean()
+        kept, removed = [], []
+        for form in self.forms:
+            if self.can_delete and self._should_delete_form(form):
+                removed.append(form)
+            elif hasattr(form, "cleaned_data"):
+                kept.append(form)
+        self._clean_numbers(kept)
+        staying = (
+            self.instance.people.exclude(pk__in=self.instance.people.removable())
+            .filter(pk__in=[form.instance.pk for form in removed if form.instance.pk])
+            .select_related("person", "team")
+        )
+        errors = [has_statistics_error(association) for association in staying]
+        if errors:
+            raise forms.ValidationError(errors)
+
+    @staticmethod
+    def _clean_numbers(kept):
+        """
+        Refuse a number given to more than one of the forms being ``kept``.
+        Only a form whose number was changed is refused, so a team that
+        already has a number twice can still be saved as it stands.
+        """
+        wearers = collections.defaultdict(list)
+        for form in kept:
+            number = form.cleaned_data.get("number")
+            if number is not None:
+                wearers[number].append(form)
+        for number, wearing in wearers.items():
+            for form in wearing:
+                others = [other for other in wearing if other is not form]
+                if others and "number" in form.changed_data:
+                    form.add_error(
+                        "number",
+                        number_worn_error(number, others[0].cleaned_data.get("person")),
+                    )
 
 
 class BaseSeasonAssociationFormSet(UserMixin, ConstructFormMixin, BaseModelFormSet):
@@ -2439,12 +2503,30 @@ class ClubAssociationForm(UserMixin, ModelForm):
 
 
 class TeamAssociationForm(UserMixin, ModelForm):
-    def __init__(self, team, *args, **kwargs):
+    def __init__(self, team, *args, saved_together=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["person"].queryset = team.club.members.all()
+        # A team's people come from its club; a team without one has nobody
+        # to choose from until it is given a club (``Team.ensure_club``).
+        people = Person.objects.none() if team.club is None else team.club.members.all()
+        self.fields["person"].queryset = people
         self.fields[
             "roles"
         ].queryset = team.division.season.competition.team_roles.all()
+        # The rest of the team, whose numbers this one must not take. A
+        # formset compares the people it saves together itself.
+        if saved_together is None:
+            saved_together = team.people.filter(pk=self.instance.pk)
+        self.others = team.people.exclude(pk__in=saved_together)
+
+    def clean_number(self):
+        number = self.cleaned_data.get("number")
+        # Only a number that was changed is checked, so a person who already
+        # shares a number can still be saved as they stand.
+        if number is not None and "number" in self.changed_data:
+            other = self.others.filter(number=number).select_related("person").first()
+            if other is not None:
+                raise number_worn_error(number, other.person)
+        return number
 
     class Meta:
         model = TeamAssociation

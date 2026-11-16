@@ -1,0 +1,25 @@
+{% extends "tournamentcontrol/competition/admin/workbook/base.html" %}
+{% load i18n admin_workbook %}
+
+{% block page_title %}{% trans "Give the team a club" %}{% endblock %}
+
+{% block content %}
+	{% trans "Team" as eyebrow %}{% trans "Give the team a club" as title %}
+	{% include "tournamentcontrol/competition/admin/workbook/_page_head.html" %}
+
+	<form class="wb-sheet wb-narrow" action="" method="post">
+		{% csrf_token %}
+		<p>{% blocktrans %}The people of a team come from its club. {{ team }} has no club, so nobody can be added to it yet.{% endblocktrans %}</p>
+		{% if club %}
+			<p>{% blocktrans %}{{ team }} will join {{ club }}, the club of {{ competition }} that has its name.{% endblocktrans %}</p>
+		{% else %}
+			<p>{% blocktrans %}A club named {{ team }} will be created, added to the clubs of {{ competition }} and given this team.{% endblocktrans %}</p>
+		{% endif %}
+		<div class="wb-formfoot">
+			<div class="wb-actions">
+				<button type="submit" class="wb-button wb-button-primary">{% trans "Give the team a club" %}</button>
+				<a class="wb-button wb-button-quiet" href="{{ cancel_url }}">{% trans "Cancel" %}</a>
+			</div>
+		</div>
+	</form>
+{% endblock %}

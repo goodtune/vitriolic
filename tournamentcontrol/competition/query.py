@@ -209,7 +209,32 @@ class StatisticQuerySet(QuerySet):
         )
 
 
+class PersonQuerySet(QuerySet):
+    def deletable(self):
+        """
+        The people who can be deleted: those with no statistics recorded, who
+        are not in a team of a season that has started.
+        """
+        return self.exclude(statistics__isnull=False).exclude(
+            teamassociation__team__division__season__start_date__lt=timezone.now()
+        )
+
+
 class TeamAssociationQuerySet(QuerySet):
+    def removable(self):
+        """
+        The people who can be taken out of their team: those with no
+        statistics recorded in one of the team's matches.
+        """
+        SimpleScoreMatchStatistic = apps.get_model(
+            "competition", "SimpleScoreMatchStatistic"
+        )
+        statistics = SimpleScoreMatchStatistic.objects.filter(
+            Q(match__home_team=OuterRef("team")) | Q(match__away_team=OuterRef("team")),
+            player=OuterRef("person"),
+        )
+        return self.filter(~Exists(statistics))
+
     def with_statistics(self, team):
         """
         Total each person's played, points and MVP counts for ``team``.

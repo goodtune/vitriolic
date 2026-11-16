@@ -37,7 +37,7 @@ from django.utils import timezone
 from django.utils.formats import date_format, time_format
 from django.utils.functional import cached_property, lazy
 from django.utils.safestring import mark_safe
-from django.utils.text import format_lazy
+from django.utils.text import format_lazy, slugify
 from django.utils.translation import gettext, gettext_lazy as _, pgettext
 from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
@@ -82,6 +82,7 @@ from tournamentcontrol.competition.managers import (
 from tournamentcontrol.competition.mixins import ModelDiffMixin
 from tournamentcontrol.competition.query import (
     DivisionQuerySet,
+    PersonQuerySet,
     SeasonQuerySet,
     StageQuerySet,
     StatisticQuerySet,
@@ -357,6 +358,27 @@ class Club(AdminUrlMixin, SitemapNodeBase):
     class Meta:
         ordering = ("title",)
 
+    def clean(self):
+        super().clean()
+        # The public site finds a club by its slug alone, so a club cannot
+        # take the slug of another. A club that already shares one is left to
+        # be saved as it stands.
+        other = Club.objects.exclude(pk=self.pk).filter(slug=self.slug).first()
+        if other is None or Club.objects.filter(pk=self.pk, slug=self.slug).exists():
+            return
+        raise ValidationError(
+            {
+                "title": ValidationError(
+                    _(
+                        'The club "%(club)s" already has the address "%(slug)s". '
+                        "Give this club another name, or an address (slug) of "
+                        "its own."
+                    ),
+                    params={"club": other.title, "slug": self.slug},
+                )
+            }
+        )
+
     @cached_property
     def _list_related(self):
         """
@@ -499,6 +521,8 @@ class Person(AdminUrlMixin, models.Model):
         settings.AUTH_USER_MODEL, blank=True, null=True, on_delete=SET_NULL
     )
 
+    objects = PersonQuerySet.as_manager()
+
     def _get_admin_namespace(self):
         return "admin:fixja:club:person"
 
@@ -541,14 +565,7 @@ class Person(AdminUrlMixin, models.Model):
 
     @cached_property
     def can_delete(self):
-        if self.statistics.exists():
-            return False
-
-        now = timezone.now()
-        if self.teamassociation_set.filter(team__division__season__start_date__lt=now):
-            return False
-
-        return True
+        return Person.objects.deletable().filter(pk=self.pk).exists()
 
     @cached_property
     def stats(self):
@@ -1973,6 +1990,83 @@ class Team(AdminUrlMixin, UpstreamMixin, OrderedSitemapNode):
 
         return super().clean()
 
+    def matching_club(self):
+        """
+        The club of the team's competition that carries the team's name (or
+        the address a club of that name would have), or ``None``: the club
+        ``ensure_club`` gives a team that has none.
+        """
+        return self.division.season.competition.clubs.filter(
+            Q(title__iexact=self.title) | Q(slug=slugify(self.title))
+        ).first()
+
+    def ensure_club_permissions(self):
+        """
+        What ``ensure_club`` takes, as ``(action, model, object)``: what
+        doing the same by hand takes. The team is changed; unless its
+        competition has a club for it to take, a club is added and the
+        competition's clubs are changed.
+        """
+        if self.club is not None:
+            return []
+        required = [("change", Team, self)]
+        if self.matching_club() is None:
+            required += [
+                ("add", Club, None),
+                ("change", Competition, self.division.season.competition),
+            ]
+        return required
+
+    def ensure_club(self):
+        """
+        The team's club, first giving a team that has none a club of its own.
+
+        A person belongs to a club and a team's people come from its club, so
+        a team entered without one (a social competition, where the team is
+        all there is) cannot have a squad. Such a team takes the club of its
+        competition that carries its name; when there is none, a club named
+        after the team is created and added to the competition's clubs.
+
+        Raises ``ValidationError`` when the club cannot be created: its name
+        belongs to a club outside the competition (the same people may have
+        entered another competition, but that is not ours to assume), or
+        would not make an address for a club.
+        """
+        if self.club is not None:
+            return self.club
+        competition = self.division.season.competition
+        with transaction.atomic():
+            club = self.matching_club()
+            if club is None:
+                slug = slugify(self.title)
+                if not slug:
+                    raise ValidationError(
+                        _(
+                            'A club cannot be named after "%(team)s". Create a '
+                            "club for the team and give it to the team."
+                        ),
+                        params={"team": self.title},
+                    )
+                elsewhere = Club.objects.filter(slug=slug).first()
+                if elsewhere is not None:
+                    raise ValidationError(
+                        _(
+                            'The club "%(club)s" already has the name of this '
+                            "team, and is not one of the clubs of "
+                            "%(competition)s. Add it to the competition's clubs "
+                            "and give it to the team, or create a club of "
+                            "another name for the team."
+                        ),
+                        params={"club": elsewhere.title, "competition": competition},
+                    )
+                club = Club(title=self.title, slug=slug)
+                club.full_clean()
+                club.save()
+                competition.clubs.add(club)
+            self.club = club
+            self.save(update_fields=["club"])
+        return club
+
     @cached_property
     def _list_select_related(self):
         return {"people": ["person"]}
@@ -1991,6 +2085,9 @@ class Team(AdminUrlMixin, UpstreamMixin, OrderedSitemapNode):
             self.division_id,
             self.pk,
         )
+
+    def _get_url_names(self):
+        return super()._get_url_names() + ["club"]
 
     def __repr__(self):
         return f"<Team: {self.title}>"
