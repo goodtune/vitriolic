@@ -23,7 +23,8 @@ The Competition API is accessible at `/api/v1/` as part of the unified REST API 
 ### Live Streaming API
 
 #### Overview
-The live streaming API provides standalone endpoints for managing YouTube live stream broadcasts for tournament matches. This API requires `change_match` permission and integrates with the Google YouTube Data API v3.
+The live streaming API provides standalone endpoints for managing YouTube live stream broadcasts for tournament matches.
+This API requires `change_match` permission and integrates with the Google YouTube Data API v3.
 
 #### Authentication & Permissions
 - **Authentication Required**: All endpoints require user authentication

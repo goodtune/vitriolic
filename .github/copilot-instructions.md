@@ -29,9 +29,12 @@ This is a Python based repository, it provides a Django reusable application tha
     - Avoid `assertTrue` and `assertFalse` in favor of `assertEqual` with the expected value. `assertNotEqual` is not a substitute; see the Assertion Guidelines below.
     - Use `assertCountEqual` to check lists and querysets.
 4. Use `tox` for running tests across supported Python versions
-    - Before opening a PR, run the environment with no selector (`tox -e <env>` alone), as CI does. Module order changes what leaks between tests, so a module that passes on its own can fail in the full run.
-5. **Continuous Improvement**: During any code review iteration, continuously evolve this instructions file to incorporate new guidance and reaffirm established patterns based on reviewer feedback. **When updating this file, also update `CLAUDE.md` to maintain synchronization with the summary overview.**
-6. **Imports and Dependencies**: 
+    - Before opening a PR, run the environment with no selector (`tox -e <env>` alone), as CI does.
+      Module order changes what leaks between tests, so a module that passes on its own can fail in the full run.
+5. **Continuous Improvement**: During any code review iteration, continuously evolve this instructions file to incorporate new guidance and reaffirm established patterns based on reviewer feedback.
+
+   **When updating this file, also update `CLAUDE.md` to maintain synchronization with the summary overview.**
+6. **Imports and Dependencies**:
     - **All imports must be at the head of the file** - never place import statements inside functions or methods
     - Never use try/except for imports of required dependencies - imports should be at the head of the file
     - Only use inline imports to avoid circular import issues

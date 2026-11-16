@@ -32,9 +32,11 @@ This is a Django-based repository providing reusable applications for sporting c
 
 ### Running Tests
 
-- Run `tox -l` to list the environments. Pick the latest Django/Python combination.
+- Run `tox -l` to list the environments.
+  Pick the latest Django/Python combination.
 - Run `tox -e <env>` to run all tests for the environment.
-- Run `tox -e <env> -- tournamentcontrol.competition` to run all the tests for that module. You can add more modules.
+- Run `tox -e <env> -- tournamentcontrol.competition` to run all the tests for that module.
+  You can add more modules.
 - Run `tox -e <env> -- tournamentcontrol.competition.tests.test_competition_admin.GoodViewTests.test_competition` to run a specific test.
 - You can combine various fragments, but always used full dotted address (ie. `package.module.Class.test_method`) and never path (ie. `package/module.py::Class::test_method`).
 
@@ -52,7 +54,8 @@ This is a Django-based repository providing reusable applications for sporting c
 - Use ORM relations instead of manual queries
 - Never perform `git add .` - always be explicit about the files you add
 - Never make up ways to run the tests, follow the instructions
-- Python `import` statements must ALWAYS appear at the head of a file. The ONLY exception is if doing so would create a cycle, but you should try to remove the cycle first
+- Python `import` statements must ALWAYS appear at the head of a file.
+  The ONLY exception is if doing so would create a cycle, but you should try to remove the cycle first
 - Never run Python scripts directly using `python script.py` - always use the proper Django management command interface or test framework
 - Never try to run Django management commands, this is a library, not a Django project
 
