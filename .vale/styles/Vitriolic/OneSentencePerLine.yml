@@ -1,0 +1,8 @@
+extends: existence
+message: "Start each sentence on a new line."
+link: https://sembr.org
+level: error
+scope: [paragraph, list]
+nonword: true
+tokens:
+  - '[a-z0-9)`*_][.!?]["'')*_]* +[A-Z]'

@@ -1,0 +1,23 @@
+extends: existence
+message: "'%s' says little. Say what the thing does, or leave it out."
+level: error
+ignorecase: true
+tokens:
+  - comprehensive
+  - crucial
+  - cutting-edge
+  - delve
+  - effortless(?:ly)?
+  - elevates?
+  - empowers?
+  - game-changer
+  - holistic
+  - it is important to note
+  - it is worth noting
+  - it's worth noting
+  - myriad
+  - plethora
+  - robust
+  - seamless(?:ly)?
+  - streamlines?
+  - tapestry

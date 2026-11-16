@@ -58,6 +58,7 @@ This is a Django-based repository providing reusable applications for sporting c
   The ONLY exception is if doing so would create a cycle, but you should try to remove the cycle first
 - Never run Python scripts directly using `python script.py` - always use the proper Django management command interface or test framework
 - Never try to run Django management commands, this is a library, not a Django project
+- Write Markdown one sentence per line, in Australian English, with headings in sentence case; run `tox -e vale` on any Markdown you change (see `docs/style.md`)
 
 ## Continuous Improvement
 
