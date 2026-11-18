@@ -6,7 +6,7 @@ This is a Python based repository, it provides a Django reusable application tha
 
 - **Unit Tests**: `tox` to run the full unit test suite across Django/Python versions
 - **E2E Tests**: `tox -e e2e` to run end-to-end browser tests with Playwright
-- **Prose**: `tox -e vale` to lint the Markdown; write it one sentence per line, in Australian English, with headings in sentence case (see `docs/style.md`)
+- **Prose**: `tox -e vale` to lint the Markdown; write the repository's Markdown files one sentence per line, in Australian English, with headings in sentence case (see `docs/style.md`); in pull request descriptions, issues and comments keep each paragraph on one line, because GitHub shows every line break there as a break
 - **Environment Options**: `tox -l` to list available `tox` environments - pick specific ones for faster feedback or run all for thoroughness
 
 ## Repository structure
