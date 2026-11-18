@@ -22,22 +22,34 @@ def broadcasts_today(season, now):
     day = season.local_date(now)
     # A match turned off for streaming can keep its identifier until the
     # broadcast is removed; it is no longer one of the day's broadcasts.
-    matches = Match.objects.filter(
-        stage__division__season=season,
-        date=day,
-        live_stream=True,
-        external_identifier__isnull=False,
-    ).select_related("stage__division__season", "play_at", "home_team", "away_team")
+    # The poll sends YouTube no thumbnail, so the blobs stay in the database.
+    matches = (
+        Match.objects.filter(
+            stage__division__season=season,
+            date=day,
+            live_stream=True,
+            external_identifier__isnull=False,
+        )
+        .select_related("stage__division__season", "play_at", "home_team", "away_team")
+        .defer(
+            "live_stream_thumbnail_image",
+            "stage__division__season__live_stream_thumbnail_image",
+        )
+    )
     start = timezone.make_aware(
         datetime.datetime.combine(day, datetime.time.min), season.get_tzinfo()
     )
     # A removed event (``live_stream=False``) has no broadcast left to poll.
-    live_events = LiveStreamEvent.objects.filter(
-        season=season,
-        live_stream=True,
-        start__gte=start,
-        start__lt=start + datetime.timedelta(days=1),
-    ).select_related("season")
+    live_events = (
+        LiveStreamEvent.objects.filter(
+            season=season,
+            live_stream=True,
+            start__gte=start,
+            start__lt=start + datetime.timedelta(days=1),
+        )
+        .select_related("season")
+        .defer("live_stream_thumbnail_image", "season__live_stream_thumbnail_image")
+    )
     return list(matches) + list(live_events)
 
 

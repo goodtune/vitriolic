@@ -42,6 +42,17 @@ SELECT_RELATED = (
     "away_team_undecided",
 )
 
+# The stream thumbnails are blobs CompOps never shows; a season's would
+# otherwise ride along with every match row (#654).
+DEFER = (
+    "live_stream_thumbnail_image",
+    "stage__division__season__live_stream_thumbnail_image",
+)
+
+
+def _with_related(queryset):
+    return queryset.select_related(*SELECT_RELATED).defer(*DEFER)
+
 
 @dataclasses.dataclass
 class Slot:
@@ -65,8 +76,7 @@ class GroundStreams:
 
 def day_matches(season, day):
     return (
-        Match.objects.filter(stage__division__season=season, date=day)
-        .select_related(*SELECT_RELATED)
+        _with_related(Match.objects.filter(stage__division__season=season, date=day))
         .with_result_state()
         .order_by("time", "play_at__order", "pk")
     )
@@ -175,11 +185,10 @@ def day_scorers(season, day):
 
 
 def _scheduled_matches(day, **filters):
-    return (
+    return _with_related(
         Match.objects.filter(date=day, is_bye=False, **filters)
         .exclude(time=None)
         .exclude(datetime=None)
-        .select_related(*SELECT_RELATED)
     )
 
 
@@ -249,11 +258,7 @@ def day_events(season, day):
 
 
 def team_results(team):
-    return (
-        team.matches.filter(is_bye=False)
-        .select_related(*SELECT_RELATED)
-        .order_by("datetime", "pk")
-    )
+    return _with_related(team.matches.filter(is_bye=False)).order_by("datetime", "pk")
 
 
 def division_leaders(division, limit=10):

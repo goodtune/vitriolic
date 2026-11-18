@@ -66,6 +66,20 @@ class RefreshStatusTests(TestCase):
         ]
         self.assertCountEqual(ids, ["yt1", "ev1"])
 
+    def test_polled_broadcasts_leave_the_thumbnails_behind(self):
+        # Blobs the status poll never sends to YouTube (#654).
+        deferred = {"live_stream_thumbnail_image"}
+        match, event = status.broadcasts_today(self.season, timezone.now())
+        self.assertEqual(
+            (
+                match.get_deferred_fields(),
+                match.stage.division.season.get_deferred_fields(),
+                event.get_deferred_fields(),
+                event.season.get_deferred_fields(),
+            ),
+            (deferred, deferred, deferred, deferred),
+        )
+
     def test_match_not_streamed_is_not_polled(self):
         # A stale identifier outlives the opt-in until the broadcast is gone.
         stale = factories.MatchFactory.create(
