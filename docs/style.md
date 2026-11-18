@@ -20,6 +20,9 @@ Vale also has plugins for most editors, which read the same `.vale.ini`.
   A change to one sentence is then a change to one line, and a review shows what changed.
   Markdown joins the lines of a paragraph, so the rendered page is the same.
 - Do not wrap a sentence over lines, and do not end a line with two spaces to force a break.
+- These layout rules are for the Markdown files in the repository.
+  GitHub shows each line break in a pull request description, issue or comment as a break, so there keep each paragraph on one line.
+  The rules under "Words" apply there too.
 - Write headings in sentence case: "Running the tests", not "Running The Tests".
   Names keep their capitals.
 

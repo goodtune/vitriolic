@@ -260,3 +260,37 @@ class GroundDayTests(DayFixture):
         self.assertEqual(
             queries.ground_day(self.field1, yesterday, at(9, 30)), (first, last, None)
         )
+
+
+class ThumbnailDeferredTests(DayFixture):
+    """
+    The stream thumbnails are blobs CompOps never shows. A large season
+    thumbnail fetched once per match row exhausted a worker's memory (#654).
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.streamed = self.match(8, ground=self.field1, live_stream=True)
+
+    def assertThumbnailsDeferred(self, match):
+        deferred = {"live_stream_thumbnail_image"}
+        self.assertEqual(
+            (
+                match.get_deferred_fields(),
+                match.stage.division.season.get_deferred_fields(),
+            ),
+            (deferred, deferred),
+        )
+
+    def test_every_match_read_leaves_the_thumbnails_behind(self):
+        (gs,), _ = queries.day_streams(self.season, DAY, at(8, 30))
+        reads = {
+            "day_matches": queries.day_matches(self.season, DAY).get(),
+            "day_streams": gs.current,
+            "ground_day": queries.ground_day(self.field1, DAY, at(8, 30))[1],
+            "ground_runsheet": queries.ground_runsheet(self.field1, DAY).get(),
+            "team_results": queries.team_results(self.streamed.home_team).get(),
+        }
+        for name, match in reads.items():
+            with self.subTest(name):
+                self.assertThumbnailsDeferred(match)
