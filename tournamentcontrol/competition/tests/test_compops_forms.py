@@ -113,7 +113,9 @@ class FormsFixture(TestCase):
     def assertDayPage(self):
         self.assert_http_200_ok()
         self.assertResponseTemplateUsed(DAY_TEMPLATE)
-        self.assertResponseContains('<span class="brand">TOURNAMENT OPS</span>')
+        self.assertResponseContains(
+            f'<a class="brand" href="{reverse("compops:index")}">TOURNAMENT OPS</a>'
+        )
 
     def assertBoothPage(self):
         self.assert_http_200_ok()

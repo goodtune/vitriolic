@@ -1,8 +1,9 @@
 """
-The ops site's day-shaped reads: the day's matches grouped into result
+The ops site's reads. Day-shaped: the day's matches grouped into result
 slots, the scored matches whose statistics do not yet balance, and the
-current and next match on each streamed ground. Pure functions over the
-ORM; no request objects, no rendering.
+current and next match on each streamed ground. And the way down to a day:
+the seasons by when they are played, and the days of one season. Pure
+functions over the ORM; no request objects, no rendering.
 
 The state of a match's result lives on ``MatchQuerySet.with_result_state()``
 and time zones on the models (``get_tzinfo()`` and ``local_date()``).
@@ -14,8 +15,11 @@ import datetime
 from django.db.models import (
     BooleanField,
     Case,
+    Count,
     Exists,
     F,
+    Max,
+    Min,
     OuterRef,
     Q,
     Subquery,
@@ -30,6 +34,7 @@ from tournamentcontrol.competition.models import (
     Ground,
     LiveStreamEvent,
     Match,
+    Season,
     SimpleScoreMatchStatistic,
 )
 
@@ -72,6 +77,133 @@ class GroundStreams:
     ground: Ground
     current: Match | None
     next: Match | None
+
+
+@dataclasses.dataclass
+class Events:
+    """
+    The seasons as the home page shows them. Those being played carry
+    ``compops_next_day``, their next day with matches (today, when it has
+    any); the others carry ``compops_days``, the days until they start or
+    since they ended.
+    """
+
+    current: list
+    upcoming: list
+    recent: list
+    competitions: list
+
+
+@dataclasses.dataclass
+class Day:
+    date: datetime.date
+    matches: int
+    entered: int
+    status: str
+
+    @property
+    def outstanding(self):
+        return self.matches - self.entered
+
+
+def events(now, limit=5):
+    """
+    Every season, grouped by when it is played: from its first match day to
+    its last (``current``), still to start (``upcoming``, soonest first) or
+    finished (``recent``, latest first), the last two cut to ``limit``. A
+    season is placed by the date where it is played, and one with no dated
+    match appears only in ``competitions``, which lists them all.
+    """
+    seasons = list(
+        Season.objects.select_related("competition")
+        .defer("live_stream_thumbnail_image")
+        .annotate(
+            first_day=Min("divisions__stages__matches__date"),
+            last_day=Max("divisions__stages__matches__date"),
+        )
+        .order_by(
+            "competition__title",
+            "competition",
+            F("first_day").desc(nulls_last=True),
+            "title",
+        )
+    )
+    current, upcoming, recent, competitions = [], [], [], []
+    for season in seasons:
+        if not competitions or competitions[-1][0] != season.competition:
+            competitions.append((season.competition, []))
+        competitions[-1][1].append(season)
+        if season.first_day is None:
+            continue
+        season.compops_today = season.local_date(now)
+        if season.compops_today < season.first_day:
+            season.compops_days = (season.first_day - season.compops_today).days
+            upcoming.append(season)
+        elif season.compops_today > season.last_day:
+            season.compops_days = (season.compops_today - season.last_day).days
+            recent.append(season)
+        else:
+            current.append(season)
+    if current:
+        # One query for the days still to play of every current season.
+        earliest = min(season.compops_today for season in current)
+        days = {}
+        for pk, day in (
+            Match.objects.filter(
+                stage__division__season__in=current, date__gte=earliest
+            )
+            .order_by()
+            .values_list("stage__division__season", "date")
+            .distinct()
+        ):
+            days.setdefault(pk, []).append(day)
+        for season in current:
+            season.compops_next_day = min(
+                day for day in days[season.pk] if day >= season.compops_today
+            )
+    current.sort(key=lambda season: season.compops_next_day)
+    upcoming.sort(key=lambda season: season.first_day)
+    recent.sort(key=lambda season: season.last_day, reverse=True)
+    return Events(current, upcoming[:limit], recent[:limit], competitions)
+
+
+def season_days(season, now):
+    """
+    The season's days with matches, in order, and the number of its matches
+    with no date. A day's ``status`` is ``complete`` once every result is in;
+    otherwise ``upcoming``, ``today`` or (for a day gone by) ``overdue``.
+    """
+    today = season.local_date(now)
+    rows = (
+        Match.objects.filter(stage__division__season=season)
+        .with_result_state()
+        .order_by()
+        .values("date")
+        .annotate(matches=Count("pk"), entered=Count("pk", filter=Q(has_result=True)))
+        .order_by("date")
+    )
+    days = []
+    undated = 0
+    for row in rows:
+        if row["date"] is None:
+            undated = row["matches"]
+        elif row["date"] > today:
+            days.append(Day(status="upcoming", **row))
+        elif row["matches"] == row["entered"]:
+            days.append(Day(status="complete", **row))
+        else:
+            status = "today" if row["date"] == today else "overdue"
+            days.append(Day(status=status, **row))
+    return days, undated
+
+
+def adjacent_days(season, day):
+    """The season's nearest days with matches before and after ``day``."""
+    found = Match.objects.filter(stage__division__season=season).aggregate(
+        previous=Max("date", filter=Q(date__lt=day)),
+        following=Min("date", filter=Q(date__gt=day)),
+    )
+    return found["previous"], found["following"]
 
 
 def day_matches(season, day):
