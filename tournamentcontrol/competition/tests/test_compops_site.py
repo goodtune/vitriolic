@@ -55,23 +55,189 @@ class IndexTests(CompOpsFixture):
             self.get("compops:index")
             self.assert_http_403_forbidden()
 
-    def test_single_active_season_redirects_to_today(self):
-        with self.login(self.staff):
-            self.get("compops:index")
-        self.assert_http_302_found(url=self.reverse("compops:day", **self.day_kwargs))
-
-    def test_two_active_seasons_are_listed(self):
-        other = factories.SeasonFactory.create(timezone="Australia/Brisbane")
-        factories.MatchFactory.create(
-            stage__division__season=other, date=datetime.date(2026, 10, 8)
+    def season_url(self, season):
+        return reverse(
+            "compops:season",
+            kwargs={"competition": season.competition.slug, "season": season.slug},
         )
+
+    def other_season(self, day, title):
+        season = factories.SeasonFactory.create(
+            title=title, timezone="Australia/Brisbane"
+        )
+        factories.MatchFactory.create(stage__division__season=season, date=day)
+        return season
+
+    def test_season_being_played_opens_at_today(self):
         with self.login(self.staff):
             self.get("compops:index")
         self.assert_http_200_ok()
-        url = reverse(
-            "compops:season", kwargs={"competition": "pacific-cup", "season": "pc26"}
+        self.assertResponseContains("<h2>On now</h2>")
+        today = self.reverse("compops:day", **self.day_kwargs)
+        self.assertResponseContains(f'<a class="btn p" href="{today}">Open today</a>')
+        self.assertResponseNotContains("<h2>Upcoming</h2>")
+        self.assertResponseNotContains("<h2>Recent</h2>")
+
+    def test_rest_day_offers_the_next_day_with_matches(self):
+        self.match.date = datetime.date(2026, 10, 7)
+        self.match.save()
+        factories.MatchFactory.create(
+            stage=self.stage, date=datetime.date(2026, 10, 10)
         )
-        self.assertResponseContains(f'<a href="{url}">{self.season}</a>')
+        with self.login(self.staff):
+            self.get("compops:index")
+        url = reverse("compops:day", kwargs={**self.day_kwargs, "datestr": "20261010"})
+        self.assertResponseContains(f'<a class="btn" href="{url}">Next: Sat 10 Oct</a>')
+
+    def test_upcoming_and_recent_seasons_lead_to_their_days(self):
+        soon = self.other_season(datetime.date(2026, 10, 9), "World Cup 2026")
+        later = self.other_season(datetime.date(2026, 10, 20), "Euros 2026")
+        ended = self.other_season(datetime.date(2026, 10, 7), "Atlantics 2026")
+        older = self.other_season(datetime.date(2026, 9, 28), "Asia Cup 2026")
+        with self.login(self.staff):
+            self.get("compops:index")
+        self.assertResponseContains("<h2>Upcoming</h2>")
+        self.assertResponseContains("<h2>Recent</h2>")
+        for season, note, when in (
+            (soon, "tomorrow", "9 Oct 2026"),
+            (later, "in 12 days", "20 Oct 2026"),
+            (ended, "ended yesterday", "7 Oct 2026"),
+            (older, "ended 10 days ago", "28 Sep 2026"),
+        ):
+            with self.subTest(season.title):
+                self.assertResponseContains(
+                    f'<a class="item" href="{self.season_url(season)}">'
+                    f'<span class="title">{season.title}</span>'
+                    f'<span class="comp">{season.competition.title}</span>'
+                    f'<span class="note">{note}</span>'
+                    f'<span class="when">{when}</span></a>'
+                )
+
+    def test_every_season_is_listed_even_with_no_matches(self):
+        empty = factories.SeasonFactory.create(
+            title="Draft 2027", timezone="Australia/Brisbane", enabled=False
+        )
+        with self.login(self.staff):
+            self.get("compops:index")
+        self.assertResponseContains("<h2>All events</h2>")
+        self.assertResponseContains(f"<h3>{empty.competition.title}</h3>")
+        self.assertResponseContains(
+            f'<a class="item" href="{self.season_url(empty)}">'
+            '<span class="title">Draft 2027</span>'
+            '<span class="tag">Not public</span>'
+            '<span class="when">No matches scheduled</span></a>'
+        )
+
+
+class EmptyIndexTests(TestCase):
+    def test_no_seasons(self):
+        with self.login(factories.UserFactory.create(is_staff=True)):
+            self.get("compops:index")
+        self.assert_http_200_ok()
+        self.assertResponseContains('<p class="empty">There are no events yet.</p>')
+
+
+@freeze_time("2026-10-08 00:00 +10:00")
+class SeasonPageTests(CompOpsFixture):
+    kwargs = {"competition": "pacific-cup", "season": "pc26"}
+
+    def day_url(self, datestr):
+        return reverse("compops:day", kwargs={**self.kwargs, "datestr": datestr})
+
+    def test_login_required(self):
+        self.assertLoginRequired("compops:season", **self.kwargs)
+
+    def test_staff_required(self):
+        with self.login(self.user):
+            self.get("compops:season", **self.kwargs)
+            self.assert_http_403_forbidden()
+
+    def test_unknown_season(self):
+        with self.login(self.staff):
+            self.get("compops:season", competition="pacific-cup", season="pc99")
+        self.assert_http_404_not_found()
+
+    def test_days_are_listed_with_their_results(self):
+        factories.MatchFactory.create(
+            stage=self.stage,
+            date=datetime.date(2026, 10, 6),
+            home_team_score=1,
+            away_team_score=0,
+        )
+        for _ in range(2):
+            factories.MatchFactory.create(
+                stage=self.stage, date=datetime.date(2026, 10, 7)
+            )
+        factories.MatchFactory.create(stage=self.stage, date=datetime.date(2026, 10, 9))
+        factories.MatchFactory.create(stage=self.stage, date=None)
+        with self.login(self.staff):
+            self.get("compops:season", **self.kwargs)
+        self.assert_http_200_ok()
+        self.assertResponseContains(f"<h1>{self.season.title}</h1>")
+        for datestr, day, tag, matches, state, text in (
+            (
+                "20261006",
+                "Tuesday 6 October 2026",
+                "",
+                "1 match",
+                "complete",
+                "All results in",
+            ),
+            (
+                "20261007",
+                "Wednesday 7 October 2026",
+                "",
+                "2 matches",
+                "overdue",
+                "2 results missing",
+            ),
+            (
+                "20261008",
+                "Thursday 8 October 2026",
+                '<span class="tag">Today</span>',
+                "1 match",
+                "today",
+                "1 result to enter",
+            ),
+            (
+                "20261009",
+                "Friday 9 October 2026",
+                "",
+                "1 match",
+                "upcoming",
+                "Upcoming",
+            ),
+        ):
+            with self.subTest(datestr):
+                self.assertResponseContains(
+                    f'<a class="item" href="{self.day_url(datestr)}">'
+                    f'<span class="title">{day}</span>{tag}'
+                    f'<span class="when">{matches}</span>'
+                    f'<span class="state {state}">{text}</span></a>'
+                )
+        self.assertResponseContains('<p class="empty">1 match has no date yet.</p>')
+
+    def test_today_is_the_date_where_the_season_is_played(self):
+        # Midnight on the 8th in Brisbane is still the 7th in Perth.
+        self.season.timezone = "Australia/Perth"
+        self.season.save()
+        with self.login(self.staff):
+            self.get("compops:season", **self.kwargs)
+        self.assertResponseContains(
+            f'<a class="item" href="{self.day_url("20261008")}">'
+            '<span class="title">Thursday 8 October 2026</span>'
+            '<span class="when">1 match</span>'
+            '<span class="state upcoming">Upcoming</span></a>'
+        )
+
+    def test_season_with_no_matches(self):
+        self.match.delete()
+        with self.login(self.staff):
+            self.get("compops:season", **self.kwargs)
+        self.assert_http_200_ok()
+        self.assertResponseContains(
+            '<p class="empty">No matches are scheduled for this event.</p>'
+        )
 
 
 @freeze_time("2026-10-08 00:00 +10:00")
@@ -91,10 +257,47 @@ class DayPageTests(CompOpsFixture):
         self.assertIn(f"m{other.pk}_home_team_score", ids)
         self.assertEqual(sorted(ids), sorted(set(ids)))
 
-    def test_season_redirects_to_today_in_season_time_zone(self):
+    def test_topbar_leads_up_to_the_season_and_home(self):
         with self.login(self.staff):
-            self.get("compops:season", competition="pacific-cup", season="pc26")
-        self.assert_http_302_found(url=self.reverse("compops:day", **self.day_kwargs))
+            self.get("compops:day", **self.day_kwargs)
+        home = self.reverse("compops:index")
+        season = self.reverse(
+            "compops:season", competition="pacific-cup", season="pc26"
+        )
+        self.assertResponseContains(
+            f'<a class="brand" href="{home}">TOURNAMENT OPS</a>'
+        )
+        self.assertResponseContains(
+            f'<a class="season" href="{season}">{self.season}</a>'
+        )
+
+    def test_topbar_steps_to_the_nearest_days_with_matches(self):
+        for day in (datetime.date(2026, 10, 5), datetime.date(2026, 10, 10)):
+            factories.MatchFactory.create(stage=self.stage, date=day)
+        with self.login(self.staff):
+            self.get("compops:day", **self.day_kwargs)
+        before = reverse(
+            "compops:day", kwargs={**self.day_kwargs, "datestr": "20261005"}
+        )
+        after = reverse(
+            "compops:day", kwargs={**self.day_kwargs, "datestr": "20261010"}
+        )
+        self.assertResponseContains(
+            '<nav class="days">'
+            f'<a href="{before}" rel="prev" title="Monday 5 October">‹</a>'
+            '<span class="day">Thursday 8 October</span>'
+            f'<a href="{after}" rel="next" title="Saturday 10 October">›</a>'
+            "</nav>"
+        )
+
+    def test_topbar_has_no_step_past_the_only_day(self):
+        with self.login(self.staff):
+            self.get("compops:day", **self.day_kwargs)
+        self.assertResponseContains(
+            '<nav class="days"><span class="step">‹</span>'
+            '<span class="day">Thursday 8 October</span>'
+            '<span class="step">›</span></nav>'
+        )
 
     def test_day_page_renders_every_panel(self):
         with self.login(self.staff):

@@ -5,8 +5,9 @@
 {% block body %}
 {% timezone season.get_tzinfo %}
 <header class="topbar">
-	<span class="brand">TOURNAMENT OPS</span>
-	<span class="season">{{ season }} · {{ day|date:"l j F" }}</span>
+	<a class="brand" href="{% url 'compops:index' %}">TOURNAMENT OPS</a>
+	<a class="season" href="{% url 'compops:season' competition=season.competition.slug season=season.slug %}">{{ season }}</a>
+	<nav class="days">{% if previous_day %}<a href="{% url 'compops:day' competition=season.competition.slug season=season.slug datestr=previous_day|date:'Ymd' %}" rel="prev" title="{{ previous_day|date:'l j F' }}">‹</a>{% else %}<span class="step">‹</span>{% endif %}<span class="day">{{ day|date:"l j F" }}</span>{% if next_day %}<a href="{% url 'compops:day' competition=season.competition.slug season=season.slug datestr=next_day|date:'Ymd' %}" rel="next" title="{{ next_day|date:'l j F' }}">›</a>{% else %}<span class="step">›</span>{% endif %}</nav>
 	<span class="spacer"></span>
 	<span class="sse" data-class:down="!$connected"><i></i> <span data-text="$connected ? 'live updates' : 'reconnecting'">live updates</span></span>
 	<span class="who">{{ user.get_username }}</span>

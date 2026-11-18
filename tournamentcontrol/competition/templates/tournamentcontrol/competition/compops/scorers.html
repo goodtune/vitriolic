@@ -5,7 +5,7 @@
 {% block body %}
 {% timezone season.get_tzinfo %}
 <header class="topbar">
-	<span class="brand">TOURNAMENT OPS</span>
+	<a class="brand" href="{% url 'compops:index' %}">TOURNAMENT OPS</a>
 	<span class="season">{{ season }} · {{ day|date:"l j F" }}</span>
 	<span class="spacer"></span>
 	<a class="back" href="{% compops_url 'day' %}">Back to the day</a>

@@ -138,8 +138,10 @@ def tournament(transactional_db):
     today = live_kickoff["date"]
 
     season = SeasonFactory.create(
+        title="Pacific Cup 2026",
         slug="pc26",
         slug_locked=True,
+        competition__title="Pacific Cup",
         competition__slug="pacific-cup",
         competition__slug_locked=True,
         timezone=zone_name,
@@ -236,6 +238,78 @@ def tournament(transactional_db):
             },
         ),
     }
+
+
+def test_home_leads_down_to_any_day_of_any_season(
+    compops_page, asgi_live_server, tournament, screenshot_dir
+):
+    page = compops_page
+    season = tournament["season"]
+    stage = tournament["match"].stage
+    today = tournament["match"].date
+    yesterday = today - datetime.timedelta(days=1)
+    MatchFactory.create(
+        stage=stage, date=yesterday, home_team_score=3, away_team_score=2
+    )
+    MatchFactory.create(stage=stage, date=yesterday)
+    MatchFactory.create(stage=stage, date=today + datetime.timedelta(days=1))
+    for title, competition, offset in (
+        ("World Cup 2027", "World Cup", 30),
+        ("European Championships 2026", "European Championships", -5),
+        ("Asia Pacific Championships 2025", "Asia Pacific Championships", -400),
+    ):
+        MatchFactory.create(
+            stage__division__season=SeasonFactory.create(
+                title=title, competition__title=competition, timezone=season.timezone
+            ),
+            date=today + datetime.timedelta(days=offset),
+        )
+    SeasonFactory.create(
+        title="World Cup 2031",
+        competition__title="World Cup (draft)",
+        timezone=season.timezone,
+        enabled=False,
+    )
+
+    page.goto(asgi_live_server.url + reverse("compops:index"))
+    now = page.locator("section.now li")
+    expect(now.locator(".title")).to_have_text(season.title)
+    expect(now.locator("a.btn")).to_have_text("Open today")
+    expect(page.locator("section.all li")).to_have_count(5)
+    # How long ago a season ended is only said while it is news.
+    expect(page.locator("section.recent .note")).to_have_text(["ended 5 days ago"])
+    page.screenshot(
+        path=str(screenshot_dir / "compops_home_desktop.png"), full_page=True
+    )
+    page.set_viewport_size({"width": 390, "height": 844})
+    page.screenshot(path=str(screenshot_dir / "compops_home_phone.png"))
+    page.set_viewport_size({"width": 1280, "height": 720})
+
+    # A season that ended is two steps from any of its days.
+    now.locator("a.item").click()
+    expect(page.locator("main h1")).to_have_text(season.title)
+    days = page.locator("ul.list li")
+    expect(days).to_have_count(3)
+    expect(days.nth(0).locator(".state")).to_have_text("1 result missing")
+    expect(days.nth(1).locator(".tag")).to_have_text("Today")
+    page.screenshot(
+        path=str(screenshot_dir / "compops_season_desktop.png"), full_page=True
+    )
+    page.set_viewport_size({"width": 390, "height": 844})
+    page.screenshot(path=str(screenshot_dir / "compops_season_phone.png"))
+    page.set_viewport_size({"width": 1280, "height": 720})
+
+    days.nth(0).locator("a.item").click()
+    expect(page.locator(".topbar .day")).to_have_text(
+        f"{yesterday:%A} {yesterday.day} {yesterday:%B}"
+    )
+    page.screenshot(
+        path=str(screenshot_dir / "compops_day_navigation.png"), full_page=True
+    )
+    page.locator('.topbar a[rel="next"]').click()
+    expect(page).to_have_url(asgi_live_server.url + tournament["day_path"])
+    page.locator(".topbar a.brand").click()
+    expect(page).to_have_url(asgi_live_server.url + reverse("compops:index"))
 
 
 def test_score_entered_on_one_page_appears_on_another(

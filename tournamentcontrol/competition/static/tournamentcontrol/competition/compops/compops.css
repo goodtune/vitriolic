@@ -18,7 +18,13 @@ button,input,select{font:inherit;color:inherit}
 /* Top bar */
 .topbar{background:var(--ink);color:#fff;padding:0 16px;display:flex;align-items:center;gap:16px;height:52px;flex:none}
 .topbar .brand{font:700 20px/1 var(--display);letter-spacing:.04em}
+.topbar a.brand{color:#fff}
 .topbar .season{font-size:14px;color:#c3cad3}
+.topbar a.season:hover,.topbar .days a:hover{color:#fff}
+.topbar .days{display:flex;align-items:center;gap:4px;font-size:14px;color:#c3cad3;min-width:0}
+.topbar .days .day{color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.topbar .days a,.topbar .days .step{display:inline-flex;align-items:center;justify-content:center;width:var(--h-sm);height:var(--h-sm);border:1px solid #3a434e;border-radius:var(--r);color:#c3cad3;font-size:18px;line-height:1;flex:none}
+.topbar .days .step{color:#4d5763;border-color:#2b323b}
 .topbar .spacer{flex:1}
 .topbar .who{font-size:12px;color:#8f99a5}
 .topbar .back{color:#fff;border:1px solid #3a434e;border-radius:var(--r);height:var(--h-sm);padding:0 12px;display:inline-flex;align-items:center;font-size:13px}
@@ -192,7 +198,29 @@ main.index ul{list-style:none;margin:0;padding:0;max-width:480px;background:var(
 main.index li + li{border-top:1px solid var(--line)}
 main.index li a{display:block;padding:12px 16px;font-weight:600}
 
+/* Home and season pages: the way down to a day */
+main.index{flex:1;min-height:0}
+main.index .sub{margin:-6px 0 0;color:var(--muted)}
+main.index h2{margin:28px 0 8px;font:600 12px/1 var(--font);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+main.index h3{margin:16px 0 6px;font:600 17px/1.2 var(--display)}
+main.index p.empty{padding:16px 0}
+main.index ul.list{max-width:760px}
+.list li{display:flex;align-items:center}
+main.index .list a.item{flex:1;min-width:0;display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;min-height:48px;padding:10px 16px}
+.list a.item:hover{background:var(--bg)}
+.list .comp,.list .note,.list .when{color:var(--muted);font-size:13px;font-weight:400}
+.list .when{margin-left:auto}
+.list .tag{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:var(--r-pill);background:var(--primary-bg);color:var(--primary);font-size:12px;font-weight:600}
+.list .state.today{background:var(--warn-bg);color:#8a5a0f}
+.list .state.overdue{background:var(--accent-bg);color:var(--accent)}
+main.index .list li>a.btn{display:inline-flex;flex:none;margin:0 12px 0 0;padding:0 14px}
+main.index .list li>a.btn.p{color:#fff}
+.now .list{border-left:3px solid var(--accent)}
+
 @media (max-width:900px){
+	.topbar{gap:10px}
+	.topbar a.season,.topbar .who{display:none}
+	main.index{padding:16px}
 	body{overflow:auto}
 	main#main{display:flex;flex-direction:column}
 	.results{grid-template-rows:none}

@@ -7,7 +7,6 @@ Mount it from a project's urls.py::
     urlpatterns += [path("compops/", CompOpsSite().urls)]
 """
 
-import datetime
 import logging
 from functools import wraps
 
@@ -20,7 +19,7 @@ from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import ImproperlyConfigured
 from django.db import transaction
 from django.http import Http404, HttpResponse, HttpResponseBadRequest
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404
 from django.urls import include, path, re_path, reverse
 from django.utils import timezone
 
@@ -438,34 +437,23 @@ class CompOpsSite(Application):
 
     @staff_required
     def index(self, request):
-        today = timezone.now().date()
-        window = (
-            today - datetime.timedelta(days=1),
-            today + datetime.timedelta(days=1),
-        )
-        seasons = list(
-            Season.objects.filter(
-                enabled=True, divisions__stages__matches__date__range=window
-            )
-            .select_related("competition")
-            .defer("live_stream_thumbnail_image")
-            .distinct()
-            .order_by("competition__title", "title")
-        )
-        if len(seasons) == 1:
-            return redirect(self._today_url(seasons[0]))
-        return self.render(
-            request, self.template_path("index.html"), {"seasons": seasons}
-        )
-
-    def _today_url(self, season):
-        today = season.local_date()
-        return reverse("compops:day", kwargs=day_kwargs(season, today))
+        """Every season, with those being played, coming up or just ended first."""
+        context = {"events": queries.events(timezone.now())}
+        return self.render(request, self.template_path("index.html"), context)
 
     @staff_required
     @season_view
     def season(self, request, season, day, **kwargs):
-        return redirect(self._today_url(season))
+        """The season's days, each leading to its day page."""
+        now = timezone.now()
+        days, undated = queries.season_days(season, now)
+        context = {
+            "season": season,
+            "days": days,
+            "undated": undated,
+            "today": season.local_date(now),
+        }
+        return self.render(request, self.template_path("season.html"), context)
 
     @staff_required
     @season_view
@@ -475,6 +463,9 @@ class CompOpsSite(Application):
     def day_page(self, request, season, day, **overrides):
         """The whole day page, as a plain browser gets it."""
         context = self.day_context(request, season, day, **overrides)
+        context["previous_day"], context["next_day"] = queries.adjacent_days(
+            season, day
+        )
         return self.render(request, self.template_path("day.html"), context)
 
     # --- fragments --------------------------------------------------

@@ -31,6 +31,22 @@ Datastar drops the body of non-200 responses, so a refusal that used an error st
 The lamp, like a ground's block in the day page's streams column and a result row with an open Edit or a refused save, is then held: the snapshot a reconnect sends passes over it, and the next action, or a push about the same ground or match, releases it.
 The template comment above `match_row` in `day.html` explains the mechanism.
 
+## Pages
+
+The site has three levels, each leading down to the next.
+
+- The home page (`compops:index`) lists every season, whether or not it is enabled.
+  The seasons being played come first, each with a button that opens today's page, or the next day with matches on a rest day.
+  The next five seasons to start and the last five to end follow, and then every season under its competition.
+  A season with no dated matches appears only in that last list.
+- The season page (`compops:season`) lists the season's days with matches.
+  Each day shows how many matches it has and whether its results are all in, still to enter today, or missing from a day gone by.
+- The day page (`compops:day`) is the dashboard.
+  Its top bar leads back up to the season and the home page, and steps to the nearest earlier and later days with matches.
+
+A season is placed by the date where it is played, from its `timezone`.
+Any day of any season can be opened, so a past day can be corrected or shown in training, and a coming one explored before it starts.
+
 ## Template partials on Django 5.2
 
 Skip this section on Django 6.0 and later.
