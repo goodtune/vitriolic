@@ -11,8 +11,6 @@
 - ``{{ user|initials }}``: one or two letters for an avatar.
 """
 
-from urllib.parse import parse_qsl, urlencode
-
 from django.forms.boundfield import BoundField
 from django.template import Library
 from django.templatetags.static import static
@@ -207,13 +205,10 @@ def admin_url(obj, name):
     "touchtechnology/admin/explorer/_pagination.html", takes_context=True
 )
 def admin_pagination(context):
-    """The links to the other pages of a list, keeping its other parameters."""
-    query = [
-        (key, value)
-        for key, value in parse_qsl(context.get("QUERY_STRING") or "", True)
-        if key != "page"
-    ]
-    context.update({"QUERY_STRING": urlencode(query, True)})
+    """
+    The links to the other pages of a list. The template builds each with
+    ``{% querystring %}``, which keeps the request's other parameters.
+    """
     return context
 
 

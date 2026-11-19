@@ -418,9 +418,10 @@ class QueryStringTest(TestCase):
     def test_filter_page(self):
         self.get("querystring:index", data={"page": 2, **self.query})
 
+        # The page keeps its place among the request's parameters.
         year = self.query["year"]
-        self.assertResponseContains(f'<a href="?year={year}&amp;page=2">2</a>')
-        self.assertResponseNotContains(f'<a href="?year={year}&amp;page=3">3</a>')
+        self.assertResponseContains(f'<a href="?page=2&amp;year={year}">2</a>')
+        self.assertResponseNotContains(f'<a href="?page=3&amp;year={year}">3</a>')
 
         self.assertResponseNotContains('<span id="5">5</span>')
         self.assertResponseContains('<span id="9">9</span>')

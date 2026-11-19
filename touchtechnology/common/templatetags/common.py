@@ -8,7 +8,6 @@ from contextlib import contextmanager
 from decimal import Decimal
 from importlib import metadata
 from itertools import islice, zip_longest
-from urllib.parse import parse_qsl
 
 try:
     import sentry_sdk
@@ -37,7 +36,6 @@ from django.urls import Resolver404, resolve, reverse
 from django.utils import timezone
 from django.utils.encoding import smart_str
 from django.utils.html import escape
-from django.utils.http import urlencode
 from django.utils.safestring import mark_safe
 from django.utils.text import slugify
 from guardian.core import ObjectPermissionChecker
@@ -456,11 +454,10 @@ def analytics(code=None):
     "touchtechnology/common/templatetags/pagination.html", takes_context=True
 )
 def pagination(context):
-    query_string = context.get("QUERY_STRING", "")
-    query = parse_qsl(query_string, True)
-    query = [q for q in query if q[0] != "page"]
-    query_string = urlencode(query, True)
-    context.update({"QUERY_STRING": query_string})
+    """
+    The links to the other pages of a list. The template builds each with
+    ``{% querystring %}``, which keeps the request's other parameters.
+    """
     return context
 
 
