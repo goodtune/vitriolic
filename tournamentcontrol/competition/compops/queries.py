@@ -202,9 +202,15 @@ def season_days(season, now):
     return days, undated
 
 
-def adjacent_days(season, day):
-    """The season's nearest days with matches before and after ``day``."""
-    found = Match.objects.filter(stage__division__season=season).aggregate(
+def adjacent_days(season, day, ground=None):
+    """
+    The season's nearest days with matches before and after ``day``; with a
+    ``ground``, the nearest with matches on it.
+    """
+    matches = Match.objects.filter(stage__division__season=season)
+    if ground is not None:
+        matches = matches.filter(play_at=ground)
+    found = matches.aggregate(
         previous=Max("date", filter=Q(date__lt=day)),
         following=Min("date", filter=Q(date__gt=day)),
     )

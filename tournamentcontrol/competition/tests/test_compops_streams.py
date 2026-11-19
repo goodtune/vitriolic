@@ -96,6 +96,57 @@ class StreamsFixture(TestCase):
             return b"".join(self.last_response.streaming_content).decode()
 
 
+class BoothLinkTests(StreamsFixture):
+    """The way from the ops pages into a booth, for those who may open one."""
+
+    season_kw = {"competition": "pacific-cup", "season": "pc26"}
+
+    def booth_url(self):
+        return reverse(
+            "compops:booth", kwargs={**self.season_kw, "ground": self.field1.slug}
+        )
+
+    def test_day_page_links_each_ground_to_its_booth(self):
+        with self.login(self.streamer):
+            self.get("compops:day", **self.kw)
+        self.assertResponseContains(
+            f'<a class="ground" href="{self.booth_url()}" title="Open the booth">Field 1</a>'
+        )
+
+    def test_another_day_links_to_the_booth_of_that_day(self):
+        with self.login(self.streamer):
+            self.get("compops:day", **{**self.kw, "datestr": "20261010"})
+        self.assertResponseContains(
+            f'<a class="ground" href="{self.booth_url()}?day=20261010" title="Open the booth">Field 1</a>'
+        )
+
+    def test_day_page_names_the_ground_to_staff_who_may_not_open_it(self):
+        with self.login(self.staff):
+            self.get("compops:day", **self.kw)
+        self.assertResponseContains('<div class="ground">Field 1</div>')
+
+    def test_streams_fragment_keeps_the_link(self):
+        with self.login(self.streamer):
+            self.get("compops:streams", **self.kw)
+        self.assertResponseContains(
+            f'<a class="ground" href="{self.booth_url()}" title="Open the booth">Field 1</a>'
+        )
+
+    def test_season_page_links_to_its_booths(self):
+        url = reverse("compops:booth-index", kwargs=self.season_kw)
+        with self.login(self.streamer):
+            self.get("compops:season", **self.season_kw)
+        self.assertResponseContains(
+            f'<a class="btn" href="{url}">Commentary booths</a>'
+        )
+
+    def test_season_page_has_no_booths_link_for_staff_who_may_not_open_them(self):
+        with self.login(self.staff):
+            self.get("compops:season", **self.season_kw)
+        self.assert_http_200_ok()
+        self.assertEqual(self.last_response.content.count(b"Commentary booths"), 0)
+
+
 class StreamsFragmentTests(StreamsFixture):
     def test_current_match_with_status_and_buttons(self):
         with self.login(self.streamer):

@@ -125,7 +125,7 @@
 	{% for item in streams %}{% partialdef ground_stream inline %}
 <div id="stream-{{ item.ground.pk }}" class="stream"{% if item.compops_held or item.compops_errors %} data-ignore-morph data-preserve-attr="data-ignore-morph"{% endif %}>
 	<div class="stream-h">
-		<div class="ground">{{ item.ground.title }}</div>
+		{% if can_booth %}<a class="ground" href="{% url 'compops:booth' competition=season.competition.slug season=season.slug ground=item.ground.slug %}{% if not is_today %}?day={{ day|date:'Ymd' }}{% endif %}" title="Open the booth">{{ item.ground.title }}</a>{% else %}<div class="ground">{{ item.ground.title }}</div>{% endif %}
 		{% if item.current %}<span class="badge {{ item.current.live_stream_status|default:'none' }}">{{ item.current.live_stream_status|default:"no status" }}</span>{% endif %}
 	</div>
 	{% for error in item.compops_errors %}<p class="warn">{{ error }}</p>{% endfor %}

@@ -10,6 +10,7 @@
 <main class="index">
 	<h1>{{ season.title }}</h1>
 	<p class="sub">{{ season.competition.title }}{% if days %}{% with first=days|first last=days|last %} · {% if first.date == last.date %}{{ first.date|date:"j F Y" }}{% else %}{{ first.date|date:"j F" }} – {{ last.date|date:"j F Y" }}{% endif %}{% endwith %}{% endif %} · {{ season.timezone }}</p>
+	{% if can_booth %}<p class="actions"><a class="btn" href="{% url 'compops:booth-index' competition=season.competition.slug season=season.slug %}">Commentary booths</a></p>{% endif %}
 	{% if days %}
 		<h2>Days</h2>
 		<ul class="list">

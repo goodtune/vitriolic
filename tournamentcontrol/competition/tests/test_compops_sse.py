@@ -661,6 +661,26 @@ class BoothEventsTests(SseFixture, TestCase):
         finally:
             await reader.close()
 
+    async def test_snapshot_follows_the_day_the_page_is_on(self):
+        when = timezone.make_aware(datetime.datetime(2026, 10, 10, 19, 0), TZ)
+        await sync_to_async(factories.MatchFactory.create)(
+            stage=self.stage,
+            datetime=when,
+            date=when.date(),
+            time=when.time(),
+            play_at=self.field1,
+            live_stream=True,
+        )
+        reader, chunks = await self.connect_booth(
+            {"day": "20261010"}, until='<section id="strip"'
+        )
+        try:
+            snapshot = "".join(chunks)
+            self.assertIn("<b>Looking at Saturday 10 October</b>", snapshot)
+            self.assertIn('<div class="sub">19:00 · ', snapshot)
+        finally:
+            await reader.close()
+
     async def test_snapshot_without_signals_is_lamp_and_strip(self):
         reader, chunks = await self.connect_booth(until='<section id="strip"')
         try:

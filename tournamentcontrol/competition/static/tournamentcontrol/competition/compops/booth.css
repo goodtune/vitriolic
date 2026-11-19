@@ -12,6 +12,12 @@ body.booth header{display:flex;align-items:center;gap:16px;height:56px;padding:0
 body.booth .brand{font:700 20px/1 var(--display);letter-spacing:.04em}
 body.booth header .ground{font:600 20px/1 var(--display);color:var(--muted)}
 body.booth .spacer{flex:1}
+body.booth header .days{display:flex;align-items:center;gap:4px;font-size:14px;color:var(--muted);min-width:0}
+body.booth header .days .day{color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body.booth header .days a,body.booth header .days .step{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:30px;border:1px solid var(--line);border-radius:4px;color:var(--muted);font-size:18px;line-height:1;flex:none}
+body.booth header .days .step{opacity:.4}
+body.booth header .days a.today{font-size:13px;padding:0 10px;margin-left:6px;color:var(--ink)}
+body.booth header .days a:hover{color:var(--ink)}
 body.booth .sse{color:var(--muted);border-color:var(--line)}
 body.booth .clock{font:600 22px/1 var(--display)}
 
