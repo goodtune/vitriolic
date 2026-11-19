@@ -135,6 +135,13 @@ class AuthSiteGroupTests(TestCase):
             self.shell.template("list.html"),
         )
 
+    def test_group_list_offers_each_group_one_delete(self):
+        delete = self.reverse("admin:auth:groups:delete", pk=self.group_instance.pk)
+        with self.login(self.superuser):
+            self.get_check_200("admin:auth:groups:list")
+        content = self.last_response.content.decode()
+        self.assertEqual(content.count(f'action="{delete}"'), 1)
+
     def test_group_create(self):
         self.get_generic_200(
             "admin:auth:groups:add",
@@ -242,6 +249,15 @@ class OwnUserRecordTests(TestCase):
                 ),
             )
         )
+
+    def test_the_list_offers_each_user_one_delete(self):
+        # The list's own Delete, and not a second from the record's own
+        # ``urls.delete``, which the user model now has.
+        delete = self.reverse("admin:auth:users:delete", pk=self.staff.pk)
+        with self.login(self.superuser):
+            self.get_check_200("admin:auth:users:list")
+        content = self.last_response.content.decode()
+        self.assertEqual(content.count(f'action="{delete}"'), 1)
 
     def test_the_edit_page(self):
         with self.login(self.superuser):

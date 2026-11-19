@@ -15,7 +15,10 @@
 	  row-buttons-extra    buttons always on show in a row (Build, Undo, Up...)
 	  row-buttons-items    the row's menu: <li><a href="...">Label</a></li>
 	  row-buttons-detail   the menu's View item, for an object with a detail page
-	  row-buttons-delete   the menu's last item, Delete (empty it for none)
+	  row-buttons-delete   the menu's last item, Delete (empty it for none). A
+	                       list with a Delete of its own puts it here, never
+	                       in row-buttons-items, or a record with a delete
+	                       page of its own is offered two
 	  delete-data-title    how the object is named when asking to delete it
 	  table-row-empty      what an empty list says
 {% endcomment %}{% firstof create|resolved create_url as create_link %}{% with type=model|type %}
