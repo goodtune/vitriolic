@@ -571,7 +571,17 @@ def set_live_stream_event_thumbnail(event_pk):
     media_body = obj.get_thumbnail_media_upload()
 
     if media_body is None:
-        raise ValueError(f"No thumbnail available for live stream event {event_pk}")
+        if not (
+            obj.live_stream_thumbnail_image or obj.season.live_stream_thumbnail_image
+        ):
+            raise ValueError(f"No thumbnail available for live stream event {event_pk}")
+        # Trying again cannot help, so the worker is not made to fail.
+        logger.warning(
+            "No thumbnail of live stream event %s can be made to fit YouTube's "
+            "limits; none was set.",
+            event_pk,
+        )
+        return
 
     obj.season.youtube.thumbnails().set(
         videoId=obj.external_identifier,
@@ -772,7 +782,16 @@ def set_youtube_thumbnail(match_pk):
     media_body = obj.get_thumbnail_media_upload()
 
     if media_body is None:
-        raise ValueError(f"No thumbnail available for match {match_pk}")
+        season = obj.stage.division.season
+        if not (obj.live_stream_thumbnail_image or season.live_stream_thumbnail_image):
+            raise ValueError(f"No thumbnail available for match {match_pk}")
+        # Trying again cannot help, so the worker is not made to fail.
+        logger.warning(
+            "No thumbnail of match %s can be made to fit YouTube's limits; "
+            "none was set.",
+            match_pk,
+        )
+        return
 
     obj.stage.division.season.youtube.thumbnails().set(
         videoId=obj.external_identifier,
