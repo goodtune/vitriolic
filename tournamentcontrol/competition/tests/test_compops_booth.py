@@ -453,6 +453,110 @@ class OtherDayTests(BoothFixture):
         )
 
 
+class EarlyStartTests(BoothFixture):
+    """
+    A stream usually starts before its match does, to introduce it. Before
+    the next match kicks off the lamp is that match's, so it can be put on
+    air early and the booth shows that it is armed or live.
+    """
+
+    GO_ON_AIR = '<button class="bigbtn" type="submit" data-hold="1500">HOLD TO GO ON AIR</button>'
+
+    def lamp(self):
+        with self.login(self.commentator):
+            self.get("compops:booth-lamp", **self.kw)
+        return self.last_response.content.decode()
+
+    def end_current(self):
+        self.current.live_stream_status = "complete"
+        self.current.save()
+
+    def test_between_matches_the_lamp_is_the_next_match(self):
+        self.end_current()
+        self.lamp()
+        self.assertResponseContains('<div id="lamp" class="lamp">OFF AIR</div>')
+        self.assertResponseContains("<b>Next · Fiji v New Zealand</b>")
+        self.assertResponseContains(self.GO_ON_AIR)
+
+    def test_before_the_first_match_the_lamp_is_that_match(self):
+        self.previous.delete()
+        self.current.delete()
+        self.lamp()
+        self.assertResponseContains("<b>Next · Fiji v New Zealand</b>")
+        self.assertResponseContains(self.GO_ON_AIR)
+
+    def test_armed_next_match_shows_standby(self):
+        self.end_current()
+        self.following.live_stream_status = "testing"
+        self.following.save()
+        self.lamp()
+        self.assertResponseContains('<div id="lamp" class="lamp testing">STANDBY</div>')
+        self.assertResponseContains("<b>Standby · Fiji v New Zealand</b>")
+        self.assertResponseContains(self.GO_ON_AIR)
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_next_match_goes_on_air_before_it_kicks_off(self, build):
+        build.return_value = youtube_mock("testing")
+        self.end_current()
+        self.following.live_stream_status = "testing"
+        self.following.save()
+        with self.login(self.commentator):
+            self.post("compops:booth-onair", status="live", **self.kw)
+        self.following.refresh_from_db()
+        self.assertEqual(self.following.live_stream_status, "live")
+        self.lamp()
+        self.assertResponseContains('<div id="lamp" class="lamp live">ON AIR</div>')
+        self.assertResponseContains("<b>Broadcasting · Fiji v New Zealand</b>")
+
+    def test_next_match_cannot_be_ended_before_it_is_on_air(self):
+        self.end_current()
+        with self.login(self.commentator):
+            body = self.datastar("post", "booth-onair", status="complete")
+        self.assertIn(
+            '<span class="warn">Nothing is on this ground right now.</span>', body
+        )
+        self.following.refresh_from_db()
+        self.assertEqual(self.following.live_stream_status, None)
+
+    def test_panes_open_on_the_next_match(self):
+        self.end_current()
+        with self.login(self.commentator):
+            self.get("compops:booth", **self.kw)
+        self.assertIn(
+            self.url("booth-pane", match_pk=self.following.pk, pane="ladder"),
+            self.last_response.content.decode(),
+        )
+
+    def test_match_being_played_keeps_the_lamp(self):
+        # It has kicked off and has not been ended: the lamp is still its.
+        self.current.live_stream_status = "testing"
+        self.current.save()
+        self.lamp()
+        self.assertResponseContains("<b>Standby · Australia v New Zealand</b>")
+
+    def test_after_the_last_match_the_lamp_stays_with_it(self):
+        self.end_current()
+        self.following.delete()
+        self.lamp()
+        self.assertResponseContains("<b>Off air · Australia v New Zealand</b>")
+        self.assertResponseContains(
+            '<button class="bigbtn end" type="button" disabled>ENDED</button>'
+        )
+
+    def test_watcher_sees_the_next_match_without_the_button(self):
+        self.end_current()
+        with self.login(self.watcher):
+            self.get("compops:booth-lamp", **self.kw)
+        self.assertResponseContains("<b>Next · Fiji v New Zealand</b>")
+        self.assertEqual(self.last_response.content.count(b"<form"), 0)
+
+    def test_another_day_has_nothing_to_press(self):
+        self.end_current()
+        with self.login(self.commentator):
+            self.get("compops:booth", data={"day": "20261009"}, **self.kw)
+        self.assertEqual(self.last_response.content.count(b"<form"), 0)
+
+
 class StripAndLampTests(BoothFixture):
     def test_strip_shows_previous_current_next(self):
         with self.login(self.commentator):

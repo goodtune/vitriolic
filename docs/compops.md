@@ -45,6 +45,8 @@ The site has three levels, each leading down to the next.
 - The day page (`compops:day`) is the dashboard.
   In its streams column, each ground's name leads to that ground's booth for those who may open it.
 - A booth (`compops:booth`) shows today at its ground.
+  A stream usually starts before its match does, to introduce it.
+  So when nothing is on air, and no match that has kicked off is still to be ended, the lamp is the next match's: it names that match, shows STANDBY once the match is armed, and puts it on air before its kick-off time.
   The arrows in its header step to the ground's nearest earlier and later days with matches, as `?day=YYYYMMDD`.
   Another day's booth is for looking over: it shows that day's matches and panes, and has no button that acts on the broadcast.
   Its top bar leads back up to the season and the home page, and steps to the nearest earlier and later days with matches.

@@ -889,23 +889,40 @@ class CompOpsSite(Application):
         ]
         # The lamp follows the match actually on air, which can be one that
         # has overrun into the next kick-off; the strip follows the schedule.
-        broadcast = next(
+        on_air = next(
             (
                 m
                 for m in reversed(streamed)
                 if streams.effective_status(m.live_stream_status) == "live"
             ),
-            current,
+            None,
         )
+        broadcast = on_air or current
+        armable_match = self._armable_match(streamed, broadcast, now)
+        if preview:
+            armable_match = None
+        # A stream usually starts before its match does, to introduce it. So
+        # with nothing on air, and no match being played that has still to be
+        # ended, the lamp is the next match's: it shows that match armed, and
+        # puts it on air, before the schedule says it has kicked off.
+        upcoming = (
+            on_air is None
+            and armable_match is not None
+            and (
+                current is None
+                or streams.effective_status(current.live_stream_status) == "complete"
+            )
+        )
+        if upcoming:
+            broadcast = armable_match
         status = (
             streams.effective_status(broadcast.live_stream_status)
             if broadcast
             else None
         )
-        armable_match = self._armable_match(streamed, broadcast, now)
         armable, reason = True, ""
         if preview:
-            armable_match, armable = None, False
+            armable = False
         elif status == "live":
             armable, reason = False, "End the current broadcast first."
         elif armable_match is None:
@@ -927,6 +944,7 @@ class CompOpsSite(Application):
             "previous": previous,
             "current": current,
             "broadcast": broadcast,
+            "upcoming": upcoming,
             "next": following,
             # The match the panes are about: the one on air, else the one the
             # schedule says is on. A day with nothing on yet, looked at from
@@ -1109,7 +1127,9 @@ class CompOpsSite(Application):
         context = self.booth_context(request, season, ground)
         errors = []
         broadcast = context["broadcast"]
-        if broadcast is None:
+        if broadcast is None or (context["upcoming"] and status == "complete"):
+            # The lamp may be the next match's, to put on air early; a match
+            # that is not on air is not there to be ended.
             errors.append("Nothing is on this ground right now.")
         elif not streams.opted_in(broadcast, self._booth_ground_ids(ground)):
             # The lamp follows opted-in matches only; a guard all the same.
