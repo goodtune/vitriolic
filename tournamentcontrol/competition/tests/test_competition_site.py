@@ -493,6 +493,43 @@ class CalendarQueryTests(TestCase):
             )
         self.assert_http_200_ok()
 
+    def test_no_calendar_query_fetches_a_stream_thumbnail(self):
+        # The thumbnails are blobs, and a season's would ride along with
+        # every match of a feed. The query counts above cannot see that: the
+        # column fetched eagerly is no extra query, only a far wider one (#312).
+        self.season.live_stream_thumbnail_image = b"season thumbnail"
+        self.season.save()
+        Match.objects.filter(stage=self.stage).update(
+            live_stream_thumbnail_image=b"match thumbnail"
+        )
+        club = factories.ClubFactory.create()
+        self.team_a.club = club
+        self.team_a.save()
+        feeds = {
+            "season": {},
+            "division": {"division": self.division.slug},
+            "team": {"division": self.division.slug, "team": self.team_a.slug},
+            "club": {"club": club.slug},
+        }
+        for name, kwargs in feeds.items():
+            with self.subTest(name), CaptureQueriesContext(connection) as queries:
+                self.get(
+                    "competition:calendar",
+                    competition=self.competition.slug,
+                    season=self.season.slug,
+                    **kwargs,
+                )
+                self.assert_http_200_ok()
+                self.assertEqual(len(self._parse_events()[1]), 10)
+                self.assertEqual(
+                    [
+                        query["sql"]
+                        for query in queries
+                        if "live_stream_thumbnail_image" in query["sql"]
+                    ],
+                    [],
+                )
+
     def _parse_events(self, response=None):
         if response is None:
             response = self.last_response
