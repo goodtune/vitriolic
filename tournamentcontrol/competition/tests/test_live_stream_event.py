@@ -382,6 +382,7 @@ class SyncLiveStreamEventTests(TestCase):
         kwargs.setdefault("season__live_stream", True)
         kwargs.setdefault("season__live_stream_client_id", "client-id")
         kwargs.setdefault("season__live_stream_client_secret", "client-secret")
+        kwargs.setdefault("season__live_stream_refresh_token", "refresh-token")
         return factories.LiveStreamEventFactory.create(**kwargs)
 
     @mock.patch(
@@ -570,6 +571,7 @@ class DeleteYoutubeBroadcastTests(TestCase):
             live_stream=True,
             live_stream_client_id="client-id",
             live_stream_client_secret="client-secret",
+            live_stream_refresh_token="refresh-token",
         )
         delete_youtube_broadcast(season.pk, "adhoc123")
 
@@ -605,6 +607,7 @@ class DeleteYoutubeBroadcastTests(TestCase):
             live_stream=True,
             live_stream_client_id="client-id",
             live_stream_client_secret="client-secret",
+            live_stream_refresh_token="refresh-token",
         )
         self.assertEqual(delete_youtube_broadcast(season.pk, "adhoc123"), None)
 
@@ -692,6 +695,7 @@ class LiveStreamEventAdminTests(WarmCachesMixin, TestCase):
             live_stream=True,
             live_stream_client_id="client-id",
             live_stream_client_secret="client-secret",
+            live_stream_refresh_token="refresh-token",
         )
         with self.login(self.superuser):
             self.post(
@@ -777,6 +781,7 @@ class LiveStreamEventAdminTests(WarmCachesMixin, TestCase):
             season__live_stream=True,
             season__live_stream_client_id="client-id",
             season__live_stream_client_secret="client-secret",
+            season__live_stream_refresh_token="refresh-token",
             external_identifier="adhoc123",
         )
         with self.login(self.superuser):
@@ -809,6 +814,7 @@ class LiveStreamEventAdminTests(WarmCachesMixin, TestCase):
             season__live_stream=True,
             season__live_stream_client_id="client-id",
             season__live_stream_client_secret="client-secret",
+            season__live_stream_refresh_token="refresh-token",
             external_identifier="adhoc123",
         )
         with self.login(self.superuser):
@@ -838,6 +844,7 @@ class LiveStreamEventAdminTests(WarmCachesMixin, TestCase):
             season__live_stream=True,
             season__live_stream_client_id="client-id",
             season__live_stream_client_secret="client-secret",
+            season__live_stream_refresh_token="refresh-token",
             external_identifier="adhoc123",
         )
         with self.login(self.superuser):
@@ -890,6 +897,7 @@ class LiveStreamEventAdminTests(WarmCachesMixin, TestCase):
             live_stream=True,
             live_stream_client_id="client-id",
             live_stream_client_secret="client-secret",
+            live_stream_refresh_token="refresh-token",
         )
         with self.login(self.superuser):
             self.post(
@@ -937,6 +945,7 @@ class LiveStreamEventAdminTests(WarmCachesMixin, TestCase):
             season__live_stream=True,
             season__live_stream_client_id="client-id",
             season__live_stream_client_secret="client-secret",
+            season__live_stream_refresh_token="refresh-token",
             external_identifier="adhoc123",
         )
         with self.login(self.superuser):
@@ -960,6 +969,7 @@ class LiveStreamEventAdminTests(WarmCachesMixin, TestCase):
             season__live_stream=True,
             season__live_stream_client_id="client-id",
             season__live_stream_client_secret="client-secret",
+            season__live_stream_refresh_token="refresh-token",
             external_identifier="adhoc123",
         )
 
@@ -982,6 +992,7 @@ class DeleteYoutubeStreamTests(TestCase):
             live_stream=True,
             live_stream_client_id="client-id",
             live_stream_client_secret="client-secret",
+            live_stream_refresh_token="refresh-token",
         )
         delete_youtube_stream(season.pk, "stream456")
 
@@ -1017,6 +1028,7 @@ class DeleteYoutubeStreamTests(TestCase):
             live_stream=True,
             live_stream_client_id="client-id",
             live_stream_client_secret="client-secret",
+            live_stream_refresh_token="refresh-token",
         )
         self.assertEqual(delete_youtube_stream(season.pk, "stream456"), None)
 
@@ -1231,6 +1243,7 @@ class LiveStreamKeyAdminTests(MessagesTestMixin, WarmCachesMixin, TestCase):
             season__live_stream=True,
             season__live_stream_client_id="client-id",
             season__live_stream_client_secret="client-secret",
+            season__live_stream_refresh_token="refresh-token",
             external_identifier="stream456",
             stream_key="abcd-1234",
         )
@@ -1266,6 +1279,7 @@ class LiveStreamKeyAdminTests(MessagesTestMixin, WarmCachesMixin, TestCase):
             season__live_stream=True,
             season__live_stream_client_id="client-id",
             season__live_stream_client_secret="client-secret",
+            season__live_stream_refresh_token="refresh-token",
             external_identifier="stream456",
             stream_key="abcd-1234",
         )
@@ -1293,6 +1307,7 @@ class LiveStreamKeyAdminTests(MessagesTestMixin, WarmCachesMixin, TestCase):
             season__live_stream=True,
             season__live_stream_client_id="client-id",
             season__live_stream_client_secret="client-secret",
+            season__live_stream_refresh_token="refresh-token",
             external_identifier="stream456",
             stream_key="abcd-1234",
         )

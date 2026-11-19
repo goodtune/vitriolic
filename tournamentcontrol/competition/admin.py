@@ -2519,14 +2519,8 @@ class CompetitionAdminComponent(AdminComponent):
             if obj.pk:
                 return
 
-            if not (season.live_stream_client_id and season.live_stream_client_secret):
-                messages.error(
-                    request,
-                    _(
-                        "YouTube credentials must be configured for this "
-                        "season before live stream events can be created."
-                    ),
-                )
+            if not season.youtube_ready:
+                messages.error(request, YOUTUBE_NOT_AUTHORISED_MESSAGE)
                 return self.redirect(".")
 
             try:
@@ -2549,9 +2543,9 @@ class CompetitionAdminComponent(AdminComponent):
             log.info("YouTube video %(id)r inserted", broadcast)
 
         def post_save_callback(obj: LiveStreamEvent):
-            # Check if YouTube credentials are configured before queuing
-            # anything, we can't interact with the YouTube API without them.
-            if not (season.live_stream_client_id and season.live_stream_client_secret):
+            # Queue nothing unless the season can reach YouTube: the task
+            # could do nothing for it.
+            if not season.youtube_ready:
                 return None
             sync_live_stream_event.s(obj.pk).apply_async()
             return None
@@ -2601,11 +2595,11 @@ class CompetitionAdminComponent(AdminComponent):
 
         verbose_name = instance._meta.verbose_name
 
-        if not (season.live_stream_client_id and season.live_stream_client_secret):
+        if not season.youtube_ready:
             messages.error(
                 request,
                 _(
-                    "YouTube credentials are not configured for this season; "
+                    "YouTube access has not been authorised for this season; "
                     "unable to confirm the %s has been removed from the "
                     "platform."
                 )
@@ -2848,9 +2842,9 @@ class CompetitionAdminComponent(AdminComponent):
         base_url = request.build_absolute_uri("/").rstrip("/")
 
         def post_save_callback(obj: Match):
-            # Check if YouTube credentials are configured before queuing anything,
-            # we can't interact with the YouTube API without them.
-            if not (season.live_stream_client_id and season.live_stream_client_secret):
+            # Queue nothing unless the season can reach YouTube: the task
+            # could do nothing for it.
+            if not season.youtube_ready:
                 return None
             # An existing broadcast always needs syncing (update or delete). For
             # insert/update we additionally need a scheduled datetime, otherwise
@@ -2927,10 +2921,8 @@ class CompetitionAdminComponent(AdminComponent):
                 context,
             )
 
-        if not (season.live_stream_client_id and season.live_stream_client_secret):
-            messages.error(
-                request, _("Live streaming is not configured for this season.")
-            )
+        if not season.youtube_ready:
+            messages.error(request, YOUTUBE_NOT_AUTHORISED_MESSAGE)
             return self.redirect(redirect_url)
 
         if not match.live_stream or not match.external_identifier:
@@ -3767,9 +3759,9 @@ class CompetitionAdminComponent(AdminComponent):
         base_url = request.build_absolute_uri("/").rstrip("/")
 
         def post_save_callback(obj: Match):
-            # Check if YouTube credentials are configured before queuing anything,
-            # we can't interact with the YouTube API without them.
-            if not (season.live_stream_client_id and season.live_stream_client_secret):
+            # Queue nothing unless the season can reach YouTube: the task
+            # could do nothing for it.
+            if not season.youtube_ready:
                 return None
             # An existing broadcast always needs syncing (update or delete). For
             # insert/update we additionally need a scheduled datetime, otherwise
@@ -3812,10 +3804,8 @@ class CompetitionAdminComponent(AdminComponent):
         if request.method != "POST":
             return self.redirect(redirect_url)
 
-        if not (season.live_stream_client_id and season.live_stream_client_secret):
-            messages.error(
-                request, _("Live streaming is not configured for this season.")
-            )
+        if not season.youtube_ready:
+            messages.error(request, YOUTUBE_NOT_AUTHORISED_MESSAGE)
             return self.redirect(redirect_url)
 
         matches = Match.objects.filter(

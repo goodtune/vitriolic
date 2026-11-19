@@ -1688,6 +1688,7 @@ class LiveStreamTests(AdminFixtureMixin, TestCase):
         super().setUpTestData()
         cls.season.live_stream_client_id = "client-id"
         cls.season.live_stream_client_secret = "client-secret"
+        cls.season.live_stream_refresh_token = "refresh-token"
         cls.season.save()
         cls.field1.live_stream = True
         cls.field1.external_identifier = "yt-field-1"
@@ -2034,6 +2035,7 @@ class LiveStreamEventTests(AdminFixtureMixin, TestCase):
         super().setUpTestData()
         cls.season.live_stream_client_id = "client-id"
         cls.season.live_stream_client_secret = "client-secret"
+        cls.season.live_stream_refresh_token = "refresh-token"
         cls.season.save()
         cls.key = factories.LiveStreamKeyFactory.create(
             season=cls.season, title="Roaming camera"
@@ -2396,6 +2398,7 @@ class LiveStreamResyncTests(AdminFixtureMixin, TestCase):
         super().setUpTestData()
         cls.season.live_stream_client_id = "client-id"
         cls.season.live_stream_client_secret = "client-secret"
+        cls.season.live_stream_refresh_token = "refresh-token"
         cls.season.save()
         cls.field1.live_stream = True
         cls.field1.external_identifier = "yt-field-1"

@@ -68,6 +68,7 @@ from pydantic import (
 
 from tournamentcontrol.competition.admin import (
     YOUTUBE_AUTH_EXPIRED_MESSAGE,
+    YOUTUBE_NOT_AUTHORISED_MESSAGE,
     next_related_factory,
 )
 from tournamentcontrol.competition.dashboard import (
@@ -1137,6 +1138,10 @@ class AdminToolset(CompetitionToolset):
                 "YouTube credentials must be configured for this season before "
                 "live streams can be managed."
             )
+        if not season.youtube_ready:
+            # The client details are saved, but nobody has completed the
+            # authorisation that grants the refresh token.
+            raise ToolError(str(YOUTUBE_NOT_AUTHORISED_MESSAGE))
         try:
             return season.youtube
         except RefreshError:
@@ -1180,7 +1185,7 @@ class AdminToolset(CompetitionToolset):
         or delete); a new one additionally needs a scheduled time.
         """
         season = match.stage.division.season
-        if not self._credentials(season):
+        if not season.youtube_ready:
             return False
         if not match.external_identifier:
             if not match.live_stream:
@@ -1195,7 +1200,7 @@ class AdminToolset(CompetitionToolset):
         Queue the broadcast synchronisation the admin's live stream event
         view queues after saving (update, binding, thumbnail or removal).
         """
-        if not self._credentials(event.season):
+        if not event.season.youtube_ready:
             return False
         sync_live_stream_event.s(event.pk).apply_async()
         return True
