@@ -168,6 +168,19 @@ YOUTUBE_AUTH_EXPIRED_MESSAGE = _(
     "Re-authorise from the YouTube button on the seasons list and try again."
 )
 
+# Shown when the season cannot reach YouTube at all: its client details are
+# missing, or nobody has completed the authorisation (``Season.youtube_ready``).
+YOUTUBE_NOT_AUTHORISED_MESSAGE = _(
+    "YouTube access has not been authorised for this season. "
+    "Authorise from the YouTube button on the seasons list and try again."
+)
+
+# The same, where the change is saved because YouTube only mirrors it.
+YOUTUBE_NOT_UPDATED_MESSAGE = _(
+    "YouTube access has not been authorised for this season, so the change "
+    "was saved here but not made on YouTube."
+)
+
 log = logging.getLogger(__name__)
 
 
@@ -1979,6 +1992,20 @@ class CompetitionAdminComponent(AdminComponent):
             ground.latlng = venue.latlng
 
         def pre_save_callback(obj: Ground):
+            # A ground newly streamed needs its stream made on YouTube up
+            # front, so it cannot be saved before the season can reach
+            # YouTube. A stream that already exists is only brought up to
+            # date, or removed, so the ground is saved with a warning and
+            # keeps its identifier for when YouTube can be reached.
+            if not (obj.external_identifier or obj.live_stream):
+                return
+            if not season.youtube_ready:
+                if not obj.external_identifier:
+                    messages.error(request, YOUTUBE_NOT_AUTHORISED_MESSAGE)
+                    return self.redirect(".")
+                messages.warning(request, YOUTUBE_NOT_UPDATED_MESSAGE)
+                return
+
             body = {
                 "snippet": {
                     "title": f"{venue.season.competition} {venue.season} ({obj.title})",
@@ -2023,6 +2050,9 @@ class CompetitionAdminComponent(AdminComponent):
                 if stream is not None:
                     obj.stream_key = stream["cdn"]["ingestionInfo"]["streamName"]
 
+            except RefreshError:
+                messages.error(request, YOUTUBE_AUTH_EXPIRED_MESSAGE)
+                return self.redirect(".")
             except HttpError as exc:
                 messages.error(request, exc.reason)
                 return self.redirect(".")
@@ -2634,24 +2664,11 @@ class CompetitionAdminComponent(AdminComponent):
             # must generate its stream on the YouTube platform up front. For
             # an existing record the platform update is cosmetic, so missing
             # credentials only warrant a warning.
-            if not (season.live_stream_client_id and season.live_stream_client_secret):
+            if not season.youtube_ready:
                 if not obj.pk:
-                    messages.error(
-                        request,
-                        _(
-                            "YouTube credentials must be configured for this "
-                            "season before stream keys can be generated."
-                        ),
-                    )
+                    messages.error(request, YOUTUBE_NOT_AUTHORISED_MESSAGE)
                     return self.redirect(".")
-                messages.warning(
-                    request,
-                    _(
-                        "YouTube credentials are not configured for this "
-                        "season; the stream title was not updated on the "
-                        "platform."
-                    ),
-                )
+                messages.warning(request, YOUTUBE_NOT_UPDATED_MESSAGE)
                 return
 
             body = {

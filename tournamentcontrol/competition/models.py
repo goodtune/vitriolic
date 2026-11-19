@@ -778,6 +778,19 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
         )
 
     @property
+    def youtube_ready(self):
+        """
+        Whether YouTube can be reached for the season: the client details are
+        saved and someone has completed the authorisation, which grants the
+        refresh token. Without the token every request raises ``RefreshError``.
+        """
+        return bool(
+            self.live_stream_client_id
+            and self.live_stream_client_secret
+            and self.live_stream_refresh_token
+        )
+
+    @property
     def youtube(self):
         credentials = Credentials(
             client_id=self.live_stream_client_id,
