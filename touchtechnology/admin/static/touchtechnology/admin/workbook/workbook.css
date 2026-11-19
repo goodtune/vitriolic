@@ -1688,6 +1688,9 @@ select.wb-multi { max-width: 16rem; }
 .wb-indent-4 { padding-left: 6rem !important; }
 
 .wb-thumb { width: 3rem; height: 3rem; object-fit: cover; border-radius: 8px; vertical-align: middle; }
+/* A halo round the avatar of someone who can sign in to the admin. */
+.wb-avatar-staff { box-shadow: 0 0 0 2px var(--wb-sheet), 0 0 0 4px var(--wb-accent); }
+.wb-avatar-superuser { box-shadow: 0 0 0 2px var(--wb-sheet), 0 0 0 4px var(--wb-mark), 0 0 10px 5px color-mix(in oklch, var(--wb-mark) 45%, transparent); }
 .wb-avatar-small { width: 1.9rem; height: 1.9rem; font-size: 0.75rem; margin-right: 0.5rem; vertical-align: middle; }
 
 .wb-code { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: 0.9em; }

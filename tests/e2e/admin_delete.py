@@ -343,6 +343,7 @@ def make_user():
         first_name="Jordan",
         last_name="Fairweather",
         email="jordan.fairweather@example.com",
+        is_staff=True,
     )
     return Opening(reverse("admin:auth:users:list"), row="Jordan Fairweather")
 

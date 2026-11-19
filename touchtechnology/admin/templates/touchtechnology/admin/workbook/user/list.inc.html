@@ -12,7 +12,8 @@
 	{# The email address goes under the name, unless there is none or it is the name. #}
 	{% with name=obj.get_full_name|default:obj.get_username %}
 	<td class="wb-title-cell">
-		<span class="wb-avatar wb-avatar-small" aria-hidden="true">{{ obj|initials }}</span>
+		{# A halo marks who can sign in to the admin: one for staff, a brighter one for a superuser. #}
+		<span class="wb-avatar wb-avatar-small{% if obj.is_superuser %} wb-avatar-superuser{% elif obj.is_staff %} wb-avatar-staff{% endif %}" aria-hidden="true"{% if obj.is_superuser %} title="{% trans "Superuser" %}"{% elif obj.is_staff %} title="{% trans "Staff" %}"{% endif %}>{{ obj|initials }}</span>
 		<span class="wb-title-lines">
 			{% if change_perm in object_perms %}
 				<a href="{% url 'admin:auth:users:edit' obj.pk %}">{{ name }}</a>
@@ -21,6 +22,7 @@
 			{% endif %}
 			{% if obj.email and obj.email != name %}<span class="wb-title-sub">{{ obj.email }}</span>{% endif %}
 		</span>
+		{% if obj.is_superuser %}<span class="wb-sr">{% trans "Superuser" %}</span>{% elif obj.is_staff %}<span class="wb-sr">{% trans "Staff" %}</span>{% endif %}
 	</td>
 	{% endwith %}
 	<td class="wb-hide-narrow" data-label="{% trans "Registered" %}">{{ obj.date_joined|date:"j M Y" }}</td>

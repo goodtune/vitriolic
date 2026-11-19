@@ -74,6 +74,39 @@ class AuthSiteUserTests(TestCase):
             (0, 0),
         )
 
+    def test_user_list_rings_the_avatars_of_staff_and_superusers(self):
+        # One superuser and one member of staff (see setUp), and one who is
+        # neither. A superuser is ringed as one, not as staff as well.
+        factories.UserFactory.create()
+        with self.login(self.superuser):
+            self.get_check_200("admin:auth:users:list")
+        content = self.last_response.content.decode()
+        superuser, staff, plain = self.by_shell(
+            workbook=(
+                'class="wb-avatar wb-avatar-small wb-avatar-superuser" '
+                'aria-hidden="true" title="Superuser"',
+                'class="wb-avatar wb-avatar-small wb-avatar-staff" '
+                'aria-hidden="true" title="Staff"',
+                'class="wb-avatar wb-avatar-small" aria-hidden="true">',
+            ),
+            explorer=(
+                'class="avatar avatar-superuser" aria-hidden="true" title="Superuser"',
+                'class="avatar avatar-staff" aria-hidden="true" title="Staff"',
+                'class="avatar" aria-hidden="true">',
+            ),
+        )
+        hidden = self.by_shell(workbook="wb-sr", explorer="visually-hidden")
+        self.assertEqual(
+            (
+                content.count(superuser),
+                content.count(staff),
+                content.count(f'<span class="{hidden}">Superuser</span>'),
+                content.count(f'<span class="{hidden}">Staff</span>'),
+            ),
+            (1, 1, 1, 1),
+        )
+        self.assertGreaterEqual(content.count(plain), 1)
+
     def test_user_list_shows_registration_and_last_login_dates(self):
         factories.UserFactory.create(
             username="veteran",

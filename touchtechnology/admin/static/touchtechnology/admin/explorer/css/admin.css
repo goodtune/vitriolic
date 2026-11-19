@@ -489,6 +489,10 @@ code, kbd, pre, samp {
 	font-weight: 700;
 }
 
+/* A halo round the avatar of someone who can sign in to the admin. */
+.avatar-staff { box-shadow: inset 0 0 0 1px var(--line-strong), 0 0 0 2px var(--surface), 0 0 0 4px var(--fill); }
+.avatar-superuser { box-shadow: inset 0 0 0 1px var(--line-strong), 0 0 0 2px var(--surface), 0 0 0 4px var(--focus), 0 0 9px 4px color-mix(in oklch, var(--focus) 45%, transparent); }
+
 .who {
 	display: flex;
 	flex-direction: column;
