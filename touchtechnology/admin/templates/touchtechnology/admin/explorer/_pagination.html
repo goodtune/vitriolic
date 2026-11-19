@@ -6,10 +6,13 @@
 			<li>
 				{% if page_number == current or page_number == current.number %}
 					<span aria-current="page">{{ page_number }}</span>
-				{% elif tab_name %}
-					<a href="?{{ QUERY_STRING }}{{ QUERY_STRING|yesno:"&," }}page={{ page_number }}" hx-get="?{{ QUERY_STRING }}{{ QUERY_STRING|yesno:"&," }}page={{ page_number }}" hx-target="#{{ tab_name }}-tab" hx-swap="innerHTML" hx-push-url="false">{{ page_number }}</a>
 				{% else %}
-					<a href="?{{ QUERY_STRING }}{{ QUERY_STRING|yesno:"&," }}page={{ page_number }}">{{ page_number }}</a>
+					{% querystring page=page_number as page_url %}
+					{% if tab_name %}
+						<a href="{{ page_url }}" hx-get="{{ page_url }}" hx-target="#{{ tab_name }}-tab" hx-swap="innerHTML" hx-push-url="false">{{ page_number }}</a>
+					{% else %}
+						<a href="{{ page_url }}">{{ page_number }}</a>
+					{% endif %}
 				{% endif %}
 			</li>
 		{% endfor %}
