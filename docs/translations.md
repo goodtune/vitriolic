@@ -41,7 +41,8 @@ Report a problem with a translation at <https://github.com/goodtune/vitriolic/is
 ## Compiled catalogues
 
 Only the `.po` catalogues are committed.
-Django reads the compiled `.mo` files, and the build makes them: `setup.py` compiles each `.po` to the `.mo` beside it before the package's files are gathered.
+Django reads the compiled `.mo` files, and the build makes them: `build_catalogues.py` compiles each `.po` to the `.mo` beside it before the package's files are gathered.
+`pyproject.toml` names it as the `build_py` command of setuptools, under `[tool.setuptools.cmdclass]`, so the project has no `setup.py`.
 The wheel therefore has them, and so does a working tree after an editable install, which is what `tox` does on every run.
 Git ignores `*.mo`.
 

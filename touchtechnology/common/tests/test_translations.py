@@ -2,7 +2,7 @@
 Guard the translation catalogues the library ships.
 
 Only the ``.po`` catalogues are committed; the build compiles the ``.mo`` files
-Django reads (see ``setup.py`` and ``docs/translations.md``). So a catalogue
+Django reads (see ``build_catalogues.py`` and ``docs/translations.md``). So a catalogue
 that no longer compiles, or a build that stopped compiling them, would leave
 every string in English without anything failing.
 """

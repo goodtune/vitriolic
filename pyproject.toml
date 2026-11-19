@@ -115,6 +115,10 @@ build-backend = "setuptools.build_meta"
 include-package-data = true
 zip-safe = false
 
+# Compile the translation catalogues as part of the build; see the module.
+[tool.setuptools.cmdclass]
+build_py = "build_catalogues.BuildPyWithCatalogues"
+
 [tool.setuptools.packages.find]
 include = ["touchtechnology*", "tournamentcontrol*"]
 

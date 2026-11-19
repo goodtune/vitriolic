@@ -6,6 +6,9 @@ made from them, so only the ``.po`` files are committed. The build writes each
 ``.mo`` beside its ``.po`` before the package's files are gathered, which puts
 them in the wheel and, for an editable install, in the working tree.
 
+``pyproject.toml`` names ``BuildPyWithCatalogues`` as setuptools' ``build_py``
+command (``[tool.setuptools.cmdclass]``), so the project needs no ``setup.py``.
+
 Babel compiles them, so that a build needs no GNU gettext. Like ``msgfmt``, it
 leaves out the entries marked ``fuzzy``.
 """
@@ -14,7 +17,6 @@ from pathlib import Path
 
 from babel.messages.mofile import write_mo
 from babel.messages.pofile import read_po
-from setuptools import setup
 from setuptools.command.build_py import build_py
 
 ROOT = Path(__file__).parent
@@ -34,6 +36,3 @@ class BuildPyWithCatalogues(build_py):
     def run(self):
         compile_catalogues()
         super().run()
-
-
-setup(cmdclass={"build_py": BuildPyWithCatalogues})
