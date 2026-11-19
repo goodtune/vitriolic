@@ -2,14 +2,16 @@
 {% load static tz compops_tags %}
 {% block title %}Booth · {{ ground.title }}{% endblock %}
 {% block extracss %}<link rel="stylesheet" href="{% static 'tournamentcontrol/competition/compops/booth.css' %}">{% endblock %}
-{% block body_attrs %}class="booth" data-signals__ifmissing="{pane: '{{ pane|default:'' }}', match: {{ pane_match.pk|default:'null' }}, modal: false}" data-indicator="connected" data-effect="$pane; $match; @get('{% url 'compops:booth-events' competition=season.competition.slug season=season.slug ground=ground.slug %}', {retryMaxCount: 1000})"{% endblock %}
+{% block body_attrs %}class="booth" data-signals__ifmissing="{pane: '{{ pane|default:'' }}', match: {{ pane_match.pk|default:'null' }}, modal: false, day: '{% if preview %}{{ daystr }}{% endif %}'}" data-indicator="connected" data-effect="$pane; $match; @get('{% url 'compops:booth-events' competition=season.competition.slug season=season.slug ground=ground.slug %}', {retryMaxCount: 1000})"{% endblock %}
 {% block body %}{% timezone tzinfo %}
 <header>
 	<span class="brand">BOOTH</span>
 	<span class="ground">{{ ground.title }}</span>
+	<nav class="days">{% if previous_day %}<a href="?day={{ previous_day|date:'Ymd' }}" rel="prev" title="{{ previous_day|date:'l j F' }}">‹</a>{% else %}<span class="step">‹</span>{% endif %}<span class="day">{{ day|date:"l j F" }}</span>{% if next_day %}<a href="?day={{ next_day|date:'Ymd' }}" rel="next" title="{{ next_day|date:'l j F' }}">›</a>{% else %}<span class="step">›</span>{% endif %}{% if preview %}<a class="today" href="{% url 'compops:booth' competition=season.competition.slug season=season.slug ground=ground.slug %}">Today</a>{% endif %}</nav>
 	<span class="spacer"></span>
 	<span class="sse" data-class:down="!$connected"><i></i> <span data-text="$connected ? 'updates connected' : 'reconnecting'">updates connected</span></span>
-	<span class="clock">{{ now|time:"H:i" }}</span>
+	{# The time at the ground, kept by the browser between the page's loads. #}
+	<span class="clock" data-on-interval="el.textContent = new Intl.DateTimeFormat('en-GB', {hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: '{{ tzinfo.key }}'}).format(new Date())">{{ now|time:"H:i" }}</span>
 </header>
 {% comment %}
 A lamp that shows why an action was refused is held, as a match_row in
@@ -25,6 +27,7 @@ without the mark and releases it.
 	<div class="status">
 		{% if broadcast %}<b>{% if status == "live" %}Broadcasting{% elif status == "testing" %}Standby{% else %}Off air{% endif %} · {{ broadcast.get_home_team_plain }} v {{ broadcast.get_away_team_plain }}</b>
 			<span>{{ broadcast.stage.division.title }} · kick-off {{ broadcast.time|time:"H:i" }}{% if broadcast.live_stream_status_at %} · {{ status }} since {{ broadcast.live_stream_status_at|time:"H:i" }}{% endif %}{% if not broadcast.external_identifier %} · no YouTube broadcast{% endif %}</span>
+		{% elif preview %}<b>Looking at {{ day|date:"l j F" }}</b>
 		{% else %}<b>Nothing on {{ ground.title }} right now</b>{% endif %}
 		{% for error in errors %}<span class="warn">{{ error }}</span>{% endfor %}
 	</div>
@@ -38,10 +41,10 @@ without the mark and releases it.
 				<form method="post" action="{{ live_url }}" data-on:submit="@post('{{ live_url }}', {contentType: 'form'})">{% csrf_token %}<button class="bigbtn" type="submit" data-hold="1500">HOLD TO GO ON AIR</button></form>
 			{% else %}<button class="bigbtn end" type="button" disabled>ENDED</button>{% endif %}
 		{% endif %}
-		<div class="nocontrol">
+		<div class="nocontrol">{% if preview %}The broadcast is run from today's booth.{% else %}
 			{% if armable_match %}Next on {{ ground.title }} today: {{ armable_match.time|time:"H:i" }} {{ armable_match.get_home_team_plain }} v {{ armable_match.get_away_team_plain }}{% else %}No more broadcasts on {{ ground.title }} today{% endif %}{% if can_stream %}
-			{% if armable %}{% url 'compops:booth-arm' competition=season.competition.slug season=season.slug ground=ground.slug as arm_url %} · <form class="inline" method="post" action="{{ arm_url }}" data-on:submit="@post('{{ arm_url }}', {contentType: 'form'})">{% csrf_token %}<button class="link" type="submit">arm now</button></form>{% elif arm_reason %} · {{ arm_reason }}{% endif %}
-		{% endif %}</div>
+			{% if armable %}{% url 'compops:booth-arm' competition=season.competition.slug season=season.slug ground=ground.slug as arm_url %} · <form class="inline" method="post" action="{{ arm_url }}" data-on:submit="@post('{{ arm_url }}', {contentType: 'form'})">{% csrf_token %}<button class="link" type="submit">arm now</button></form>{% elif arm_reason and armable_match or arm_reason and status == "live" %} · {{ arm_reason }}{% endif %}
+		{% endif %}{% endif %}</div>
 	</div>
 </section>
 {% endpartialdef %}
@@ -61,7 +64,7 @@ without the mark and releases it.
 	</div>
 </section>
 {% endpartialdef %}
-<nav class="tabs">{% with focus=broadcast|default:current %}
+<nav class="tabs">{% with focus=focus %}
 	{% if focus %}
 		{% for name, label in panes %}
 			<button type="button" data-class:active="$pane == '{{ name }}'" data-attr:aria-pressed="$pane == '{{ name }}' ? 'true' : 'false'" data-on:click="@get('{% url 'compops:booth-pane' competition=season.competition.slug season=season.slug ground=ground.slug match_pk=focus.pk pane=name %}')">{{ label }}</button>

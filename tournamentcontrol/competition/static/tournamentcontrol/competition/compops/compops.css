@@ -134,6 +134,9 @@ select.ff{height:var(--h-sm);border:1px solid var(--line-strong);border-radius:v
 .stream{padding:12px 16px;border-bottom:1px solid var(--line)}
 .stream-h{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .stream .ground{font:600 18px/1 var(--display)}
+.stream a.ground{color:var(--ink)}
+.stream a.ground::after{content:" →";color:var(--primary);font-family:var(--font);font-size:14px}
+.stream a.ground:hover{color:var(--primary)}
 .stream-h .badge{margin-left:auto}
 .stream p.warn{margin:0 0 8px;border-bottom:0;border-radius:var(--r)}
 .line{display:grid;grid-template-columns:72px 1fr auto;gap:12px;align-items:center;min-height:var(--h)}
@@ -204,6 +207,7 @@ main.index .sub{margin:-6px 0 0;color:var(--muted)}
 main.index h2{margin:28px 0 8px;font:600 12px/1 var(--font);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 main.index h3{margin:16px 0 6px;font:600 17px/1.2 var(--display)}
 main.index p.empty{padding:16px 0}
+main.index p.actions{margin:16px 0 0}
 main.index ul.list{max-width:760px}
 .list li{display:flex;align-items:center}
 main.index .list a.item{flex:1;min-width:0;display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;min-height:48px;padding:10px 16px}

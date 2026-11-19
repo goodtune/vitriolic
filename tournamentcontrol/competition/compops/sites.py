@@ -12,6 +12,7 @@ from functools import wraps
 
 import django
 from datastar_py.consts import ElementPatchMode
+from datastar_py.django import read_signals
 from django import forms
 from django.apps import apps
 from django.conf import settings
@@ -375,6 +376,8 @@ class CompOpsSite(Application):
             "activity": events.recent(season.pk),
             "collapsed": request.session.get("compops_collapsed", False),
             "can_stream": can_stream(request.user, season),
+            "can_booth": can_commentate(request.user, season),
+            "is_today": day == season.local_date(now),
             "can_statistics": can_enter_statistics(request.user),
             "keep_held": keep_held,
             "user": request.user,
@@ -471,6 +474,7 @@ class CompOpsSite(Application):
             "days": days,
             "undated": undated,
             "today": season.local_date(now),
+            "can_booth": can_commentate(request.user, season),
         }
         return self.render(request, self.template_path("season.html"), context)
 
@@ -865,8 +869,15 @@ class CompOpsSite(Application):
     # --- booth ------------------------------------------------------
 
     def booth_context(self, request, season, ground):
+        """
+        The context for the booth page and its fragments. The booth shows
+        today unless the request names another day (see ``_booth_day``), a
+        ``preview``: its matches to look over, and nothing to press.
+        """
         now = timezone.now()
-        day = ground.local_date(now)
+        today = ground.local_date(now)
+        day = self._booth_day(request, today)
+        preview = day != today
         previous, current, following = queries.ground_day(ground, day, now)
         # The lamp and the arm follow only the matches opted into streaming,
         # as the strip does; the runsheet itself lists every match.
@@ -893,7 +904,9 @@ class CompOpsSite(Application):
         )
         armable_match = self._armable_match(streamed, broadcast, now)
         armable, reason = True, ""
-        if status == "live":
+        if preview:
+            armable_match, armable = None, False
+        elif status == "live":
             armable, reason = False, "End the current broadcast first."
         elif armable_match is None:
             armable, reason = False, f"No more broadcasts on {ground.title} today."
@@ -909,21 +922,40 @@ class CompOpsSite(Application):
             "ground": ground,
             "day": day,
             "daystr": day.strftime("%Y%m%d"),
+            "preview": preview,
             "now": now,
             "previous": previous,
             "current": current,
             "broadcast": broadcast,
             "next": following,
+            # The match the panes are about: the one on air, else the one the
+            # schedule says is on. A day with nothing on yet, looked at from
+            # another, opens on its first.
+            "focus": broadcast or current or (following if preview else None),
             "armable_match": armable_match,
             "status": status,
             "armable": armable,
             "arm_reason": reason,
-            "can_stream": self._booth_can_stream(request, season),
+            "can_stream": not preview and self._booth_can_stream(request, season),
             "panes": PANE_LABELS,
             "tzinfo": ground.get_tzinfo(),
             "user": request.user,
             "errors": [],
         }
+
+    @staticmethod
+    def _booth_day(request, today):
+        """
+        The day a booth request is about: ``?day=YYYYMMDD`` on the page's own
+        address, or the ``day`` signal the page then sends with every request
+        it makes, its event stream included; ``today`` when neither names one.
+        An action is posted as a form, with no signals, so it is always about
+        today.
+        """
+        datestr = request.GET.get("day")
+        if not datestr and request.method == "GET":
+            datestr = (read_signals(request) or {}).get("day")
+        return parse_day(datestr) if datestr else today
 
     @staticmethod
     def _booth_can_stream(request, season):
@@ -1042,10 +1074,13 @@ class CompOpsSite(Application):
     def booth_page(self, request, season, ground, **overrides):
         """The whole booth page, as a plain browser gets it."""
         context = self.booth_context(request, season, ground)
+        context["previous_day"], context["next_day"] = queries.adjacent_days(
+            season, context["day"], ground
+        )
         context.update(overrides)
         # The panes open on the match on air, which can have overrun into the
         # next kick-off, before the match the schedule says is on.
-        match = context["broadcast"] or context["current"]
+        match = context["focus"]
         if match:
             context["pane"] = "sheets"
             context["pane_match"] = match

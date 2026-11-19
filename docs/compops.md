@@ -41,7 +41,12 @@ The site has three levels, each leading down to the next.
   A season with no dated matches appears only in that last list.
 - The season page (`compops:season`) lists the season's days with matches.
   Each day shows how many matches it has and whether its results are all in, still to enter today, or missing from a day gone by.
+  Those who may open the season's booths get a link to them.
 - The day page (`compops:day`) is the dashboard.
+  In its streams column, each ground's name leads to that ground's booth for those who may open it.
+- A booth (`compops:booth`) shows today at its ground.
+  The arrows in its header step to the ground's nearest earlier and later days with matches, as `?day=YYYYMMDD`.
+  Another day's booth is for looking over: it shows that day's matches and panes, and has no button that acts on the broadcast.
   Its top bar leads back up to the season and the home page, and steps to the nearest earlier and later days with matches.
 
 Someone who is not staff gets a shorter home page: the seasons whose booths they may open, each leading to its booths (see [Who can do what](#who-can-do-what)).

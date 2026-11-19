@@ -1,4 +1,5 @@
 import datetime
+import json
 from unittest import mock
 from zoneinfo import ZoneInfo
 
@@ -141,6 +142,16 @@ class BoothAccessTests(BoothFixture):
         self.assertIn(
             f"data-effect=\"$pane; $match; @get('{url}', {{retryMaxCount: 1000}})\"",
             self.last_response.content.decode(),
+        )
+
+    def test_clock_keeps_the_time_at_the_ground(self):
+        with self.login(self.commentator):
+            self.get("compops:booth", **self.kw)
+        self.assertResponseContains(
+            '<span class="clock" data-on-interval="el.textContent = '
+            "new Intl.DateTimeFormat('en-GB', {hour: '2-digit', minute: '2-digit', "
+            "hourCycle: 'h23', timeZone: 'Australia/Brisbane'}).format(new Date())\">"
+            "10:50</span>"
         )
 
     def test_index_lists_streamed_grounds(self):
@@ -329,6 +340,116 @@ class WatchOnlyTests(BoothFixture):
             self.get("compops:booth", **self.kw)
         self.assertResponseContains(
             '<button class="bigbtn end" type="submit" data-hold="1500">HOLD TO END BROADCAST</button>'
+        )
+
+
+class OtherDayTests(BoothFixture):
+    """The booth of another day: a look ahead, or back, with nothing to press."""
+
+    SATURDAY = {"day": "20261010"}
+
+    def setUp(self):
+        super().setUp()
+        when = timezone.make_aware(datetime.datetime(2026, 10, 10, 19, 0), TZ)
+        self.saturday = factories.MatchFactory.create(
+            stage=self.stage,
+            stage_group=self.pool_a,
+            home_team=self.fji,
+            away_team=self.aus,
+            datetime=when,
+            date=when.date(),
+            time=when.time(),
+            play_at=self.field1,
+            live_stream=True,
+            external_identifier="yt-sat",
+        )
+
+    def test_today_steps_to_the_next_day_with_matches_on_the_ground(self):
+        # A nearer day, on another ground, is not this booth's.
+        other = factories.GroundFactory.create(
+            venue=self.field1.venue, live_stream=True
+        )
+        factories.MatchFactory.create(
+            stage=self.stage, play_at=other, date=datetime.date(2026, 10, 9)
+        )
+        with self.login(self.commentator):
+            self.get("compops:booth", **self.kw)
+        self.assertResponseContains(
+            '<nav class="days"><span class="step">‹</span>'
+            '<span class="day">Thursday 8 October</span>'
+            '<a href="?day=20261010" rel="next" title="Saturday 10 October">›</a>'
+            "</nav>"
+        )
+
+    def test_another_day_shows_its_matches_and_the_way_back(self):
+        with self.login(self.commentator):
+            self.get("compops:booth", data=self.SATURDAY, **self.kw)
+        self.assert_http_200_ok()
+        self.assertResponseContains(
+            '<nav class="days">'
+            '<a href="?day=20261008" rel="prev" title="Thursday 8 October">‹</a>'
+            '<span class="day">Saturday 10 October</span>'
+            '<span class="step">›</span>'
+            f'<a class="today" href="{self.url("booth")}">Today</a>'
+            "</nav>"
+        )
+        self.assertResponseContains("<b>Looking at Saturday 10 October</b>")
+        self.assertResponseContains(
+            '<div class="teams">Fiji <small>v</small> Australia</div>'
+        )
+        content = self.last_response.content.decode()
+        # The panes open on the day's first match, there being none on now.
+        self.assertIn('<div id="pane" class="pane sheets">', content)
+        self.assertIn("day: '20261010'", content)
+        # Nothing to press: the broadcast is run from today's booth.
+        self.assertEqual(content.count("<form"), 0)
+
+    def test_today_named_in_the_address_keeps_its_controls(self):
+        with self.login(self.commentator):
+            self.get("compops:booth", data={"day": "20261008"}, **self.kw)
+        self.assertResponseContains(
+            '<button class="bigbtn end" type="submit" data-hold="1500">HOLD TO END BROADCAST</button>'
+        )
+        self.assertIn("day: ''", self.last_response.content.decode())
+
+    def test_day_that_is_no_date_is_404(self):
+        with self.login(self.commentator):
+            self.get("compops:booth", data={"day": "20261340"}, **self.kw)
+        self.assert_http_404_not_found()
+
+    def test_panes_follow_the_day_the_page_is_on(self):
+        # The page's signals carry its day on every request it makes.
+        signals = {"datastar": json.dumps(self.SATURDAY)}
+        with self.login(self.commentator):
+            self.get(
+                "compops:booth-pane",
+                data=signals,
+                extra=DATASTAR,
+                match_pk=self.saturday.pk,
+                pane="results",
+                **self.kw,
+            )
+            self.assert_http_200_ok()
+            self.get("compops:booth-runsheet", data=signals, extra=DATASTAR, **self.kw)
+            runsheet = b"".join(self.last_response.streaming_content).decode()
+            self.assertIn("<h4>Field 1 · Sat 10 Oct</h4>", runsheet)
+            # Without it the match is not one of today's.
+            self.get(
+                "compops:booth-pane",
+                match_pk=self.saturday.pk,
+                pane="results",
+                **self.kw,
+            )
+            self.assert_http_404_not_found()
+
+    def test_end_of_the_day_says_so_once(self):
+        for match in (self.current, self.following):
+            match.live_stream_status = "complete"
+            match.save()
+        with self.login(self.commentator):
+            self.get("compops:booth-lamp", **self.kw)
+        self.assertEqual(
+            self.last_response.content.count(b"No more broadcasts on Field 1 today"), 1
         )
 
 
@@ -795,7 +916,7 @@ class PaneTests(BoothFixture):
         self.assertIn(self.url("booth-teams", match_pk=self.current.pk), body)
         self.assertIn(
             f"data-signals__ifmissing=\"{{pane: 'sheets', "
-            f'match: {self.current.pk}, modal: false}}"',
+            f"match: {self.current.pk}, modal: false, day: ''}}\"",
             body,
         )
 

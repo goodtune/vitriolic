@@ -425,6 +425,51 @@ def test_comms_team_watches_the_booth_without_its_controls(
         context.close()
 
 
+def test_booth_clock_keeps_time_and_its_days_can_be_stepped_through(
+    compops_page, asgi_live_server, tournament, screenshot_dir
+):
+    page = compops_page
+    today = tournament["match"].date
+    saturday = today + datetime.timedelta(days=2)
+    MatchFactory.create(
+        stage=tournament["match"].stage,
+        home_team=tournament["teams"][2],
+        away_team=tournament["teams"][3],
+        play_at=tournament["ground"],
+        live_stream=True,
+        date=saturday,
+        time=datetime.time(19, 0),
+        datetime=tournament["match"].datetime + datetime.timedelta(days=2),
+    )
+    page.set_viewport_size({"width": 1024, "height": 768})
+    page.goto(asgi_live_server.url + tournament["booth_path"])
+    clock = page.locator("header .clock")
+    # The browser keeps the clock: whatever it shows is put right in a second.
+    clock.evaluate("el => { el.textContent = 'stopped' }")
+    expect(clock).to_have_text(re.compile(r"^\d\d:\d\d$"), timeout=3000)
+
+    # Another day of the ground: its matches, and nothing to press.
+    page.locator('header a[rel="next"]').click()
+    expect(page.locator("header .day")).to_have_text(
+        f"{saturday:%A} {saturday.day} {saturday:%B}"
+    )
+    expect(page.locator("#onair button")).to_have_count(0)
+    expect(page.locator("#strip .card").nth(2)).to_contain_text("19:00")
+    expect(page.locator("#pane.sheets")).to_be_visible()
+    # The page's requests, its event stream among them, stay on that day.
+    page.locator("nav.tabs button", has_text="runsheet").click()
+    expect(page.locator("#pane h4")).to_contain_text(f"{saturday:%a} {saturday.day}")
+    expect(page.locator(".sse")).not_to_have_class("down")
+    expect(page.locator("header .day")).to_have_text(
+        f"{saturday:%A} {saturday.day} {saturday:%B}"
+    )
+    page.screenshot(
+        path=str(screenshot_dir / "compops_booth_another_day.png"), full_page=True
+    )
+    page.locator("header a.today").click()
+    expect(page.locator("#lamp")).to_have_text("ON AIR")
+
+
 def test_hold_button_needs_a_hold(
     compops_page, asgi_live_server, tournament, screenshot_dir
 ):
