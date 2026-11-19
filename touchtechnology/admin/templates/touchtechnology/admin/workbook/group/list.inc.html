@@ -26,8 +26,12 @@
 	{% if add_perm in object_perms %}
 		<li><a href="{% url 'admin:auth:groups:perms' obj.pk %}">{% icon "lock" %}{% trans "Security" %}</a></li>
 	{% endif %}
+{% endblock %}
+
+{# The list's one Delete: the base would add another from the record's own urls. #}
+{% block row-buttons-delete %}
 	{% if delete_perm in object_perms %}
 		{% url 'admin:auth:groups:delete' obj.pk as delete_url %}
-		<li>{% include "touchtechnology/admin/workbook/_delete.html" with action=delete_url %}</li>
+		<li class="wb-menu-last">{% include "touchtechnology/admin/workbook/_delete.html" with action=delete_url %}</li>
 	{% endif %}
 {% endblock %}

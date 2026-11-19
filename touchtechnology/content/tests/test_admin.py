@@ -1239,6 +1239,9 @@ class DeleteConfirmationTests(DeleteFormMixin, TestCase):
                 "placeholder",
             )
         )
+        delete = self.reverse("admin:content:real_placeholder:delete", self.news.pk)
+        content = self.last_response.content.decode()
+        self.assertEqual(content.count(f'action="{delete}"'), 1)
 
 
 @per_shell

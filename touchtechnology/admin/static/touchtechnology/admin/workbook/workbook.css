@@ -1275,6 +1275,9 @@ select.wb-multi { max-width: 16rem; }
 .wb-table td.wb-row-actions { text-align: right; white-space: nowrap; width: 1%; }
 .wb-table .wb-title-cell a { font-weight: 700; text-decoration: none; }
 .wb-table .wb-title-cell a:hover { text-decoration: underline; }
+/* A second line under the title: a user's email address under their name. */
+.wb-title-lines { display: inline-flex; flex-direction: column; min-width: 0; vertical-align: middle; }
+.wb-title-sub { color: var(--wb-ink-soft); font-size: 0.85rem; font-weight: 400; overflow-wrap: anywhere; }
 .wb-row-buttons { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 0.35rem; }
 .wb-row-buttons form { margin: 0; display: inline; }
 .wb-table-empty td { padding: 1.5rem 0.75rem; color: var(--wb-ink-soft); }
@@ -1685,6 +1688,9 @@ select.wb-multi { max-width: 16rem; }
 .wb-indent-4 { padding-left: 6rem !important; }
 
 .wb-thumb { width: 3rem; height: 3rem; object-fit: cover; border-radius: 8px; vertical-align: middle; }
+/* A halo round the avatar of someone who can sign in to the admin. */
+.wb-avatar-staff { box-shadow: 0 0 0 2px var(--wb-sheet), 0 0 0 4px var(--wb-accent); }
+.wb-avatar-superuser { box-shadow: 0 0 0 2px var(--wb-sheet), 0 0 0 4px var(--wb-mark), 0 0 10px 5px color-mix(in oklch, var(--wb-mark) 45%, transparent); }
 .wb-avatar-small { width: 1.9rem; height: 1.9rem; font-size: 0.75rem; margin-right: 0.5rem; vertical-align: middle; }
 
 .wb-code { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: 0.9em; }

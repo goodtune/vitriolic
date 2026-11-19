@@ -18,9 +18,13 @@
 
 {% block row-buttons-items %}
 	{% url 'admin:content:real_placeholder:edit' obj.pk as edit_url %}
-	{% url 'admin:content:real_placeholder:delete' obj.pk as delete_url %}
 	{% if change_perm in object_perms %}<li><a href="{{ edit_url }}">{% icon "pencil" %}{% trans "Edit" %}</a></li>{% endif %}
-	{% if delete_perm in object_perms %}<li>{% include "touchtechnology/admin/workbook/_delete.html" with action=delete_url %}</li>{% endif %}
+{% endblock %}
+
+{# The list's one Delete: the base would add another from the record's own urls. #}
+{% block row-buttons-delete %}
+	{% url 'admin:content:real_placeholder:delete' obj.pk as delete_url %}
+	{% if delete_perm in object_perms %}<li class="wb-menu-last">{% include "touchtechnology/admin/workbook/_delete.html" with action=delete_url %}</li>{% endif %}
 {% endblock %}
 
 {% block empty-row-colspan %}4{% endblock %}

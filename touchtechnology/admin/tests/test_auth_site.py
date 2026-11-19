@@ -49,6 +49,64 @@ class AuthSiteUserTests(TestCase):
             self.shell.template("list.html"),
         )
 
+    def test_user_list_shows_the_email_address_under_the_name(self):
+        factories.UserFactory.create(
+            first_name="Alex", last_name="Smith", email="alex@example.com"
+        )
+        # Nothing to put under a name with no address, or one that is the name.
+        factories.UserFactory.create(first_name="Kim", last_name="Lee", email="")
+        factories.UserFactory.create(
+            username="sam@example.com",
+            first_name="",
+            last_name="",
+            email="sam@example.com",
+        )
+        sub = self.by_shell(workbook="wb-title-sub", explorer="title-sub")
+        with self.login(self.superuser):
+            self.get_check_200("admin:auth:users:list")
+        self.assertResponseContains(f'<span class="{sub}">alex@example.com</span>')
+        content = self.last_response.content.decode()
+        self.assertEqual(
+            (
+                content.count(f'<span class="{sub}"></span>'),
+                content.count(f'<span class="{sub}">sam@example.com</span>'),
+            ),
+            (0, 0),
+        )
+
+    def test_user_list_rings_the_avatars_of_staff_and_superusers(self):
+        # One superuser and one member of staff (see setUp), and one who is
+        # neither. A superuser is ringed as one, not as staff as well.
+        factories.UserFactory.create()
+        with self.login(self.superuser):
+            self.get_check_200("admin:auth:users:list")
+        content = self.last_response.content.decode()
+        superuser, staff, plain = self.by_shell(
+            workbook=(
+                'class="wb-avatar wb-avatar-small wb-avatar-superuser" '
+                'aria-hidden="true" title="Superuser"',
+                'class="wb-avatar wb-avatar-small wb-avatar-staff" '
+                'aria-hidden="true" title="Staff"',
+                'class="wb-avatar wb-avatar-small" aria-hidden="true">',
+            ),
+            explorer=(
+                'class="avatar avatar-superuser" aria-hidden="true" title="Superuser"',
+                'class="avatar avatar-staff" aria-hidden="true" title="Staff"',
+                'class="avatar" aria-hidden="true">',
+            ),
+        )
+        # The mark is on the avatar alone; the row says nothing more.
+        self.assertEqual(
+            (
+                content.count(superuser),
+                content.count(staff),
+                content.count(">Superuser</span>"),
+                content.count(">Staff</span>"),
+            ),
+            (1, 1, 0, 0),
+        )
+        self.assertGreaterEqual(content.count(plain), 1)
+
     def test_user_list_shows_registration_and_last_login_dates(self):
         factories.UserFactory.create(
             username="veteran",
@@ -134,6 +192,13 @@ class AuthSiteGroupTests(TestCase):
             ["model", "object_list"],
             self.shell.template("list.html"),
         )
+
+    def test_group_list_offers_each_group_one_delete(self):
+        delete = self.reverse("admin:auth:groups:delete", pk=self.group_instance.pk)
+        with self.login(self.superuser):
+            self.get_check_200("admin:auth:groups:list")
+        content = self.last_response.content.decode()
+        self.assertEqual(content.count(f'action="{delete}"'), 1)
 
     def test_group_create(self):
         self.get_generic_200(
@@ -242,6 +307,15 @@ class OwnUserRecordTests(TestCase):
                 ),
             )
         )
+
+    def test_the_list_offers_each_user_one_delete(self):
+        # The list's own Delete, and not a second from the record's own
+        # ``urls.delete``, which the user model now has.
+        delete = self.reverse("admin:auth:users:delete", pk=self.staff.pk)
+        with self.login(self.superuser):
+            self.get_check_200("admin:auth:users:list")
+        content = self.last_response.content.decode()
+        self.assertEqual(content.count(f'action="{delete}"'), 1)
 
     def test_the_edit_page(self):
         with self.login(self.superuser):

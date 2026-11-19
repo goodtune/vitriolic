@@ -96,7 +96,16 @@ def test_the_confirmation_names_the_object(
 
     row.get_by_role("button", name=ROW_MENU).click()
     delete = row.get_by_role("button", name="Delete", exact=True)
+    # One Delete, and no other item of the menu offered twice.
+    expect(delete).to_have_count(1)
     expect(delete).to_be_visible()
+    items = [
+        text.strip()
+        for text in row.locator(
+            by_shell(workbook=".wb-menu li", explorer=".menu-panel > *")
+        ).all_inner_texts()
+    ]
+    assert sorted(items) == sorted(set(items)), items
     # The row posts to the route the case is for.
     action = urlparse(delete.locator("xpath=ancestor::form").get_attribute("action"))
     assert resolve(action.path).namespace == case.route
