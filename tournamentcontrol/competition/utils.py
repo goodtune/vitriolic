@@ -1123,6 +1123,34 @@ def create_thumbnail_preview(
     return ThumbnailPreview(output_buffer.getvalue(), original_mime)
 
 
+# YouTube's thumbnails.set takes at most 2 MB, and recommends 1280x720.
+YOUTUBE_THUMBNAIL_MAX_BYTES = 2 * 1024 * 1024
+YOUTUBE_THUMBNAIL_SIZE = (1280, 720)
+YOUTUBE_THUMBNAIL_QUALITIES = (90, 80, 70, 60, 50, 40, 30)
+
+
+def fit_youtube_thumbnail(image_data):
+    """
+    The thumbnail as YouTube will take it. An image within the size limit is
+    returned as it is. A larger one is scaled down to fit 1280x720 and encoded
+    again as JPEG, at a lower quality each time until it is within the limit.
+
+    Returns ``None`` when it cannot be made to fit: it is over the limit and
+    cannot be read as an image.
+    """
+    if len(image_data) <= YOUTUBE_THUMBNAIL_MAX_BYTES:
+        return image_data
+    for quality in YOUTUBE_THUMBNAIL_QUALITIES:
+        fitted = create_thumbnail_preview(
+            image_data, *YOUTUBE_THUMBNAIL_SIZE, quality=quality
+        ).image_data
+        if fitted is None:
+            return None
+        if len(fitted) <= YOUTUBE_THUMBNAIL_MAX_BYTES:
+            return fitted
+    return None
+
+
 def matches_timeline(matches_by_date):
     """
     Reshape a ``matches_by_date`` mapping (as produced by

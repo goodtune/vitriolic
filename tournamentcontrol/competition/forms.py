@@ -103,6 +103,7 @@ from tournamentcontrol.competition.utils import (
     create_thumbnail_preview,
     first_stage_position_error,
     first_stage_position_message,
+    fit_youtube_thumbnail,
     legitimate_bye_match,
     match_unplayed,
     time_choice,
@@ -332,7 +333,9 @@ class ThumbnailImageField(forms.FileField):
     def __init__(self, *args, **kwargs):
         kwargs.setdefault(
             "help_text",
-            "Upload an image to use as the thumbnail on YouTube. Supported formats: JPEG, PNG, GIF.",
+            "Upload an image to use as the thumbnail on YouTube. Supported formats: "
+            "JPEG, PNG, GIF. An image over 2 MB is resized to fit 1280×720 and "
+            "saved as a JPEG.",
         )
         kwargs.setdefault("required", False)
         super().__init__(*args, **kwargs)
@@ -358,7 +361,15 @@ class ThumbnailImageField(forms.FileField):
                     f"Image file too large. Maximum size is {max_size // (1024 * 1024)}MB."
                 )
 
-            return binary_data
+            # YouTube takes at most 2 MB, so a larger image is stored already
+            # scaled down and encoded again as JPEG.
+            fitted = fit_youtube_thumbnail(binary_data)
+            if fitted is None:
+                raise forms.ValidationError(
+                    "This file is over the 2 MB that YouTube accepts and could "
+                    "not be resized. Upload a JPEG, PNG or GIF image."
+                )
+            return fitted
 
         return super().to_python(data)
 

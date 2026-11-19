@@ -105,6 +105,7 @@ from tournamentcontrol.competition.utils import (
     FauxQueryset,
     combine_and_localize,
     create_thumbnail_response,
+    fit_youtube_thumbnail,
     stage_group_position,
     stage_group_position_re,
     team_and_division,
@@ -123,6 +124,22 @@ stage_group_position_tpl = lazy_get_template(
 win_lose_team_tpl = lazy_get_template(
     "tournamentcontrol/competition/_win_lose_team.txt"
 )
+
+
+def thumbnail_media_upload(*images):
+    """
+    A ``MediaMemoryUpload`` of the first of ``images`` that YouTube will take,
+    fitted to its limits (see ``fit_youtube_thumbnail``); ``None`` when there
+    is none. An image that is not set, or cannot be made to fit, is passed
+    over for the next.
+    """
+    for image in images:
+        if not image:
+            continue
+        fitted = fit_youtube_thumbnail(image)
+        if fitted is not None:
+            return MediaMemoryUpload(fitted, resumable=True)
+    return None
 
 
 def generate_random_color():
@@ -891,9 +908,7 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
         Returns:
             MediaMemoryUpload or None if no thumbnail is set
         """
-        if self.live_stream_thumbnail_image:
-            return MediaMemoryUpload(self.live_stream_thumbnail_image, resumable=True)
-        return None
+        return thumbnail_media_upload(self.live_stream_thumbnail_image)
 
     def live_stream_thumbnail_response(self, width=None, height=None) -> HttpResponse:
         """
@@ -3248,16 +3263,11 @@ class Match(
         Returns:
             MediaMemoryUpload or None if no thumbnail is available
         """
-        # Try match-specific thumbnail first
-        if self.live_stream_thumbnail_image:
-            return MediaMemoryUpload(self.live_stream_thumbnail_image, resumable=True)
-
-        # Fall back to season thumbnail
-        season = self.stage.division.season
-        if season.live_stream_thumbnail_image:
-            return MediaMemoryUpload(season.live_stream_thumbnail_image, resumable=True)
-
-        return None
+        # The match's own thumbnail first, then the season's.
+        return thumbnail_media_upload(
+            self.live_stream_thumbnail_image,
+            self.stage.division.season.live_stream_thumbnail_image,
+        )
 
     def live_stream_thumbnail_response(self, width=None, height=None) -> HttpResponse:
         """
@@ -3645,15 +3655,10 @@ class LiveStreamEvent(LiveStreamTransitionMixin, AdminUrlMixin, models.Model):
         Returns:
             MediaMemoryUpload or None if no thumbnail is available
         """
-        if self.live_stream_thumbnail_image:
-            return MediaMemoryUpload(self.live_stream_thumbnail_image, resumable=True)
-
-        if self.season.live_stream_thumbnail_image:
-            return MediaMemoryUpload(
-                self.season.live_stream_thumbnail_image, resumable=True
-            )
-
-        return None
+        return thumbnail_media_upload(
+            self.live_stream_thumbnail_image,
+            self.season.live_stream_thumbnail_image,
+        )
 
     def live_stream_thumbnail_response(self, width=None, height=None) -> HttpResponse:
         """
