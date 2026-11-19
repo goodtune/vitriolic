@@ -22,7 +22,6 @@
 			{% endif %}
 			{% if obj.email and obj.email != name %}<span class="wb-title-sub">{{ obj.email }}</span>{% endif %}
 		</span>
-		{% if obj.is_superuser %}<span class="wb-sr">{% trans "Superuser" %}</span>{% elif obj.is_staff %}<span class="wb-sr">{% trans "Staff" %}</span>{% endif %}
 	</td>
 	{% endwith %}
 	<td class="wb-hide-narrow" data-label="{% trans "Registered" %}">{{ obj.date_joined|date:"j M Y" }}</td>

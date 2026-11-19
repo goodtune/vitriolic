@@ -95,15 +95,15 @@ class AuthSiteUserTests(TestCase):
                 'class="avatar" aria-hidden="true">',
             ),
         )
-        hidden = self.by_shell(workbook="wb-sr", explorer="visually-hidden")
+        # The mark is on the avatar alone; the row says nothing more.
         self.assertEqual(
             (
                 content.count(superuser),
                 content.count(staff),
-                content.count(f'<span class="{hidden}">Superuser</span>'),
-                content.count(f'<span class="{hidden}">Staff</span>'),
+                content.count(">Superuser</span>"),
+                content.count(">Staff</span>"),
             ),
-            (1, 1, 1, 1),
+            (1, 1, 0, 0),
         )
         self.assertGreaterEqual(content.count(plain), 1)
 

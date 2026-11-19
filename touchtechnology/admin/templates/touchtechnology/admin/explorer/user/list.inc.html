@@ -17,8 +17,6 @@
 		{% else %}
 			<span class="avatar{% if obj.is_superuser %} avatar-superuser{% elif obj.is_staff %} avatar-staff{% endif %}" aria-hidden="true"{% if obj.is_superuser %} title="{% trans "Superuser" %}"{% elif obj.is_staff %} title="{% trans "Staff" %}"{% endif %}>{{ obj|initials }}</span> <span class="title-lines"><span>{{ name }}</span>{% if obj.email and obj.email != name %}<span class="title-sub">{{ obj.email }}</span>{% endif %}</span>
 		{% endif %}
-		{# The halo on the avatar, said for those who cannot see it. #}
-		{% if obj.is_superuser %}<span class="visually-hidden">{% trans "Superuser" %}</span>{% elif obj.is_staff %}<span class="visually-hidden">{% trans "Staff" %}</span>{% endif %}
 	</td>
 	{% endwith %}
 	<td class="wide-only">{{ obj.date_joined|date:"j M Y" }}</td>
