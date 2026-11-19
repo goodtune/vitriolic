@@ -3063,6 +3063,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             division__season__live_stream_project_id="test-project-123",
             division__season__live_stream_client_id="test-client-id",
             division__season__live_stream_client_secret="test-client-secret",
+            division__season__live_stream_refresh_token="refresh-token",
         )
         team1 = factories.TeamFactory.create(division=stage.division)
         team2 = factories.TeamFactory.create(division=stage.division)
@@ -3103,6 +3104,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             division__season__live_stream_project_id="test-project-123",
             division__season__live_stream_client_id="test-client-id",
             division__season__live_stream_client_secret="test-client-secret",
+            division__season__live_stream_refresh_token="refresh-token",
         )
         ground = factories.GroundFactory.create(
             venue__season=stage.division.season,
@@ -3163,6 +3165,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             division__season__live_stream_project_id="test-project-123",
             division__season__live_stream_client_id="test-client-id",
             division__season__live_stream_client_secret="test-client-secret",
+            division__season__live_stream_refresh_token="refresh-token",
         )
         ground = factories.GroundFactory.create(venue__season=stage.division.season)
         match = factories.MatchFactory.create(
@@ -3403,6 +3406,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             division__season__live_stream=True,
             division__season__live_stream_client_id="test-client-id",
             division__season__live_stream_client_secret="test-client-secret",
+            division__season__live_stream_refresh_token="refresh-token",
         )
         camera_ground = factories.GroundFactory.create(
             venue__season=stage.division.season, live_stream=True
@@ -3489,6 +3493,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             division__season__live_stream=True,
             division__season__live_stream_client_id="test-client-id",
             division__season__live_stream_client_secret="test-client-secret",
+            division__season__live_stream_refresh_token="refresh-token",
         )
         camera_ground = factories.GroundFactory.create(
             venue__season=stage.division.season, live_stream=True
@@ -3589,6 +3594,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             division__season__live_stream=True,
             division__season__live_stream_client_id="test-client-id",
             division__season__live_stream_client_secret="test-client-secret",
+            division__season__live_stream_refresh_token="refresh-token",
         )
         camera_ground = factories.GroundFactory.create(
             venue__season=stage.division.season, live_stream=True
@@ -4930,6 +4936,7 @@ class StreamedMatchMixin(MatchRowMixin):
             division__season__live_stream_project_id="test-project-123",
             division__season__live_stream_client_id="test-client-id",
             division__season__live_stream_client_secret="test-client-secret",
+            division__season__live_stream_refresh_token="refresh-token",
         )
         self.camera = factories.GroundFactory.create(
             venue__season=self.stage.division.season, live_stream=True

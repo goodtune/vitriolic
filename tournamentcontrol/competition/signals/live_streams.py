@@ -11,11 +11,9 @@ logger = logging.getLogger(__name__)
 
 
 def _season_credentials(instance):
-    """Return the instance's season when its YouTube credentials are set."""
+    """Return the instance's season when it can reach YouTube."""
     season = instance.season
-    if season.live_stream_client_id and season.live_stream_client_secret:
-        return season
-    return None
+    return season if season.youtube_ready else None
 
 
 def cleanup_youtube_broadcast(sender, instance, **kwargs):

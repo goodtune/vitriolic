@@ -192,6 +192,7 @@ class SyncLiveStreamTaskTests(TestCase):
             live_stream_project_id="test-project",
             live_stream_client_id="test-client-id",
             live_stream_client_secret="test-client-secret",
+            live_stream_refresh_token="refresh-token",
             live_stream_privacy="unlisted",
         )
         self.division = factories.DivisionFactory.create(
@@ -630,6 +631,7 @@ class SyncLiveStreamTitleFormsTests(TestCase):
             live_stream_project_id="test-project",
             live_stream_client_id="test-client-id",
             live_stream_client_secret="test-client-secret",
+            live_stream_refresh_token="refresh-token",
             live_stream_privacy="unlisted",
         )
         self.division = factories.DivisionFactory.create(

@@ -360,7 +360,7 @@ def _sync_live_stream(match, base_url):
     match_pk = match.pk
     season = match.stage.division.season
 
-    if not (season.live_stream_client_id and season.live_stream_client_secret):
+    if not season.youtube_ready:
         return None
 
     if not match.live_stream and not match.external_identifier:
@@ -541,7 +541,7 @@ def sync_live_stream_event(event_pk):
             return None
         season = event.season
 
-        if not (season.live_stream_client_id and season.live_stream_client_secret):
+        if not season.youtube_ready:
             return None
 
         try:
@@ -604,7 +604,7 @@ def delete_youtube_broadcast(season_pk, external_identifier):
         )
         return
 
-    if not (season.live_stream_client_id and season.live_stream_client_secret):
+    if not season.youtube_ready:
         return
 
     try:
@@ -637,7 +637,7 @@ def delete_youtube_stream(season_pk, external_identifier):
         )
         return
 
-    if not (season.live_stream_client_id and season.live_stream_client_secret):
+    if not season.youtube_ready:
         return
 
     try:
