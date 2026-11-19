@@ -174,6 +174,12 @@ def _login(page, base_url, username):
 
 
 @pytest.fixture
+def login():
+    """Log a page in as a user whose password is ``password``."""
+    return _login
+
+
+@pytest.fixture
 def compops_page(asgi_live_server, page, compops_user):
     # The server is set up before the page, so it is torn down after it: the
     # browser closes the page's event stream before the server stops, and

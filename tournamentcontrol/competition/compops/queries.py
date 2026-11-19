@@ -92,6 +92,7 @@ class Events:
     upcoming: list
     recent: list
     competitions: list
+    unscheduled: list
 
 
 @dataclasses.dataclass
@@ -106,16 +107,19 @@ class Day:
         return self.matches - self.entered
 
 
-def events(now, limit=5):
+def events(now, limit=5, seasons=None):
     """
-    Every season, grouped by when it is played: from its first match day to
-    its last (``current``), still to start (``upcoming``, soonest first) or
-    finished (``recent``, latest first), the last two cut to ``limit``. A
-    season is placed by the date where it is played, and one with no dated
-    match appears only in ``competitions``, which lists them all.
+    Every season (or those of the queryset ``seasons``), grouped by when it
+    is played: from its first match day to its last (``current``), still to
+    start (``upcoming``, soonest first) or finished (``recent``, latest
+    first), the last two cut to ``limit`` unless it is ``None``. A season is
+    placed by the date where it is played, and one with no dated match is
+    ``unscheduled``. ``competitions`` lists them all.
     """
+    if seasons is None:
+        seasons = Season.objects.all()
     seasons = list(
-        Season.objects.select_related("competition")
+        seasons.select_related("competition")
         .defer("live_stream_thumbnail_image")
         .annotate(
             first_day=Min("divisions__stages__matches__date"),
@@ -128,12 +132,13 @@ def events(now, limit=5):
             "title",
         )
     )
-    current, upcoming, recent, competitions = [], [], [], []
+    current, upcoming, recent, competitions, unscheduled = [], [], [], [], []
     for season in seasons:
         if not competitions or competitions[-1][0] != season.competition:
             competitions.append((season.competition, []))
         competitions[-1][1].append(season)
         if season.first_day is None:
+            unscheduled.append(season)
             continue
         season.compops_today = season.local_date(now)
         if season.compops_today < season.first_day:
@@ -164,7 +169,7 @@ def events(now, limit=5):
     current.sort(key=lambda season: season.compops_next_day)
     upcoming.sort(key=lambda season: season.first_day)
     recent.sort(key=lambda season: season.last_day, reverse=True)
-    return Events(current, upcoming[:limit], recent[:limit], competitions)
+    return Events(current, upcoming[:limit], recent[:limit], competitions, unscheduled)
 
 
 def season_days(season, now):

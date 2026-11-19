@@ -719,6 +719,7 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
         ]
         permissions = [
             ("stream_season", "Can start and stop live streams for the season"),
+            ("commentate_season", "Can watch the commentary booths of the season"),
         ]
 
     def _get_admin_namespace(self):

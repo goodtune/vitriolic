@@ -1,6 +1,12 @@
 {% extends "tournamentcontrol/competition/compops/base.html" %}
 {% block title %}Booth · {{ season }}{% endblock %}
 {% block body %}
+<header class="topbar">
+	<a class="brand" href="{% url 'compops:index' %}">TOURNAMENT OPS</a>
+	<span class="season">{{ season }}</span>
+	<span class="spacer"></span>
+	<span class="who">{{ user.get_username }}</span>
+</header>
 <main class="index">
 	<h1>Commentary booth · {{ season }}</h1>
 	<ul class="seasons">{% for ground in grounds %}<li><a href="{% url 'compops:booth' competition=season.competition.slug season=season.slug ground=ground.slug %}">{{ ground.title }}</a></li>{% empty %}<li class="empty">No streamed grounds.</li>{% endfor %}</ul>
