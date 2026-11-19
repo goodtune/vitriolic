@@ -9,10 +9,12 @@ from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
 import pytest
+from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.utils import timezone
 from faker import Faker
 from googleapiclient.errors import HttpError
+from guardian.shortcuts import assign_perm
 from playwright.sync_api import expect
 
 from tournamentcontrol.competition.compops import events, streams
@@ -362,6 +364,65 @@ def test_ending_the_broadcast_from_ops_darkens_the_booth_lamp(
             path=str(screenshot_dir / "compops_streams_ended.png"), full_page=True
         )
         expect(second_page.locator("#lamp")).to_have_text("OFF AIR")
+
+
+def test_comms_team_watches_the_booth_without_its_controls(
+    compops_page,
+    browser,
+    login,
+    asgi_live_server,
+    tournament,
+    django_user_model,
+    screenshot_dir,
+):
+    # No staff flag and no permission of their own: only the group's right
+    # to watch this season's booths.
+    comms = Group.objects.create(name="Comms team")
+    assign_perm("competition.commentate_season", comms, tournament["season"])
+    django_user_model.objects.create_user(
+        username="comms", password="password"
+    ).groups.add(comms)
+    context = browser.new_context(viewport={"width": 1024, "height": 768})
+    page = context.new_page()
+    try:
+        login(page, asgi_live_server.url, "comms")
+        page.goto(asgi_live_server.url + tournament["booth_path"])
+        expect(page.locator("#lamp")).to_have_text("ON AIR")
+        expect(page.locator("#onair button")).to_have_count(0)
+        expect(page.locator("#pane.sheets")).to_be_visible()
+        page.screenshot(
+            path=str(screenshot_dir / "compops_booth_watch_only.png"), full_page=True
+        )
+        page.locator("nav.tabs button", has_text="Ladder").click()
+        expect(page.locator("#pane.ladder")).to_be_visible()
+
+        # The lamp follows the broadcast as the ops desk runs it.
+        with mock.patch(
+            "tournamentcontrol.competition.models.build",
+            return_value=youtube_mock("live"),
+        ):
+            compops_page.goto(asgi_live_server.url + tournament["day_path"])
+            compops_page.locator(
+                f"#stream-{tournament['ground'].pk} button", has_text="End"
+            ).click()
+            expect(page.locator("#lamp")).to_have_text("OFF AIR")
+        expect(page.locator("#onair button")).to_have_count(0)
+
+        # The rest of the site stays closed to them.
+        assert page.goto(asgi_live_server.url + tournament["day_path"]).status == 403
+
+        # The front door lists their seasons, and leads back to the booth.
+        page.goto(asgi_live_server.url + reverse("compops:index"))
+        expect(page.locator("main h1")).to_have_text("Commentary booths")
+        expect(page.locator("ul.list li")).to_have_count(1)
+        page.screenshot(
+            path=str(screenshot_dir / "compops_front_door.png"), full_page=True
+        )
+        page.locator("a.item", has_text=tournament["season"].title).click()
+        page.locator("a", has_text="Field 1").click()
+        expect(page).to_have_url(asgi_live_server.url + tournament["booth_path"])
+    finally:
+        context.close()
 
 
 def test_hold_button_needs_a_hold(

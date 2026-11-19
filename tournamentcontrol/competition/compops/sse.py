@@ -19,7 +19,7 @@ from django.http import Http404, HttpResponseForbidden
 from tournamentcontrol.competition.compops import events
 from tournamentcontrol.competition.compops.days import parse_day
 from tournamentcontrol.competition.compops.default_settings import EVENTS_KEEPALIVE
-from tournamentcontrol.competition.compops.permissions import can_stream
+from tournamentcontrol.competition.compops.permissions import can_commentate
 from tournamentcontrol.competition.models import Season
 
 logger = logging.getLogger(__name__)
@@ -136,7 +136,7 @@ def booth_events(site):
         if not user.is_authenticated:
             return redirect_to_login(request.get_full_path())
         season = await get_season(competition, season)
-        allowed = await sync_to_async(can_stream)(user, season)
+        allowed = await sync_to_async(can_commentate)(user, season)
         if not allowed:
             return HttpResponseForbidden()
         ground = await site.booth_ground(season, ground)

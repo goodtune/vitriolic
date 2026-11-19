@@ -2,6 +2,7 @@ import datetime
 from unittest import mock
 from zoneinfo import ZoneInfo
 
+from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.utils import timezone
 from freezegun import freeze_time
@@ -39,6 +40,9 @@ class BoothFixture(TestCase):
         )
         self.commentator = factories.UserFactory.create()
         assign_perm("competition.stream_season", self.commentator, self.season)
+        # The comms team: no staff flag, and the right to watch but not to act.
+        self.watcher = factories.UserFactory.create()
+        assign_perm("competition.commentate_season", self.watcher, self.season)
         self.outsider = factories.UserFactory.create()
         venue = factories.VenueFactory.create(season=self.season)
         self.field1 = factories.GroundFactory.create(
@@ -153,6 +157,179 @@ class BoothAccessTests(BoothFixture):
                 ground="field-9",
             )
         self.assert_http_404_not_found()
+
+
+class WatchOnlyTests(BoothFixture):
+    """``commentate_season`` on the season opens its booths, and nothing else."""
+
+    def test_every_booth_page_opens(self):
+        season = {"competition": "pacific-cup", "season": "pc26"}
+        views = {
+            "booth-index": season,
+            "booth": self.kw,
+            "booth-lamp": self.kw,
+            "booth-strip": self.kw,
+            "booth-runsheet": self.kw,
+            "booth-pane": {**self.kw, "match_pk": self.current.pk, "pane": "ladder"},
+            "booth-teams": {**self.kw, "match_pk": self.current.pk},
+            "booth-team": {**self.kw, "team_pk": self.aus.pk},
+        }
+        with self.login(self.watcher):
+            for name, kwargs in views.items():
+                with self.subTest(name):
+                    self.get(f"compops:{name}", **kwargs)
+                    self.assert_http_200_ok()
+
+    def test_lamp_is_shown_without_its_controls(self):
+        with self.login(self.watcher):
+            self.get("compops:booth", **self.kw)
+        self.assertResponseContains('<div id="lamp" class="lamp live">ON AIR</div>')
+        # What is next is said; what to do about it is not theirs to do.
+        self.assertResponseContains("Next on Field 1 today: 11:20 Fiji v New Zealand")
+        self.assertEqual(
+            self.last_response.content.count(b"End the current broadcast first."), 0
+        )
+        self.assertEqual(self.last_response.content.count(b"HOLD TO END BROADCAST"), 0)
+        self.assertEqual(self.last_response.content.count(b"<form"), 0)
+
+    def test_lamp_offers_no_arm_between_broadcasts(self):
+        self.current.live_stream_status = "complete"
+        self.current.save()
+        with self.login(self.watcher):
+            self.get("compops:booth-lamp", **self.kw)
+        self.assertResponseContains('<div id="lamp" class="lamp">OFF AIR</div>')
+        self.assertEqual(self.last_response.content.count(b"arm now"), 0)
+        self.assertEqual(self.last_response.content.count(b"<form"), 0)
+
+    def test_broadcast_cannot_be_ended_or_armed(self):
+        with self.login(self.watcher):
+            for name, kwargs in (
+                ("booth-onair", {"status": "complete"}),
+                ("booth-arm", {}),
+            ):
+                with self.subTest(name):
+                    self.post(f"compops:{name}", **self.kw, **kwargs)
+                    self.assert_http_403_forbidden()
+        self.current.refresh_from_db()
+        self.assertEqual(self.current.live_stream_status, "live")
+
+    def test_rest_of_the_site_stays_closed(self):
+        season = {"competition": "pacific-cup", "season": "pc26"}
+        with self.login(self.watcher):
+            for name, kwargs in (
+                ("season", season),
+                ("day", {**season, "datestr": "20261008"}),
+                ("events", {**season, "datestr": "20261008"}),
+            ):
+                with self.subTest(name):
+                    self.get(f"compops:{name}", **kwargs)
+                    self.assert_http_403_forbidden()
+
+    def front_door_row(self, season):
+        url = reverse(
+            "compops:booth-index",
+            kwargs={"competition": season.competition.slug, "season": season.slug},
+        )
+        return (
+            f'<a class="item" href="{url}">'
+            f'<span class="title">{season.title}</span>'
+            f'<span class="comp">{season.competition.title}</span>'
+            '<span class="when">8 Oct 2026</span></a>'
+        )
+
+    def test_front_door_lists_the_seasons_they_may_watch(self):
+        # Played the same day, with no permission on it for either of them.
+        closed = factories.MatchFactory.create(
+            date=self.current.date
+        ).stage.division.season
+        for user in (self.watcher, self.commentator):
+            with self.subTest(user=user), self.login(user):
+                self.get("compops:index")
+                self.assert_http_200_ok()
+                self.assertResponseContains("<h1>Commentary booths</h1>")
+                self.assertResponseContains("<h2>On now</h2>")
+                self.assertResponseContains(self.front_door_row(self.season))
+                content = self.last_response.content.decode()
+                self.assertEqual(
+                    (
+                        content.count(self.front_door_row(closed)),
+                        content.count("Open today"),
+                        content.count("All events"),
+                    ),
+                    (0, 0, 0),
+                )
+
+    def test_front_door_lists_a_season_with_no_matches_yet(self):
+        coming = factories.SeasonFactory.create(timezone="Australia/Brisbane")
+        assign_perm("competition.commentate_season", self.watcher, coming)
+        url = reverse(
+            "compops:booth-index",
+            kwargs={"competition": coming.competition.slug, "season": coming.slug},
+        )
+        with self.login(self.watcher):
+            self.get("compops:index")
+        self.assertResponseContains("<h2>Not yet scheduled</h2>")
+        self.assertResponseContains(
+            f'<a class="item" href="{url}">'
+            f'<span class="title">{coming.title}</span>'
+            f'<span class="comp">{coming.competition.title}</span>'
+            '<span class="when">No matches scheduled</span></a>'
+        )
+
+    def test_front_door_is_closed_to_someone_with_no_season(self):
+        with self.login(self.outsider):
+            self.get("compops:index")
+        self.assert_http_403_forbidden()
+
+    def test_front_door_opens_for_a_group_member(self):
+        comms = Group.objects.create(name="Comms team")
+        assign_perm("competition.commentate_season", comms, self.season)
+        self.outsider.groups.add(comms)
+        with self.login(self.outsider):
+            self.get("compops:index")
+        self.assertResponseContains(self.front_door_row(self.season))
+
+    def test_list_of_booths_leads_back_to_the_front_door(self):
+        with self.login(self.watcher):
+            self.get("compops:booth-index", competition="pacific-cup", season="pc26")
+        home = reverse("compops:index")
+        self.assertResponseContains(
+            f'<a class="brand" href="{home}">TOURNAMENT OPS</a>'
+        )
+
+    def test_another_season_stays_closed(self):
+        other = factories.GroundFactory.create(live_stream=True)
+        kwargs = {
+            "competition": other.venue.season.competition.slug,
+            "season": other.venue.season.slug,
+        }
+        with self.login(self.watcher):
+            self.get("compops:booth", ground=other.slug, **kwargs)
+            self.assert_http_403_forbidden()
+            self.get("compops:booth-index", **kwargs)
+            self.assert_http_403_forbidden()
+
+    def test_group_holding_the_permission_lets_its_members_in(self):
+        comms = Group.objects.create(name="Comms team")
+        assign_perm("competition.commentate_season", comms, self.season)
+        self.outsider.groups.add(comms)
+        with self.login(self.outsider):
+            self.get("compops:booth", **self.kw)
+        self.assert_http_200_ok()
+        self.assertEqual(self.last_response.content.count(b"HOLD TO END BROADCAST"), 0)
+
+    def test_permission_on_every_season_opens_this_one(self):
+        assign_perm("competition.commentate_season", self.outsider)
+        with self.login(self.outsider):
+            self.get("compops:booth", **self.kw)
+        self.assert_http_200_ok()
+
+    def test_stream_permission_keeps_the_controls(self):
+        with self.login(self.commentator):
+            self.get("compops:booth", **self.kw)
+        self.assertResponseContains(
+            '<button class="bigbtn end" type="submit" data-hold="1500">HOLD TO END BROADCAST</button>'
+        )
 
 
 class StripAndLampTests(BoothFixture):

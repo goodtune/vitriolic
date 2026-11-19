@@ -554,6 +554,8 @@ class BoothEventsTests(SseFixture, TestCase):
         super().setUp()
         self.commentator = factories.UserFactory.create()
         assign_perm("competition.stream_season", self.commentator, self.season)
+        self.watcher = factories.UserFactory.create()
+        assign_perm("competition.commentate_season", self.watcher, self.season)
         venue = factories.VenueFactory.create(season=self.season)
         self.field1 = factories.GroundFactory.create(
             venue=venue, title="Field 1", slug="field-1", live_stream=True
@@ -642,6 +644,20 @@ class BoothEventsTests(SseFixture, TestCase):
             self.assertIn('<section id="onair"', chunks[0])
             self.assertIn('<section id="strip"', chunks[1])
             self.assertIn('<div id="pane" class="pane sheets">', snapshot)
+        finally:
+            await reader.close()
+
+    async def test_watcher_is_sent_the_lamp_without_its_controls(self):
+        await self.async_client.aforce_login(self.watcher)
+        response = await self.async_client.get(
+            self.booth_url, headers={"Datastar-Request": "true"}
+        )
+        self.assert_http_200_ok(response)
+        reader = Reader(response)
+        try:
+            lamp = "".join(await reader.until('<section id="onair"'))
+            self.assertIn('<div id="lamp" class="lamp live">ON AIR</div>', lamp)
+            self.assertEqual(lamp.count("<form"), 0)
         finally:
             await reader.close()
 

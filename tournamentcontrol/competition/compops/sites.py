@@ -38,7 +38,9 @@ from tournamentcontrol.competition.compops.fragments import (
     render_fragment,
 )
 from tournamentcontrol.competition.compops.permissions import (
+    booth_seasons,
     can_change_match,
+    can_commentate,
     can_enter_statistics,
     can_stream,
     require,
@@ -128,13 +130,17 @@ def booth_view(view):
 
 
 def booth_required(view):
-    """Login plus ``stream_season``; the booth does not need ``is_staff``."""
+    """
+    Login plus ``commentate_season`` or ``stream_season`` on the season; the
+    booth does not need ``is_staff``. A view that acts on the broadcast also
+    checks ``stream_season`` itself.
+    """
 
     @wraps(view)
     def wrapper(self, request, season, ground, **kwargs):
         if not request.user.is_authenticated:
             return redirect_to_login(request.get_full_path())
-        require(can_stream(request.user, season))
+        require(can_commentate(request.user, season))
         return view(self, request, season, ground, **kwargs)
 
     return wrapper
@@ -435,10 +441,23 @@ class CompOpsSite(Application):
 
     # --- pages ------------------------------------------------------
 
-    @staff_required
+    @login_required_m
     def index(self, request):
-        """Every season, with those being played, coming up or just ended first."""
-        context = {"events": queries.events(timezone.now())}
+        """
+        The front door. Staff get every season, with those being played,
+        coming up or just ended first, each leading to its days. Anyone else
+        gets the seasons whose booths they may open, each leading to them.
+        """
+        now = timezone.now()
+        if request.user.is_staff:
+            context = {"events": queries.events(now)}
+        else:
+            seasons = booth_seasons(request.user)
+            context = {
+                "events": queries.events(now, limit=None, seasons=seasons),
+                "booths": True,
+            }
+            require(context["events"].competitions)
         return self.render(request, self.template_path("index.html"), context)
 
     @staff_required
@@ -899,12 +918,23 @@ class CompOpsSite(Application):
             "status": status,
             "armable": armable,
             "arm_reason": reason,
-            "can_stream": True,
+            "can_stream": self._booth_can_stream(request, season),
             "panes": PANE_LABELS,
             "tzinfo": ground.get_tzinfo(),
             "user": request.user,
             "errors": [],
         }
+
+    @staticmethod
+    def _booth_can_stream(request, season):
+        """
+        Whether the person may act on the broadcast, or only watch it. Asked
+        once a request: an event stream renders the lamp on every push, and
+        an object permission is a query each time it is checked.
+        """
+        if not hasattr(request, "_compops_can_stream"):
+            request._compops_can_stream = can_stream(request.user, season)
+        return request._compops_can_stream
 
     @staticmethod
     def _booth_ground_ids(ground):
@@ -994,7 +1024,7 @@ class CompOpsSite(Application):
     @login_required_m
     @season_view
     def booth_index(self, request, season, day, **kwargs):
-        require(can_stream(request.user, season))
+        require(can_commentate(request.user, season))
         grounds = Ground.objects.filter(
             venue__season=season, live_stream=True
         ).order_by("venue__order", "order")
@@ -1038,6 +1068,7 @@ class CompOpsSite(Application):
     @booth_view
     @booth_required
     def booth_onair(self, request, season, ground, status, **kwargs):
+        require(can_stream(request.user, season))
         if status not in ("live", "complete"):
             raise Http404("Unknown broadcast status.")
         context = self.booth_context(request, season, ground)
@@ -1062,6 +1093,7 @@ class CompOpsSite(Application):
     @booth_view
     @booth_required
     def booth_arm(self, request, season, ground, **kwargs):
+        require(can_stream(request.user, season))
         context = self.booth_context(request, season, ground)
         if not context["armable"]:
             return self._booth_refused(

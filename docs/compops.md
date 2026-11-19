@@ -44,6 +44,8 @@ The site has three levels, each leading down to the next.
 - The day page (`compops:day`) is the dashboard.
   Its top bar leads back up to the season and the home page, and steps to the nearest earlier and later days with matches.
 
+Someone who is not staff gets a shorter home page: the seasons whose booths they may open, each leading to its booths (see [Who can do what](#who-can-do-what)).
+
 A season is placed by the date where it is played, from its `timezone`.
 Any day of any season can be opened, so a past day can be corrected or shown in training, and a coming one explored before it starts.
 
@@ -152,19 +154,36 @@ To turn a check off, put its id in `SILENCED_SYSTEM_CHECKS`.
 | Page or action | Needs |
 | --- | --- |
 | Ops dashboard pages | login and `is_staff` |
+| The home page | login, and `is_staff` or a booth permission on some season |
 | Enter or edit a result | `is_staff` and `competition.change_match` on the match (guardian object or global) |
 | Enter scorers | `is_staff`, `competition.add_simplescorematchstatistic` and `change_simplescorematchstatistic` |
 | Start, test or stop a broadcast; whole-slot actions | `is_staff` and `competition.stream_season` on the season |
-| The booth | login and `competition.stream_season` on the season; staff status is not needed |
+| Watch the booth: the lamp, the strip, the runsheet and the panes | login and `competition.commentate_season` (or `competition.stream_season`) on the season; staff status is not needed |
+| Go on air, end the broadcast or arm the next one from the booth | login and `competition.stream_season` on the season; staff status is not needed |
 
 Every dashboard action is part of the dashboard, so it needs `is_staff` as well as its own permission.
 Only the booth works without staff status.
 
-Grant a commentator pair one object permission on the season:
+Both booth permissions are season permissions, held for one season (a guardian object permission) or for every season (a global permission).
+A permission on a season covers every streamed ground and every match of that season.
+
+`competition.commentate_season` is for people who follow the broadcast but do not run it, such as a communications team.
+They see the on-air lamp, kept live, and the team sheets, results, ladder and leaders, with no button that acts on the broadcast.
+The home page (`compops:index`) is their front door: for someone who is not staff it lists only the seasons whose booths they may open, each leading to its list of booths (`compops:booth-index`).
+It refuses someone with no such season, and the rest of the site refuses anyone who is not staff.
+Grant it to a group, and add people to the group:
 
 ```python
+from django.contrib.auth.models import Group
 from guardian.shortcuts import assign_perm
 
+comms = Group.objects.get(name="Comms team")
+assign_perm("competition.commentate_season", comms, season)
+```
+
+Grant the commentator pair who run the broadcast `stream_season` in the same way:
+
+```python
 assign_perm("competition.stream_season", user, season)
 ```
 
