@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: vitriolic\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-25 19:27+0000\n"
+"POT-Creation-Date: 2026-11-19 05:47+0000\n"
 "PO-Revision-Date: 2014-11-13 21:21-0500\n"
 "Last-Translator: Erick Acker <erick.acker@internationaltouch.org>\n"
 "Language-Team: French\n"
@@ -10,11 +10,10 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 "X-Generator: crowdin.com\n"
 
-#: explorer.py:312
+#: explorer.py:323
 #, python-format
 msgid "All %(count)d %(things)s"
 msgstr ""
@@ -52,7 +51,14 @@ msgstr ""
 msgid "The component %s is already registered"
 msgstr "Le composant %s est déjà enregistré"
 
-#: sites/admin.py:78
+#: sites/admin.py:74
+#, python-format
+msgid ""
+"The component %(component)s has the name %(name)s of the registered "
+"component %(registered)s"
+msgstr ""
+
+#: sites/admin.py:94
 #, python-format
 msgid "The component %s is not registered"
 msgstr "Le composant %s n'est pas enregistré"
@@ -74,10 +80,8 @@ msgid "Users"
 msgstr ""
 
 #: sites/auth.py:79
-#, fuzzy
-#| msgid "Users & Groups"
 msgid "Groups"
-msgstr "Utilisateurs & groupes"
+msgstr "Groupes"
 
 #: sites/settings.py:11
 #: templates/touchtechnology/admin/explorer/explorer/rail.html:48
@@ -122,6 +126,28 @@ msgstr ""
 msgid "Back to the dashboard"
 msgstr ""
 
+#: templates/touchtechnology/admin/explorer/_delete.html:6
+#, python-format
+msgid "The %(type)s “%(obj)s” will be removed for good."
+msgstr ""
+
+#: templates/touchtechnology/admin/explorer/_delete.html:6
+#, python-format
+msgid "Delete this %(type)s?"
+msgstr ""
+
+#: templates/touchtechnology/admin/explorer/_delete.html:6
+#: templates/touchtechnology/admin/explorer/_delete.html:8
+#: templates/touchtechnology/admin/explorer/base.html:94
+#: templates/touchtechnology/admin/explorer/group/list.inc.html:22
+#: templates/touchtechnology/admin/explorer/group/list.inc.html:24
+#: templates/touchtechnology/admin/explorer/user/list.inc.html:33
+#: templates/touchtechnology/admin/explorer/user/list.inc.html:35
+#: templates/touchtechnology/admin/workbook/_delete.html:10
+#: templates/touchtechnology/admin/workbook/_dialogs.html:9
+msgid "Delete"
+msgstr ""
+
 #: templates/touchtechnology/admin/explorer/_form_errors.html:8
 msgid ""
 "Some of what you entered needs another look; see the fields marked below."
@@ -147,6 +173,24 @@ msgstr ""
 
 #: templates/touchtechnology/admin/explorer/_pagination.html:4
 msgid "Page"
+msgstr ""
+
+#: templates/touchtechnology/admin/explorer/_reorder.inc.html:7
+msgid "Move up"
+msgstr ""
+
+#: templates/touchtechnology/admin/explorer/_reorder.inc.html:7
+#, python-format
+msgid "Move %(obj)s up"
+msgstr ""
+
+#: templates/touchtechnology/admin/explorer/_reorder.inc.html:8
+msgid "Move down"
+msgstr ""
+
+#: templates/touchtechnology/admin/explorer/_reorder.inc.html:8
+#, python-format
+msgid "Move %(obj)s down"
 msgstr ""
 
 #: templates/touchtechnology/admin/explorer/_setup.html:4
@@ -185,6 +229,9 @@ msgid "%(done)s of %(total)s done"
 msgstr ""
 
 #: templates/touchtechnology/admin/explorer/_setup_summary.html:6
+#: templates/touchtechnology/admin/explorer/edit.html:18
+#: templates/touchtechnology/admin/workbook/edit.html:62
+#: templates/touchtechnology/admin/workbook/edit.html:82
 msgid "Next"
 msgstr ""
 
@@ -211,8 +258,8 @@ msgstr ""
 
 #: templates/touchtechnology/admin/explorer/base.html:60
 #: templates/touchtechnology/admin/explorer/list.html:8
-#: templates/touchtechnology/admin/workbook/edit.html:22
-#: templates/touchtechnology/admin/workbook/edit.html:29
+#: templates/touchtechnology/admin/workbook/edit.html:23
+#: templates/touchtechnology/admin/workbook/edit.html:30
 #, python-format
 msgid "New %(type)s"
 msgstr ""
@@ -239,25 +286,13 @@ msgstr ""
 #: templates/touchtechnology/admin/explorer/form_page.html:13
 #: templates/touchtechnology/admin/explorer/permissions.html:30
 #: templates/touchtechnology/admin/workbook/_savebar.html:7
-#: templates/touchtechnology/admin/workbook/edit.html:60
+#: templates/touchtechnology/admin/workbook/edit.html:61
 msgid "Cancel"
-msgstr ""
-
-#: templates/touchtechnology/admin/explorer/base.html:94
-#: templates/touchtechnology/admin/explorer/group/list.inc.html:22
-#: templates/touchtechnology/admin/explorer/group/list.inc.html:24
-#: templates/touchtechnology/admin/explorer/list.inc.html:72
-#: templates/touchtechnology/admin/explorer/list.inc.html:74
-#: templates/touchtechnology/admin/explorer/user/list.inc.html:33
-#: templates/touchtechnology/admin/explorer/user/list.inc.html:35
-#: templates/touchtechnology/admin/workbook/_delete.html:8
-#: templates/touchtechnology/admin/workbook/_dialogs.html:9
-msgid "Delete"
 msgstr ""
 
 #: templates/touchtechnology/admin/explorer/edit.html:9
 #: templates/touchtechnology/admin/explorer/group/list.inc.html:19
-#: templates/touchtechnology/admin/explorer/list.inc.html:69
+#: templates/touchtechnology/admin/explorer/list.inc.html:72
 #: templates/touchtechnology/admin/explorer/user/list.inc.html:30
 #: templates/touchtechnology/admin/workbook/permissions.html:20
 msgid "Permissions"
@@ -267,19 +302,19 @@ msgstr ""
 #: templates/touchtechnology/admin/explorer/form_page.html:15
 #: templates/touchtechnology/admin/explorer/permissions.html:29
 #: templates/touchtechnology/admin/workbook/_savebar.html:6
-#: templates/touchtechnology/admin/workbook/edit.html:61
-#: templates/touchtechnology/admin/workbook/edit.html:76
+#: templates/touchtechnology/admin/workbook/edit.html:62
+#: templates/touchtechnology/admin/workbook/edit.html:82
 msgid "Save"
 msgstr ""
 
 #: templates/touchtechnology/admin/explorer/edit.html:26
-#: templates/touchtechnology/admin/workbook/edit.html:41
+#: templates/touchtechnology/admin/workbook/edit.html:42
 #, python-format
 msgid "Parts of this %(type)s"
 msgstr ""
 
 #: templates/touchtechnology/admin/explorer/edit.html:28
-#: templates/touchtechnology/admin/workbook/edit.html:43
+#: templates/touchtechnology/admin/workbook/edit.html:44
 msgid "Details"
 msgstr ""
 
@@ -288,7 +323,7 @@ msgid "Set-up"
 msgstr ""
 
 #: templates/touchtechnology/admin/explorer/edit.html:64
-#: templates/touchtechnology/admin/workbook/edit.html:90
+#: templates/touchtechnology/admin/workbook/edit.html:96
 msgid "Loading…"
 msgstr ""
 
@@ -335,10 +370,10 @@ msgid "Sign out"
 msgstr ""
 
 #: templates/touchtechnology/admin/explorer/group/list.inc.html:16
-#: templates/touchtechnology/admin/explorer/list.inc.html:66
+#: templates/touchtechnology/admin/explorer/list.inc.html:69
 #: templates/touchtechnology/admin/explorer/user/list.inc.html:27
 #: templates/touchtechnology/admin/workbook/group/list.inc.html:24
-#: templates/touchtechnology/admin/workbook/list.inc.html:80
+#: templates/touchtechnology/admin/workbook/list.inc.html:83
 #: templates/touchtechnology/admin/workbook/user/list.inc.html:30
 #: templates/touchtechnology/admin/workbook/widgets/location_widget.html:5
 msgid "Edit"
@@ -375,42 +410,32 @@ msgstr ""
 msgid "Clear"
 msgstr ""
 
-#: templates/touchtechnology/admin/explorer/list.inc.html:15
+#: templates/touchtechnology/admin/explorer/list.inc.html:16
 #: templates/touchtechnology/admin/workbook/_add.html:4
 #: templates/touchtechnology/admin/workbook/list.html:26
 #, python-format
 msgid "Add %(type)s"
 msgstr ""
 
-#: templates/touchtechnology/admin/explorer/list.inc.html:32
+#: templates/touchtechnology/admin/explorer/list.inc.html:33
 #: templates/touchtechnology/admin/explorer/user/list.inc.html:5
 #: templates/touchtechnology/admin/workbook/user/list.inc.html:5
 msgid "Name"
 msgstr ""
 
-#: templates/touchtechnology/admin/explorer/list.inc.html:34
-#: templates/touchtechnology/admin/workbook/list.inc.html:48
+#: templates/touchtechnology/admin/explorer/list.inc.html:35
+#: templates/touchtechnology/admin/workbook/list.inc.html:49
 msgid "Actions"
 msgstr ""
 
-#: templates/touchtechnology/admin/explorer/list.inc.html:58
+#: templates/touchtechnology/admin/explorer/list.inc.html:59
 #, python-format
 msgid "More actions for %(obj)s"
 msgstr ""
 
-#: templates/touchtechnology/admin/explorer/list.inc.html:63
-#: templates/touchtechnology/admin/workbook/list.inc.html:77
+#: templates/touchtechnology/admin/explorer/list.inc.html:65
+#: templates/touchtechnology/admin/workbook/list.inc.html:79
 msgid "View"
-msgstr ""
-
-#: templates/touchtechnology/admin/explorer/list.inc.html:72
-#, python-format
-msgid "The %(type)s “%(obj)s” will be removed for good."
-msgstr ""
-
-#: templates/touchtechnology/admin/explorer/list.inc.html:72
-#, python-format
-msgid "Delete this %(type)s?"
 msgstr ""
 
 #: templates/touchtechnology/admin/explorer/list.inc.html:92
@@ -419,6 +444,7 @@ msgid "No %(types)s yet. <a href=\"%(create)s\">Add the first %(type)s</a>."
 msgstr ""
 
 #: templates/touchtechnology/admin/explorer/list.inc.html:94
+#: templates/touchtechnology/admin/workbook/list.inc.html:107
 #, python-format
 msgid "No %(types)s yet."
 msgstr ""
@@ -561,17 +587,17 @@ msgstr ""
 msgid "Show set-up checklist"
 msgstr ""
 
-#: templates/touchtechnology/admin/workbook/_delete.html:6
+#: templates/touchtechnology/admin/workbook/_delete.html:8
 #, python-format
 msgid "The %(type)s “%(what)s” will be removed for good."
 msgstr ""
 
-#: templates/touchtechnology/admin/workbook/_delete.html:6
+#: templates/touchtechnology/admin/workbook/_delete.html:8
 #, python-format
 msgid "Delete %(what)s?"
 msgstr ""
 
-#: templates/touchtechnology/admin/workbook/_delete.html:6
+#: templates/touchtechnology/admin/workbook/_delete.html:8
 #, python-format
 msgid "Delete %(type)s"
 msgstr ""
@@ -594,7 +620,7 @@ msgid "Main"
 msgstr ""
 
 #: templates/touchtechnology/admin/workbook/_nav.html:10
-#: templates/touchtechnology/admin/workbook/index.html:4 trail.py:72
+#: templates/touchtechnology/admin/workbook/index.html:4 trail.py:71
 msgid "Home"
 msgstr ""
 
@@ -615,7 +641,7 @@ msgstr ""
 msgid "Please check the form"
 msgstr ""
 
-#: templates/touchtechnology/admin/workbook/_sections.html:5
+#: templates/touchtechnology/admin/workbook/_sections.html:6
 #, python-format
 msgid "%(name)s sections"
 msgstr ""
@@ -636,12 +662,12 @@ msgstr ""
 msgid "Change password"
 msgstr ""
 
-#: templates/touchtechnology/admin/workbook/edit.html:58
+#: templates/touchtechnology/admin/workbook/edit.html:59
 #, python-format
 msgid "%(type)s details"
 msgstr ""
 
-#: templates/touchtechnology/admin/workbook/edit.html:78
+#: templates/touchtechnology/admin/workbook/edit.html:84
 #, python-format
 msgid "Save and add another %(type)s"
 msgstr ""
@@ -652,10 +678,8 @@ msgid "Up to %(label)s"
 msgstr ""
 
 #: templates/touchtechnology/admin/workbook/group/list.inc.html:5
-#, fuzzy
-#| msgid "Users & Groups"
 msgid "Group"
-msgstr "Utilisateurs & groupes"
+msgstr "Groupe"
 
 #: templates/touchtechnology/admin/workbook/group/list.inc.html:6
 #: templates/touchtechnology/admin/workbook/group/list.inc.html:17
@@ -663,7 +687,7 @@ msgid "Members"
 msgstr ""
 
 #: templates/touchtechnology/admin/workbook/group/list.inc.html:27
-#: templates/touchtechnology/admin/workbook/list.inc.html:83
+#: templates/touchtechnology/admin/workbook/list.inc.html:86
 #: templates/touchtechnology/admin/workbook/permissions.html:9
 #: templates/touchtechnology/admin/workbook/user/list.inc.html:33
 msgid "Security"
@@ -695,26 +719,21 @@ msgstr ""
 msgid "Show all"
 msgstr ""
 
-#: templates/touchtechnology/admin/workbook/list.inc.html:46
+#: templates/touchtechnology/admin/workbook/list.inc.html:47
 msgid "Title"
 msgstr ""
 
-#: templates/touchtechnology/admin/workbook/list.inc.html:72
+#: templates/touchtechnology/admin/workbook/list.inc.html:73
 #, python-format
 msgid "More actions for %(name)s"
 msgstr ""
 
-#: templates/touchtechnology/admin/workbook/list.inc.html:104
-#, python-format
-msgid "No %(type)s yet."
-msgstr ""
-
-#: templates/touchtechnology/admin/workbook/list.inc.html:104
+#: templates/touchtechnology/admin/workbook/list.inc.html:107
 #, python-format
 msgid "Add the first %(type)s"
 msgstr ""
 
-#: templates/touchtechnology/admin/workbook/list.inc.html:106
+#: templates/touchtechnology/admin/workbook/list.inc.html:109
 #, python-format
 msgid "There are no %(types)s."
 msgstr ""
@@ -751,10 +770,8 @@ msgid "Page tools"
 msgstr ""
 
 #: templates/touchtechnology/admin/workbook/settings/index.html:9
-#, fuzzy
-#| msgid "Settings"
 msgid "Site settings"
-msgstr "Paramètres"
+msgstr "Paramètres du site"
 
 #: templates/touchtechnology/admin/workbook/settings/index.html:10
 msgid "How the site is reached and named."

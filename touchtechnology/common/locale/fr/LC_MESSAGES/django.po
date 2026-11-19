@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: vitriolic\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-25 19:26+0000\n"
+"POT-Creation-Date: 2026-11-19 05:47+0000\n"
 "PO-Revision-Date: 2014-11-13 16:00-0500\n"
 "Last-Translator: Erick Acker <erick.acker@internationaltouch.org>\n"
 "Language-Team: French\n"
@@ -10,7 +10,6 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 "X-Generator: crowdin.com\n"
 
@@ -42,7 +41,7 @@ msgstr ""
 "Cette adresse électronique est déjà utilisée. Veuillez fournir une adresse "
 "électronique différente."
 
-#: forms/auth.py:62
+#: forms/auth.py:61
 msgid "The two password fields didn't match."
 msgstr "Les champs des deux mots de passe sont différents."
 
@@ -74,55 +73,55 @@ msgstr ""
 "Votre adresse électronique est également votre nom d'utilisateur.<br/>\n"
 "Veuillez vous assurer que vous l'entrez correctement."
 
-#: models.py:27
+#: models.py:26
 msgid "Title"
 msgstr "Titre"
 
-#: models.py:32
+#: models.py:31
 msgid "Short title"
 msgstr "Titre abrégé"
 
-#: models.py:34
+#: models.py:33
 msgid "This is used in navigation menus instead of the longer title value."
 msgstr ""
 "Elle est utilisée dans les menus de navigation à la place d'une plus longue "
 "valeur de titre. "
 
-#: models.py:38
+#: models.py:37
 msgid "Slug"
 msgstr "Partie d'une URL"
 
-#: models.py:40
+#: models.py:39
 msgid "Slug locked"
 msgstr "Partie d'une URL verrouillée"
 
-#: models.py:64
+#: models.py:63
 msgid "Parent"
 msgstr "Parent"
 
-#: models.py:82
+#: models.py:81
 msgid "HTTPS Required"
 msgstr "HTTPS requis"
 
-#: models.py:83
+#: models.py:82
 msgid "Force this to be served via HTTPS."
 msgstr "Forcer à être diffusé via HTTPS."
 
-#: models.py:89
+#: models.py:88
 msgid "Enabled"
 msgstr "Activé"
 
-#: models.py:91
+#: models.py:90
 msgid "Set this to 'No' to disable this object and it's children on the site."
 msgstr ""
 "Le définir à \"Non\" pour désactiver cet objet et ses dépendances sur le "
 "site."
 
-#: models.py:97
+#: models.py:96
 msgid "Hide from menus"
 msgstr "Masquer des menus"
 
-#: models.py:99
+#: models.py:98
 msgid ""
 "When set to 'Yes' this object will still be available, but will not appear "
 "in menus."
@@ -130,11 +129,11 @@ msgstr ""
 "Lorsqu'il est défini à \"Oui\" cet objet sera toujours disponible, mais il "
 "n'apparaitra pas dans les menus."
 
-#: models.py:106
+#: models.py:105
 msgid "Hide from sitemap"
 msgstr "Cacher du plan du site"
 
-#: models.py:108
+#: models.py:107
 msgid ""
 "When set to 'Yes' this object will not be listed in the auto-generated "
 "sitemap."
@@ -142,31 +141,25 @@ msgstr ""
 "Lorsqu'il est défini à \"Oui\" cet objet ne figurera pas dans le plan du "
 "site généré automatiquement."
 
-#: models.py:115
+#: models.py:114
 msgid "Hide from spiders"
 msgstr "Cacher des internautes"
 
-#: models.py:118
-#, fuzzy
-#| msgid ""
-#| "Set this to 'Yes' to prevent search engines from indexing this part of "
-#| "the site.<br />\n"
-#| "<strong>Warning:</strong> this may affect your ranking in search engines."
+#: models.py:117
 msgid ""
 "Set this to <em>Yes</em> to prevent search engines from indexing this part "
 "of the site.<br><strong>Warning:</strong> this may affect your ranking in "
 "search engines."
 msgstr ""
-"Attribuer \"Oui\" pour empêcher les moteurs de recherche d'indexer cette "
-"partie du site..<br />\n"
-"<strong>Warning:</strong>  ce qui peut affecter votre classement dans les "
-"moteurs de recherche."
+"Attribuer <em>Oui</em> pour empêcher les moteurs de recherche d'indexer "
+"cette partie du site.<br><strong>Attention :</strong> cela peut affecter "
+"votre classement dans les moteurs de recherche."
 
-#: models.py:129
+#: models.py:128
 msgid "Restrict to Groups"
 msgstr "Limiter aux Groupes"
 
-#: models.py:131
+#: models.py:130
 msgid ""
 "If you select one or more of these groups your visitors will need to be "
 "logged in and a member of an appropriate group to view this part of the site."
@@ -175,26 +168,26 @@ msgstr ""
 "être connectés et membres d'un groupe approprié pour afficher cette partie "
 "du site."
 
-#: models.py:210
+#: models.py:218
 msgid "direction must be one of 'left' or 'right'"
 msgstr "La direction doit être soit \"gauche\" soit \"droite\""
 
-#: sites.py:490
+#: sites.py:482
 #, python-brace-format
 msgid "Your {model} has been saved."
 msgstr "Votre {model} a été enregistré."
 
-#: sites.py:491
+#: sites.py:483
 #, python-brace-format
 msgid "Your {model} was not changed."
 msgstr "Votre {model} n'a pas été changé."
 
-#: sites.py:671
+#: sites.py:665
 #, python-brace-format
 msgid "Your {models} have been saved."
 msgstr "Vos {models} ont été enregistrés."
 
-#: sites.py:869
+#: sites.py:862
 #, python-format
 msgid ""
 "Your %(model_verbose_name)s and %(related_verbose_name_plural)s have been "
@@ -203,22 +196,21 @@ msgstr ""
 "Vos %(model_verbose_name)s and %(related_verbose_name_plural)s ont été "
 "enregistrés."
 
-#: sites.py:957
-#, fuzzy, python-brace-format
-#| msgid "Your {models} have been saved."
+#: sites.py:950
+#, python-brace-format
 msgid "Your {models} have been created."
-msgstr "Vos {models} ont été enregistrés."
+msgstr "Vos {models} ont été créés."
 
-#: sites.py:1127
+#: sites.py:1124
 #, python-format
 msgid "The %s has been deleted."
 msgstr "Les %s ont été supprimés."
 
-#: sites.py:1345
+#: sites.py:1338
 msgid "Your changes have been saved."
 msgstr "Vos modifications ont été enregistrées."
 
-#: sites.py:1349
+#: sites.py:1342
 msgid "You did not make any changes."
 msgstr "Vous n'avez fait aucune modification."
 
@@ -417,12 +409,7 @@ msgid "My Account"
 msgstr "Mon compte"
 
 #: templates/registration/profile.html:14
-#, fuzzy, python-format
-#| msgid ""
-#| "\n"
-#| "\t\t\t<p>Welcome back %(user.first_name)s &ndash; this is your personal "
-#| "page on <strong>%(site.name)s</strong>.</p>\n"
-#| "\t\t"
+#, python-format
 msgid "Welcome back %(name)s &ndash; this is your personal page."
 msgstr "Bienvenue %(name)s &ndash; ceci est votre page personnelle."
 

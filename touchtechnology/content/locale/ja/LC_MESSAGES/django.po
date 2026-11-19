@@ -3,12 +3,11 @@
 # This file is distributed under the same license as the PACKAGE package.
 # FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
 #
-#, fuzzy
 msgid ""
 msgstr ""
 "Project-Id-Version: vitriolic\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-25 19:27+0000\n"
+"POT-Creation-Date: 2026-11-19 05:47+0000\n"
 "PO-Revision-Date: 2026-10-25 20:21+0000\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: Japanese\n"
@@ -18,75 +17,112 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: admin.py:139
+#: admin.py:143
 msgid "Content"
 msgstr ""
 
-#: admin.py:242
+#: admin.py:246
 msgid "Edit the website's pages"
 msgstr ""
 
-#: admin.py:244
+#: admin.py:248
 msgid "Pages, menus, files and redirects"
 msgstr ""
 
-#: admin.py:252
+#: admin.py:256
 #: templates/touchtechnology/content/admin/explorer/sitemapnode/list.html:4
 msgid "Sitemap"
 msgstr ""
 
-#: admin.py:253
+#: admin.py:259
 #: templates/touchtechnology/content/admin/explorer/file/list.html:4
 msgid "Media"
 msgstr ""
 
-#: admin.py:254
+#: admin.py:260
 msgid "Chunks"
 msgstr ""
 
-#: admin.py:255
+#: admin.py:261
 msgid "Redirects"
 msgstr ""
 
-#: admin.py:256
+#: admin.py:262
 msgid "Applications"
 msgstr ""
 
-#: admin.py:601
+#: admin.py:476
+#, python-format
+msgid ""
+"“%(name)s” was not deleted: the sitemap still uses it at %(nodes)s. Delete "
+"those from the sitemap first."
+msgstr ""
+
+#: admin.py:656
+#, python-format
+msgid ""
+"The folder “%(name)s” was not made: this site's storage cannot make folders."
+msgstr ""
+
+#: admin.py:665
 #, python-format
 msgid "Opened new folder \"%s\"."
 msgstr ""
 
-#: admin.py:608
+#: admin.py:672
 #, python-format
 msgid "Uploaded new file \"%s\""
 msgstr ""
 
-#: admin.py:611
+#: admin.py:675
 msgid "There were no changes to be saved."
 msgstr ""
 
-#: admin.py:741
+#: admin.py:794
+#: templates/touchtechnology/content/admin/workbook/file/list.inc.html:33
+msgid "file"
+msgstr ""
+
+#: admin.py:796
+#: templates/touchtechnology/content/admin/explorer/sitemapnode/list.inc.html:38
+#: templates/touchtechnology/content/admin/workbook/file/list.inc.html:33
+#: templates/touchtechnology/content/admin/workbook/sitemapnode/list.inc.html:41
+msgid "folder"
+msgstr ""
+
+#: admin.py:804
+#, python-format
+msgid ""
+"The folder “%(name)s” was not removed: this site's storage cannot remove "
+"folders."
+msgstr ""
+
+#: admin.py:812
 #, python-format
 msgid "The folder \"%s\" is not empty."
 msgstr ""
 
+#: admin.py:819
+#, python-format
+msgid "The %(kind)s \"%(name)s\" has been deleted."
+msgstr ""
+
 #: forms.py:165
 #: templates/touchtechnology/content/admin/explorer/edit_application.html:5
-#: templates/touchtechnology/content/admin/explorer/placeholder/list.inc.html:5
+#: templates/touchtechnology/content/admin/explorer/placeholder/list.inc.html:8
 #: templates/touchtechnology/content/admin/workbook/placeholder/list.inc.html:5
 msgid "Application"
 msgstr ""
 
-#: forms.py:271
+#: forms.py:268
 msgid "New folder name"
 msgstr ""
 
-#: forms.py:280
+#: forms.py:275
 msgid "Already exists."
 msgstr ""
 
-#: forms.py:289
+#: forms.py:296
 msgid "File to upload"
 msgstr ""
 
@@ -113,79 +149,79 @@ msgid ""
 "Search Engines may use this when determining the relevance of your page."
 msgstr ""
 
-#: models.py:113
+#: models.py:119
 #: templates/touchtechnology/content/admin/explorer/edit_page.html:5
 #: templates/touchtechnology/content/admin/explorer/sitemapnode/list.inc.html:5
 #: templates/touchtechnology/content/admin/workbook/sitemapnode/list.inc.html:5
 msgid "Page"
 msgstr ""
 
-#: models.py:119
+#: models.py:125
 msgid "CSS class"
 msgstr ""
 
-#: models.py:121
+#: models.py:127
 msgid "Sequence"
 msgstr ""
 
-#: models.py:122
+#: models.py:128
 msgid "Copy"
 msgstr ""
 
-#: models.py:136
+#: models.py:142
 msgid "Slug"
 msgstr ""
 
-#: models.py:137 models.py:152
+#: models.py:143 models.py:161
 msgid "Page Copy"
 msgstr ""
 
-#: models.py:149
+#: models.py:158
 msgid "Node"
 msgstr ""
 
-#: models.py:158
+#: models.py:167
 msgid "Module path"
 msgstr ""
 
-#: models.py:160
+#: models.py:169
 msgid "Namespace"
 msgstr ""
 
-#: models.py:163
+#: models.py:172
 msgid "Nodes"
 msgstr ""
 
-#: models.py:172
+#: models.py:181
 msgid "Not installed"
 msgstr ""
 
-#: models.py:223
+#: models.py:232
 msgid "Source URL"
 msgstr ""
 
-#: models.py:224
+#: models.py:233
 msgid "The path that will trigger the redirection."
 msgstr ""
 
-#: models.py:229
+#: models.py:238
 msgid "Destination URL"
 msgstr ""
 
-#: models.py:230
+#: models.py:239
 msgid "The URL or path that the browser will be sent to."
 msgstr ""
 
-#: models.py:233
+#: models.py:242
 #: templates/touchtechnology/content/admin/workbook/redirect/list.inc.html:5
 msgid "Label"
 msgstr ""
 
-#: models.py:235
+#: models.py:244
 msgid "Active"
 msgstr ""
 
-#: models.py:236
+#: models.py:245
 msgid "Permanent"
 msgstr ""
 
@@ -213,12 +249,12 @@ msgstr ""
 #: templates/touchtechnology/content/admin/explorer/delete_confirm.html:21
 #: templates/touchtechnology/content/admin/explorer/edit_application.html:13
 #: templates/touchtechnology/content/admin/explorer/edit_page.html:14
-#: templates/touchtechnology/content/admin/explorer/file/list.html:23
-#: templates/touchtechnology/content/admin/explorer/file/list.html:34
+#: templates/touchtechnology/content/admin/explorer/file/list.html:26
+#: templates/touchtechnology/content/admin/explorer/file/list.html:37
 #: templates/touchtechnology/content/admin/workbook/delete_confirm.html:22
 #: templates/touchtechnology/content/admin/workbook/delete_confirm.html:28
-#: templates/touchtechnology/content/admin/workbook/file/list.html:17
-#: templates/touchtechnology/content/admin/workbook/file/list.html:31
+#: templates/touchtechnology/content/admin/workbook/file/list.html:18
+#: templates/touchtechnology/content/admin/workbook/file/list.html:32
 msgid "Cancel"
 msgstr ""
 
@@ -245,7 +281,7 @@ msgstr ""
 
 #: templates/touchtechnology/content/admin/explorer/edit_application.html:14
 #: templates/touchtechnology/content/admin/explorer/edit_page.html:15
-#: templates/touchtechnology/content/admin/explorer/file/list.html:44
+#: templates/touchtechnology/content/admin/explorer/file/list.html:47
 msgid "Save"
 msgstr ""
 
@@ -270,7 +306,7 @@ msgstr ""
 
 #: templates/touchtechnology/content/admin/explorer/edit_page.html:10
 #: templates/touchtechnology/content/admin/explorer/sitemapnode/list.inc.html:36
-#: templates/touchtechnology/content/admin/workbook/sitemapnode/list.inc.html:34
+#: templates/touchtechnology/content/admin/workbook/sitemapnode/list.inc.html:36
 msgid "View on the site"
 msgstr ""
 
@@ -290,27 +326,27 @@ msgstr ""
 msgid "The site's files"
 msgstr ""
 
-#: templates/touchtechnology/content/admin/explorer/file/list.html:9
-#: templates/touchtechnology/content/admin/explorer/file/list.html:20
+#: templates/touchtechnology/content/admin/explorer/file/list.html:10
+#: templates/touchtechnology/content/admin/explorer/file/list.html:23
 #: templates/touchtechnology/content/admin/explorer/sitemapnode/list.html:8
-#: templates/touchtechnology/content/admin/workbook/file/list.html:24
-#: templates/touchtechnology/content/admin/workbook/file/list.html:28
+#: templates/touchtechnology/content/admin/workbook/file/list.html:25
+#: templates/touchtechnology/content/admin/workbook/file/list.html:29
 msgid "New folder"
 msgstr ""
 
-#: templates/touchtechnology/content/admin/explorer/file/list.html:10
-#: templates/touchtechnology/content/admin/explorer/file/list.html:31
-#: templates/touchtechnology/content/admin/workbook/file/list.html:10
-#: templates/touchtechnology/content/admin/workbook/file/list.html:14
-#: templates/touchtechnology/content/admin/workbook/file/list.html:18
+#: templates/touchtechnology/content/admin/explorer/file/list.html:11
+#: templates/touchtechnology/content/admin/explorer/file/list.html:34
+#: templates/touchtechnology/content/admin/workbook/file/list.html:11
+#: templates/touchtechnology/content/admin/workbook/file/list.html:15
+#: templates/touchtechnology/content/admin/workbook/file/list.html:19
 msgid "Upload file"
 msgstr ""
 
-#: templates/touchtechnology/content/admin/explorer/file/list.html:24
+#: templates/touchtechnology/content/admin/explorer/file/list.html:27
 msgid "Make the folder"
 msgstr ""
 
-#: templates/touchtechnology/content/admin/explorer/file/list.html:35
+#: templates/touchtechnology/content/admin/explorer/file/list.html:38
 msgid "Upload"
 msgstr ""
 
@@ -345,15 +381,20 @@ msgstr ""
 msgid "Nothing here yet. Upload a file or make a folder."
 msgstr ""
 
-#: templates/touchtechnology/content/admin/explorer/placeholder/list.inc.html:6
+#: templates/touchtechnology/content/admin/explorer/placeholder/list.inc.html:9
 msgid "Import path"
 msgstr ""
 
-#: templates/touchtechnology/content/admin/explorer/placeholder/list.inc.html:16
+#: templates/touchtechnology/content/admin/explorer/placeholder/list.inc.html:20
 #, python-format
 msgid "%(count)s page"
 msgid_plural "%(count)s pages"
 msgstr[0] ""
+
+#: templates/touchtechnology/content/admin/explorer/placeholder/list.inc.html:29
+#: templates/touchtechnology/content/admin/workbook/placeholder/list.inc.html:22
+msgid "Edit"
+msgstr ""
 
 #: templates/touchtechnology/content/admin/explorer/redirect/list.inc.html:5
 msgid "Redirect"
@@ -400,6 +441,16 @@ msgstr ""
 msgid "Search"
 msgstr ""
 
+#: templates/touchtechnology/content/admin/explorer/sitemapnode/list.inc.html:38
+#: templates/touchtechnology/content/admin/workbook/sitemapnode/list.inc.html:41
+msgid "page"
+msgstr ""
+
+#: templates/touchtechnology/content/admin/explorer/sitemapnode/list.inc.html:38
+#: templates/touchtechnology/content/admin/workbook/sitemapnode/list.inc.html:41
+msgid "application"
+msgstr ""
+
 #: templates/touchtechnology/content/admin/workbook/delete_confirm.html:4
 #: templates/touchtechnology/content/admin/workbook/delete_confirm.html:10
 #, python-format
@@ -429,7 +480,7 @@ msgstr ""
 msgid "Pictures and documents the site's pages use."
 msgstr ""
 
-#: templates/touchtechnology/content/admin/workbook/file/list.html:32
+#: templates/touchtechnology/content/admin/workbook/file/list.html:33
 msgid "Create folder"
 msgstr ""
 
@@ -450,10 +501,6 @@ msgstr ""
 #: templates/touchtechnology/content/admin/workbook/placeholder/list.inc.html:7
 #: templates/touchtechnology/content/admin/workbook/placeholder/list.inc.html:16
 msgid "Import Path"
-msgstr ""
-
-#: templates/touchtechnology/content/admin/workbook/placeholder/list.inc.html:22
-msgid "Edit"
 msgstr ""
 
 #: templates/touchtechnology/content/admin/workbook/redirect/list.inc.html:6
@@ -513,10 +560,10 @@ msgstr ""
 msgid "(opens a new tab)"
 msgstr ""
 
-#: templates/touchtechnology/content/admin/workbook/sitemapnode/list.inc.html:32
+#: templates/touchtechnology/content/admin/workbook/sitemapnode/list.inc.html:33
 msgid "Move up"
 msgstr ""
 
-#: templates/touchtechnology/content/admin/workbook/sitemapnode/list.inc.html:33
+#: templates/touchtechnology/content/admin/workbook/sitemapnode/list.inc.html:34
 msgid "Move down"
 msgstr ""
