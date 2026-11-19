@@ -339,7 +339,10 @@ def make_category():
 
 def make_user():
     get_user_model().objects.create_user(
-        username="jfairweather", first_name="Jordan", last_name="Fairweather"
+        username="jfairweather",
+        first_name="Jordan",
+        last_name="Fairweather",
+        email="jordan.fairweather@example.com",
     )
     return Opening(reverse("admin:auth:users:list"), row="Jordan Fairweather")
 

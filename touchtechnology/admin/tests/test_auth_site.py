@@ -49,6 +49,31 @@ class AuthSiteUserTests(TestCase):
             self.shell.template("list.html"),
         )
 
+    def test_user_list_shows_the_email_address_under_the_name(self):
+        factories.UserFactory.create(
+            first_name="Alex", last_name="Smith", email="alex@example.com"
+        )
+        # Nothing to put under a name with no address, or one that is the name.
+        factories.UserFactory.create(first_name="Kim", last_name="Lee", email="")
+        factories.UserFactory.create(
+            username="sam@example.com",
+            first_name="",
+            last_name="",
+            email="sam@example.com",
+        )
+        sub = self.by_shell(workbook="wb-title-sub", explorer="title-sub")
+        with self.login(self.superuser):
+            self.get_check_200("admin:auth:users:list")
+        self.assertResponseContains(f'<span class="{sub}">alex@example.com</span>')
+        content = self.last_response.content.decode()
+        self.assertEqual(
+            (
+                content.count(f'<span class="{sub}"></span>'),
+                content.count(f'<span class="{sub}">sam@example.com</span>'),
+            ),
+            (0, 0),
+        )
+
     def test_user_list_shows_registration_and_last_login_dates(self):
         factories.UserFactory.create(
             username="veteran",

@@ -9,14 +9,20 @@
 {% endblock %}
 
 {% block table-columns %}
+	{# The email address goes under the name, unless there is none or it is the name. #}
+	{% with name=obj.get_full_name|default:obj.get_username %}
 	<td class="wb-title-cell">
 		<span class="wb-avatar wb-avatar-small" aria-hidden="true">{{ obj|initials }}</span>
-		{% if change_perm in object_perms %}
-			<a href="{% url 'admin:auth:users:edit' obj.pk %}">{{ obj.get_full_name|default:obj.get_username }}</a>
-		{% else %}
-			{{ obj.get_full_name|default:obj.get_username }}
-		{% endif %}
+		<span class="wb-title-lines">
+			{% if change_perm in object_perms %}
+				<a href="{% url 'admin:auth:users:edit' obj.pk %}">{{ name }}</a>
+			{% else %}
+				<span>{{ name }}</span>
+			{% endif %}
+			{% if obj.email and obj.email != name %}<span class="wb-title-sub">{{ obj.email }}</span>{% endif %}
+		</span>
 	</td>
+	{% endwith %}
 	<td class="wb-hide-narrow" data-label="{% trans "Registered" %}">{{ obj.date_joined|date:"j M Y" }}</td>
 	<td data-label="{% trans "Last login" %}">{% if obj.last_login %}{{ obj.last_login|date:"j M Y" }}{% else %}{% trans "Never" %}{% endif %}</td>
 {% endblock %}

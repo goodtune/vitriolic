@@ -1275,6 +1275,9 @@ select.wb-multi { max-width: 16rem; }
 .wb-table td.wb-row-actions { text-align: right; white-space: nowrap; width: 1%; }
 .wb-table .wb-title-cell a { font-weight: 700; text-decoration: none; }
 .wb-table .wb-title-cell a:hover { text-decoration: underline; }
+/* A second line under the title: a user's email address under their name. */
+.wb-title-lines { display: inline-flex; flex-direction: column; min-width: 0; vertical-align: middle; }
+.wb-title-sub { color: var(--wb-ink-soft); font-size: 0.85rem; font-weight: 400; overflow-wrap: anywhere; }
 .wb-row-buttons { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 0.35rem; }
 .wb-row-buttons form { margin: 0; display: inline; }
 .wb-table-empty td { padding: 1.5rem 0.75rem; color: var(--wb-ink-soft); }

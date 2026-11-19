@@ -1195,6 +1195,9 @@ input[type="radio"] {
 }
 
 .listing .title-cell a .icon { color: var(--muted); }
+/* A second line under the title: a user's email address under their name. */
+.listing .title-cell .title-lines { display: inline-flex; flex-direction: column; min-width: 0; vertical-align: middle; }
+.listing .title-cell .title-sub { color: var(--muted); font-size: 0.85em; font-weight: 400; overflow-wrap: anywhere; }
 .listing .title-cell a:hover { color: var(--ink); text-decoration: underline; }
 
 .listing .actions-cell {
