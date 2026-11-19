@@ -108,7 +108,7 @@ async = [
 redis = []
 
 [build-system]
-requires = ["setuptools", "setuptools-scm[toml]>=6.2"]
+requires = ["setuptools", "setuptools-scm[toml]>=6.2", "Babel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]

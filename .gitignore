@@ -9,6 +9,9 @@
 /uv.lock
 __pycache__
 
+# Translation catalogues compiled from the .po files when the package is built
+*.mo
+
 # E2E test screenshots
 screenshots/
 tests/screenshots/

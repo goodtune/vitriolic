@@ -3,12 +3,11 @@
 # This file is distributed under the same license as the PACKAGE package.
 # FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
 #
-#, fuzzy
 msgid ""
 msgstr ""
 "Project-Id-Version: vitriolic\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-25 20:21+0000\n"
+"POT-Creation-Date: 2026-11-19 05:47+0000\n"
 "PO-Revision-Date: 2026-10-25 20:21+0000\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: Japanese\n"
@@ -18,26 +17,26 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: admin.py:18
+#: admin.py:19
 msgid "News"
 msgstr ""
 
-#: admin.py:71
+#: admin.py:72
 msgid "Write a news article"
 msgstr ""
 
-#: admin.py:73
+#: admin.py:74
 msgid "Publish it now or later"
 msgstr ""
 
-#: admin.py:81
+#: admin.py:82
 #: templates/touchtechnology/news/admin/explorer/category/list.inc.html:6
 #: templates/touchtechnology/news/admin/workbook/category/list.inc.html:6
 #: templates/touchtechnology/news/admin/workbook/category/list.inc.html:13
 msgid "Articles"
 msgstr ""
 
-#: admin.py:82 models.py:56
+#: admin.py:83 models.py:56
 #: templates/touchtechnology/news/_related_list.html:17
 #: templates/touchtechnology/news/admin/explorer/article/list.inc.html:6
 #: templates/touchtechnology/news/admin/workbook/article/list.inc.html:6
@@ -60,11 +59,11 @@ msgstr ""
 msgid "Headline"
 msgstr ""
 
-#: models.py:40 models.py:158
+#: models.py:40 models.py:161
 msgid "Slug"
 msgstr ""
 
-#: models.py:41 models.py:159
+#: models.py:41 models.py:162
 msgid "Locked Slug"
 msgstr ""
 
@@ -103,23 +102,23 @@ msgstr ""
 msgid "Copy"
 msgstr ""
 
-#: models.py:151
+#: models.py:154
 msgid "Title"
 msgstr ""
 
-#: models.py:155
+#: models.py:158
 msgid "Short Title"
 msgstr ""
 
-#: models.py:156
+#: models.py:159
 msgid "Used in navigation, a shorter alternative to the main title."
 msgstr ""
 
-#: models.py:165
+#: models.py:168
 msgid "Hide from menus"
 msgstr ""
 
-#: models.py:167
+#: models.py:170
 msgid ""
 "When set to 'Yes' this object will still be available, but will not appear "
 "in menus."

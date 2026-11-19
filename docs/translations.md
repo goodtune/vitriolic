@@ -38,5 +38,22 @@ The header of each catalogue gives `Project-Id-Version: vitriolic`, the language
 It copies `POT-Creation-Date` and `Report-Msgid-Bugs-To` from the template that it makes, so leave `Report-Msgid-Bugs-To` empty.
 Report a problem with a translation at <https://github.com/goodtune/vitriolic/issues>.
 
-Do not run `compilemessages` as part of this work.
-A decision to compile the `.mo` files is a separate change (see issue #449).
+## Compiled catalogues
+
+Only the `.po` catalogues are committed.
+Django reads the compiled `.mo` files, and the build makes them: `setup.py` compiles each `.po` to the `.mo` beside it before the package's files are gathered.
+The wheel therefore has them, and so does a working tree after an editable install, which is what `tox` does on every run.
+Git ignores `*.mo`.
+
+The build uses Babel, a build requirement in `pyproject.toml`, so it needs no GNU gettext.
+Like `msgfmt`, it leaves out the entries marked `fuzzy`.
+
+Do not run `compilemessages` and commit the result.
+After you change a `.po` file, run `tox` (or reinstall the package) to compile it again.
+
+`touchtechnology/common/tests/test_translations.py` fails when a catalogue is missing, is not compiled or has a live `fuzzy` entry.
+
+## State of the translations
+
+French has most of `touchtechnology/common` and a few strings of `touchtechnology/admin`.
+The other French catalogues, and every German and Japanese one, hold the strings with no translation yet, so those pages show English.
