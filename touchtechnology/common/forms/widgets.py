@@ -26,6 +26,31 @@ class HTMLWidget(forms.Textarea):
         )
 
 
+class SignatureWidget(forms.Widget):
+    """
+    A box to sign in. Signature Pad draws on a canvas, and a hidden input
+    carries what was drawn as a PNG data URL (see ``signature-field.js``).
+
+    It is not a ``HiddenInput``: a form shows a hidden field with no label
+    and no row of its own. The browser cannot require a hidden input either,
+    so the form field is what asks for the signature.
+    """
+
+    template_name = "touchtechnology/common/widgets/signature.html"
+
+    def use_required_attribute(self, initial):
+        return False
+
+    class Media:
+        css = {
+            "all": ("touchtechnology/common/css/signature-field.css",),
+        }
+        js = (
+            "touchtechnology/common/js/signature_pad.umd.min.js",
+            "touchtechnology/common/js/signature-field.js",
+        )
+
+
 class LocationWidget(MultiWidget):
     """
     Latitude, longitude and zoom inputs beneath an OpenStreetMap map.

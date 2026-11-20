@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: vitriolic\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-19 05:47+0000\n"
+"POT-Creation-Date: 2026-11-20 08:46+0000\n"
 "PO-Revision-Date: 2026-10-25 20:21+0000\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: Japanese\n"
@@ -47,19 +47,31 @@ msgstr ""
 msgid "The two password fields didn't match."
 msgstr ""
 
-#: forms/fields.py:85
+#: forms/fields.py:109
+msgid "Please sign in the box."
+msgstr ""
+
+#: forms/fields.py:110
+msgid "This is not a signature."
+msgstr ""
+
+#: forms/fields.py:111
+msgid "This signature is too large to keep. Clear it and sign again."
+msgstr ""
+
+#: forms/fields.py:159
 msgid "Enter a valid date."
 msgstr ""
 
-#: forms/fields.py:86
+#: forms/fields.py:160
 msgid "Enter a valid time."
 msgstr ""
 
-#: forms/fields.py:87
+#: forms/fields.py:161
 msgid "Enter a valid time zone."
 msgstr ""
 
-#: forms/fields.py:148
+#: forms/fields.py:222
 msgid "Default"
 msgstr ""
 
@@ -400,4 +412,20 @@ msgstr ""
 
 #: templates/touchtechnology/common/templatetags/version.html:12
 msgid "Unversioned"
+msgstr ""
+
+#: templates/touchtechnology/common/widgets/signature.html:2
+msgid "Signature"
+msgstr ""
+
+#: templates/touchtechnology/common/widgets/signature.html:5
+msgid "Clear"
+msgstr ""
+
+#: templates/touchtechnology/common/widgets/signature.html:6
+msgid "Sign in the box with a mouse, a finger or a stylus."
+msgstr ""
+
+#: templates/touchtechnology/common/widgets/signature.html:8
+msgid "Signing needs JavaScript, which is turned off in this browser."
 msgstr ""

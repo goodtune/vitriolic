@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Sign the waiver</title>
+	<style>
+		body { margin: 0; padding: 24px; font: 16px/1.5 system-ui, sans-serif; color: #1c2127; background: #f1f2f4; }
+		main { max-width: 640px; margin: 0 auto; padding: 24px; background: #fff; border: 1px solid #dfe3e8; border-radius: 8px; }
+		h1 { margin: 0 0 16px; font-size: 24px; }
+		label { display: block; margin: 16px 0 4px; font-weight: 600; }
+		input[type="text"] { width: 100%; box-sizing: border-box; padding: 8px 10px; font: inherit; border: 1px solid #8a94a3; border-radius: 6px; }
+		.errorlist { margin: 4px 0; padding: 0; list-style: none; color: #b8322f; }
+		button[type="submit"] { margin-top: 20px; padding: 10px 18px; font: inherit; font-weight: 600; color: #fff; background: #275d8b; border: 0; border-radius: 6px; }
+		img.signature { display: block; max-width: 100%; border: 1px solid #dfe3e8; border-radius: 6px; }
+	</style>
+	{{ form.media }}
+</head>
+<body>
+<main>
+	<h1>Player waiver</h1>
+	<p>I have read the waiver and accept its terms.</p>
+	<form method="post">
+		{% csrf_token %}
+		{% for field in form %}
+			<div class="field">
+				{{ field.label_tag }}
+				{{ field }}
+				{{ field.errors }}
+			</div>
+		{% endfor %}
+		<button type="submit">Accept and sign</button>
+	</form>
+</main>
+</body>
+</html>
