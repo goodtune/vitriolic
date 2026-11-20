@@ -25,7 +25,7 @@ without the mark and releases it.
 <section id="onair" class="onair"{% if keep_held or errors %} data-ignore-morph data-preserve-attr="data-ignore-morph"{% endif %}>
 	{% if status == "live" %}<div id="lamp" class="lamp live">ON AIR</div>{% elif status == "testing" %}<div id="lamp" class="lamp testing">STANDBY</div>{% else %}<div id="lamp" class="lamp">OFF AIR</div>{% endif %}
 	<div class="status">
-		{% if broadcast %}<b>{% if status == "live" %}Broadcasting{% elif status == "testing" %}Standby{% else %}Off air{% endif %} · {{ broadcast.get_home_team_plain }} v {{ broadcast.get_away_team_plain }}</b>
+		{% if broadcast %}<b>{% if status == "live" %}Broadcasting{% elif status == "testing" %}Standby{% elif upcoming %}Next{% else %}Off air{% endif %} · {{ broadcast.get_home_team_plain }} v {{ broadcast.get_away_team_plain }}</b>
 			<span>{{ broadcast.stage.division.title }} · kick-off {{ broadcast.time|time:"H:i" }}{% if broadcast.live_stream_status_at %} · {{ status }} since {{ broadcast.live_stream_status_at|time:"H:i" }}{% endif %}{% if not broadcast.external_identifier %} · no YouTube broadcast{% endif %}</span>
 		{% elif preview %}<b>Looking at {{ day|date:"l j F" }}</b>
 		{% else %}<b>Nothing on {{ ground.title }} right now</b>{% endif %}
