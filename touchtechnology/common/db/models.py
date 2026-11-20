@@ -10,6 +10,7 @@ from touchtechnology.common.forms.fields import (
     ModelChoiceField,
     ModelMultipleChoiceField,
     SelectDateTimeField,
+    SignatureField as SignatureFormField,
     SitemapNodeModelChoiceField,
     TemplatePathFormField,
 )
@@ -71,6 +72,19 @@ class HTMLField(models.TextField):
 
     def formfield(
         self, form_class=HTMLFormField, widget=HTMLFormField.widget, **kwargs
+    ):
+        return super().formfield(form_class=form_class, widget=widget, **kwargs)
+
+
+class SignatureField(models.TextField):
+    """
+    A person's signature, as the acceptance of what a form says. It is kept
+    as a PNG data URL, which a template shows with ``<img src="{{ value }}">``,
+    and is drawn in forms with Signature Pad.
+    """
+
+    def formfield(
+        self, form_class=SignatureFormField, widget=SignatureFormField.widget, **kwargs
     ):
         return super().formfield(form_class=form_class, widget=widget, **kwargs)
 
