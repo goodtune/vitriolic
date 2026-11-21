@@ -2487,7 +2487,10 @@ class TeamAssociation(AdminUrlMixin, models.Model):
         Person, null=True, label_from_instance="get_full_name", on_delete=PROTECT
     )
     roles = ManyToManyField(TeamRole, blank=True, label_from_instance="name")
-    number = models.IntegerField(blank=True, null=True)
+    # Zero is a shirt number in some sports; only a negative one is refused.
+    number = models.IntegerField(
+        blank=True, null=True, validators=[validators.MinValueValidator(0)]
+    )
     is_player = BooleanField(default=True)
 
     objects = TeamAssociationQuerySet.as_manager()
@@ -3725,7 +3728,10 @@ class MatchScoreSheet(AdminUrlMixin, models.Model):
 class MatchStatisticBase(models.Model):
     match = ForeignKey("Match", related_name="statistics", on_delete=PROTECT)
     player = ForeignKey("Person", related_name="statistics", on_delete=PROTECT)
-    number = models.IntegerField(blank=True, null=True)
+    # Zero is a shirt number in some sports; only a negative one is refused.
+    number = models.IntegerField(
+        blank=True, null=True, validators=[validators.MinValueValidator(0)]
+    )
 
     def team(self):
         if self.match.home_team.people.filter(person=self.player):
@@ -3765,7 +3771,8 @@ class SimpleScoreMatchStatistic(MatchStatisticBase):
         if not self.played and self.mvp:
             errors["mvp"] = _("A person who did not play cannot earn MVP points.")
 
-        if self.played and not self.number:
+        # Zero is a shirt number; only none at all is missing.
+        if self.played and self.number is None:
             errors["number"] = _("A person who played must have a shirt number.")
 
         if errors:

@@ -20,7 +20,7 @@
 			<tbody>
 				{% for member in team.people.all %}
 					<tr>
-						<td class="wb-num">{{ member.number|default:"–" }}</td>
+						<td class="wb-num">{{ member.number|default_if_none:"–" }}</td>
 						<td class="wb-title-cell">{{ member.person.get_full_name }}</td>
 						<td data-label="{% trans "Player" %}">{{ member.is_player|yesno|title }}</td>
 						<td data-label="{% trans "Roles" %}">{% for role in member.roles.all %}{{ role.name }}{% if not forloop.last %}, {% endif %}{% empty %}–{% endfor %}</td>

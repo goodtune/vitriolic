@@ -84,7 +84,7 @@
 								<td>{{ object.person.email|urlize }}</td>
 								<td>
 									{% if object.is_player %}
-										{% if object.number %}
+										{% if object.number is not None %}
 											#{{ object.number }}
 										{% else %}
 											{% trans "TBA" %}

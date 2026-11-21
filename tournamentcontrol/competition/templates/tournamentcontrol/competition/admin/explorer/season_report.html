@@ -55,7 +55,7 @@
 								<td>{{ object.person.mobile_telephone }}</td>
 								<td>{{ object.person.work_telephone }}</td>
 								<td>{{ object.person.email|urlize }}</td>
-								<td>{% if object.is_player %}{% if object.number %}#{{ object.number }}{% else %}{% trans "TBA" %}{% endif %}{% endif %}</td>
+								<td>{% if object.is_player %}{% if object.number is not None %}#{{ object.number }}{% else %}{% trans "TBA" %}{% endif %}{% endif %}</td>
 								<td>{% for role in object.roles.all %}{{ role.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
 							</tr>
 						{% empty %}
