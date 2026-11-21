@@ -164,6 +164,23 @@ class ScorersModalTests(ScorersFixture):
         self.assertEqual(event["type"], "statistics-entered")
         self.assertEqual(event["actor"], self.staff.get_username())
 
+    def test_player_in_shirt_number_zero_is_saved(self):
+        # Legal in some sports; only no number at all is refused.
+        data = self.payload([1, 1], [1])
+        data["home-0-number"] = "0"
+        with self.login(self.staff), self.captureOnCommitCallbacks(execute=True):
+            self.scorers("post", data, DATASTAR)
+        self.assert_http_200_ok()
+        self.assertIn('data: signals {"modal":false}', self.body())
+        self.assertEqual(
+            sorted(
+                SimpleScoreMatchStatistic.objects.filter(match=self.match).values_list(
+                    "number", flat=True
+                )
+            ),
+            [0, 1, 2],
+        )
+
     def test_one_event_is_published_after_both_sides_are_saved(self):
         seen = []
         publish = events.publish

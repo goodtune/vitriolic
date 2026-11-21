@@ -20,7 +20,7 @@
 			<tbody>
 				{% for member in team.people.all %}
 					<tr>
-						<td class="num">{{ member.number|default:"&ndash;" }}</td>
+						<td class="num">{{ member.number|default_if_none:"&ndash;" }}</td>
 						<td>{{ member.person.get_full_name }}</td>
 						<td>{{ member.is_player|yesno|capfirst }}</td>
 						<td>{% for role in member.roles.all %}<span class="tag">{{ role.name }}</span> {% endfor %}</td>

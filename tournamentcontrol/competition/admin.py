@@ -4286,7 +4286,8 @@ class CompetitionAdminComponent(AdminComponent):
                     "players", []
                 ).append(
                     (
-                        pa.number or "",
+                        # Zero is a shirt number; only none at all is blank.
+                        "" if pa.number is None else pa.number,
                         pa.person.first_name.strip(),
                         pa.person.last_name.strip(),
                         pa.person.date_of_birth,
