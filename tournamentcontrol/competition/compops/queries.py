@@ -347,6 +347,15 @@ def _streamed_matches(day, **filters):
     return _scheduled_matches(day, live_stream=True, **filters)
 
 
+def ground_matches(ground):
+    """Every scheduled match on the ground, on any day: one is looked up by pk."""
+    return _with_related(
+        Match.objects.filter(play_at=ground, is_bye=False)
+        .exclude(time=None)
+        .exclude(datetime=None)
+    )
+
+
 def _split_day(matches, now):
     """
     The previous, current and next match of one ground's day, from its

@@ -681,6 +681,27 @@ class BoothEventsTests(SseFixture, TestCase):
         finally:
             await reader.close()
 
+    async def test_snapshot_is_of_the_match_the_booth_was_opened_on(self):
+        when = timezone.make_aware(datetime.datetime(2026, 10, 8, 14, 30), TZ)
+        later = await sync_to_async(factories.MatchFactory.create)(
+            stage=self.stage,
+            datetime=when,
+            date=when.date(),
+            time=when.time(),
+            play_at=self.field1,
+            live_stream=True,
+            external_identifier="yt-later",
+        )
+        reader, chunks = await self.connect_booth(
+            {"view": later.pk}, until='<section id="strip"'
+        )
+        try:
+            snapshot = "".join(chunks)
+            self.assertIn("kick-off 14:30", snapshot)
+            self.assertIn("This match · 14:30", snapshot)
+        finally:
+            await reader.close()
+
     async def test_snapshot_without_signals_is_lamp_and_strip(self):
         reader, chunks = await self.connect_booth(until='<section id="strip"')
         try:

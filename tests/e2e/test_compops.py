@@ -470,6 +470,72 @@ def test_booth_clock_keeps_time_and_its_days_can_be_stepped_through(
     expect(page.locator("#lamp")).to_have_text("ON AIR")
 
 
+def test_booth_is_opened_on_the_next_match_and_put_on_air_from_there(
+    compops_page, asgi_live_server, tournament, screenshot_dir
+):
+    page = compops_page
+    upcoming = tournament["upcoming"]
+    match_path = reverse(
+        "compops:booth-match",
+        kwargs={
+            "competition": "pacific-cup",
+            "season": "pc26",
+            "ground": "field-1",
+            "match_pk": upcoming.pk,
+        },
+    )
+    page.set_viewport_size({"width": 1024, "height": 768})
+    page.goto(asgi_live_server.url + tournament["booth_path"])
+    expect(page.locator("#lamp")).to_have_text("ON AIR")
+
+    # The next match's card opens the booth on that match.
+    page.locator("#strip .card").nth(2).locator("a.teams").click()
+    expect(page).to_have_url(asgi_live_server.url + match_path)
+    expect(page.locator("#lamp")).to_have_text("OFF AIR")
+    expect(page.locator("#onair .status b")).to_have_text("Next · Japan v Singapore")
+    expect(page.locator("#strip .card.now .lab")).to_contain_text("This match")
+    # Another match is on air, so this one cannot be put on air yet.
+    expect(page.locator("#onair button[data-hold]")).to_have_count(0)
+    on_air = page.locator("#onair .nocontrol a")
+    expect(on_air).to_have_text("Australia v New Zealand is on air")
+    page.screenshot(
+        path=str(screenshot_dir / "compops_booth_match_blocked.png"), full_page=True
+    )
+
+    # End that broadcast from its own view; this match can then go on air.
+    with mock.patch(
+        "tournamentcontrol.competition.models.build", return_value=youtube_mock("live")
+    ):
+        on_air.click()
+        expect(page.locator("#lamp")).to_have_text("ON AIR")
+        hold(page, page.locator("button[data-hold]"))
+        expect(page.locator("#lamp")).to_have_text("OFF AIR")
+        page.goto(asgi_live_server.url + match_path)
+        button = page.locator("#onair button[data-hold]")
+        expect(button).to_have_text("HOLD TO GO ON AIR")
+        page.screenshot(
+            path=str(screenshot_dir / "compops_booth_match_ready.png"), full_page=True
+        )
+        hold(page, button)
+        expect(page.locator("#lamp")).to_have_text("ON AIR")
+        expect(page.locator("#onair .status b")).to_have_text(
+            "Broadcasting · Japan v Singapore"
+        )
+    assert Match.objects.get(pk=upcoming.pk).live_stream_status == "live"
+
+    page.locator("header a.today").click()
+    expect(page).to_have_url(asgi_live_server.url + tournament["booth_path"])
+
+
+def hold(page, button):
+    """Press and hold a hold-button for longer than it asks."""
+    box = button.bounding_box()
+    page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+    page.mouse.down()
+    page.wait_for_timeout(1700)
+    page.mouse.up()
+
+
 def test_hold_button_needs_a_hold(
     compops_page, asgi_live_server, tournament, screenshot_dir
 ):
