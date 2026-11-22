@@ -159,11 +159,13 @@ class GoodViewTests(TestCase):
             match.stage.division.slug,
             match.pk,
         )
-        self.assertResponseContains(
-            '<iframe width="480" height="360" '
-            'src="http://www.youtube.com/embed/jNQXAC9IVRw?wmode=opaque" '
-            'loading="lazy" frameborder="0" allowfullscreen>'
-            "</iframe>"
+        # The page embeds the video; the rest of the iframe's attributes are
+        # django-embed-video's own, and 1.5 added ``referrerpolicy`` to them.
+        self.assertRegex(
+            self.last_response.content.decode(),
+            r'<iframe width="480" height="360" '
+            r'src="http://www\.youtube\.com/embed/jNQXAC9IVRw\?wmode=opaque"'
+            r"[^>]*></iframe>",
         )
 
     def test_match_video_gone(self):
