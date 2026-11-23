@@ -57,7 +57,7 @@ test = [
     # reads ``__closure__`` from every ``__init__`` it finds, and 8.2 has one
     # written in C. Lift this when a fakeredis release works with it. The
     # package itself asks only for redis>=5.0.1.
-    "redis<8.2",
+    "redis<8.3",
     "freezegun",
     "mcp",
     "packaging>=25.0",
