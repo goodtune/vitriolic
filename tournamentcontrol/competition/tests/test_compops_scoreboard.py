@@ -13,9 +13,15 @@ from freezegun import freeze_time
 from guardian.shortcuts import assign_perm
 from test_plus import TestCase
 
+from touchtechnology.admin.tests.shells import by_shell
 from tournamentcontrol.competition.compops import events, scoreboard
 from tournamentcontrol.competition.compops.scoreboard import Clock, Moment
-from tournamentcontrol.competition.forms import DivisionForm, VenueForm
+from tournamentcontrol.competition.forms import (
+    DivisionForm,
+    MatchEditForm,
+    StageForm,
+    VenueForm,
+)
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.tests.test_compops_results import DATASTAR
 
@@ -58,6 +64,28 @@ class ClockTests(TestCase):
     def test_part_of_a_second_left_reads_as_a_whole_one(self):
         now = at(19) + datetime.timedelta(seconds=899.6)
         self.assertEqual(self.clock.at(now), Moment("period", 0, 1, 1))
+
+    def test_last_minute_of_a_period_is_shown_to_a_tenth_of_a_second(self):
+        def shown(seconds_left, clock=self.clock, end=at(19, 15)):
+            return clock.at(end - datetime.timedelta(seconds=seconds_left)).display
+
+        self.assertEqual(
+            [shown(left) for left in (61, 60, 59.96, 59.94, 30, 9.25, 0.04)],
+            ["01:01", "01:00", "59.9", "59.9", "30.0", "9.2", "0.0"],
+        )
+        # Only a period is: a break and the wait for a start count in seconds.
+        self.assertEqual(
+            (shown(30.5, end=at(19, 17)), shown(30.5, end=at(19))),
+            ("00:31", "00:31"),
+        )
+
+    def test_break_starts_the_moment_a_period_ends(self):
+        end = at(19, 15)
+        tick = datetime.timedelta(milliseconds=1)
+        self.assertEqual(
+            (self.clock.at(end - tick).kind, self.clock.at(end).kind),
+            ("period", "break"),
+        )
 
     def test_clock_not_started_waits_at_a_full_period(self):
         waiting = Clock(start=None, periods=2, period=900, pause=120)
@@ -206,6 +234,48 @@ class BoardMatchTests(ScoreboardFixture):
         self.division.save()
         self.first.refresh_from_db()
         self.assertEqual(scoreboard.clock_for(self.first, self.field1), None)
+
+    def test_stage_or_match_may_have_a_timing_of_its_own(self):
+        # Rugby sevens: halves of 7 minutes, but of 10 in the final.
+        self.division.period_minutes = 7
+        self.division.break_minutes = 2
+        self.division.save()
+        finals = factories.StageFactory.create(
+            division=self.division, period_minutes=10
+        )
+        pool_match = self.match(19, self.aus, self.nzl)
+        final = factories.MatchFactory.create(
+            stage=finals, play_at=self.field1, datetime=at(21), date=DAY
+        )
+        replay = factories.MatchFactory.create(
+            stage=finals,
+            play_at=self.field1,
+            datetime=at(22),
+            date=DAY,
+            periods=4,
+            period_minutes=5,
+            break_minutes=0,
+        )
+        self.assertEqual(
+            [
+                (clock.periods, clock.period, clock.pause)
+                for clock in (
+                    scoreboard.clock_for(match, self.field1)
+                    for match in (pool_match, final, replay)
+                )
+            ],
+            # The match's own, else its stage's, else its division's, each
+            # number on its own: the final keeps the division's break.
+            [(2, 420, 120), (2, 600, 120), (4, 300, 0)],
+        )
+
+    def test_stage_may_give_a_clock_to_a_division_that_has_none(self):
+        self.division.period_minutes = None
+        self.division.save()
+        self.stage.period_minutes = 10
+        self.stage.save()
+        self.first.refresh_from_db()
+        self.assertEqual(scoreboard.clock_for(self.first, self.field1).period, 600)
 
     def test_team_is_coded_by_its_club_else_the_start_of_its_name(self):
         self.assertEqual(
@@ -567,6 +637,42 @@ class SettingsFormTests(TestCase):
         form.save()
         division.refresh_from_db()
         self.assertEqual((division.periods, division.break_minutes), (4, 3))
+
+    def test_division_page_shows_the_timing_without_unfolding_anything(self):
+        # A new division has no clock until its period length is set, so the
+        # Workbook does not tuck the timing away with the rarely used fields.
+        division = factories.DivisionFactory.create()
+        superuser = factories.UserFactory.create(is_staff=True, is_superuser=True)
+        with self.login(superuser):
+            self.get_check_200(division.urls["edit"])
+        content = self.last_response.content.decode()
+        field = content.index('name="period_minutes"')
+        self.assertEqual(
+            by_shell(
+                workbook=(
+                    content.count('<h3 class="wb-group-title">Match timing'),
+                    field < content.index('<details class="wb-group wb-group-folded"'),
+                ),
+                explorer=(1, True),
+            ),
+            (1, True),
+        )
+
+    def test_stage_and_match_forms_have_a_timing_of_their_own(self):
+        timing = ["periods", "period_minutes", "break_minutes"]
+        match = factories.MatchFactory.create()
+        for form in (
+            StageForm(instance=match.stage),
+            MatchEditForm(instance=match),
+        ):
+            with self.subTest(type(form).__name__):
+                self.assertEqual(
+                    (
+                        [name for name in form.fields if name in timing],
+                        [form.fields[name].required for name in timing],
+                    ),
+                    (timing, [False, False, False]),
+                )
 
     def test_venue_form_has_whether_its_clocks_start_on_time(self):
         form = VenueForm(instance=factories.VenueFactory.create())

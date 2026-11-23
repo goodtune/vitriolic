@@ -85,4 +85,76 @@ class Migration(migrations.Migration):
             name="clock_started_at",
             field=models.DateTimeField(blank=True, null=True),
         ),
+        migrations.AddField(
+            model_name="stage",
+            name="periods",
+            field=models.PositiveSmallIntegerField(
+                blank=True,
+                help_text=("Leave it empty to use the division's number of periods."),
+                null=True,
+                validators=[django.core.validators.MinValueValidator(1)],
+                verbose_name="Periods",
+            ),
+        ),
+        migrations.AddField(
+            model_name="stage",
+            name="period_minutes",
+            field=models.PositiveSmallIntegerField(
+                blank=True,
+                help_text=(
+                    "Minutes in each period. Leave it empty to use the division's."
+                ),
+                null=True,
+                validators=[django.core.validators.MinValueValidator(1)],
+                verbose_name="Period length",
+            ),
+        ),
+        migrations.AddField(
+            model_name="stage",
+            name="break_minutes",
+            field=models.PositiveSmallIntegerField(
+                blank=True,
+                help_text=(
+                    "Minutes between one period and the next. Leave it empty to use the division's."
+                ),
+                null=True,
+                verbose_name="Break length",
+            ),
+        ),
+        migrations.AddField(
+            model_name="match",
+            name="periods",
+            field=models.PositiveSmallIntegerField(
+                blank=True,
+                help_text=("Leave it empty to use the stage's number of periods."),
+                null=True,
+                validators=[django.core.validators.MinValueValidator(1)],
+                verbose_name="Periods",
+            ),
+        ),
+        migrations.AddField(
+            model_name="match",
+            name="period_minutes",
+            field=models.PositiveSmallIntegerField(
+                blank=True,
+                help_text=(
+                    "Minutes in each period. Leave it empty to use the stage's."
+                ),
+                null=True,
+                validators=[django.core.validators.MinValueValidator(1)],
+                verbose_name="Period length",
+            ),
+        ),
+        migrations.AddField(
+            model_name="match",
+            name="break_minutes",
+            field=models.PositiveSmallIntegerField(
+                blank=True,
+                help_text=(
+                    "Minutes between one period and the next. Leave it empty to use the stage's."
+                ),
+                null=True,
+                verbose_name="Break length",
+            ),
+        ),
     ]

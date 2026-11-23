@@ -563,7 +563,21 @@ def test_scoreboard_follows_the_scorer_and_counts_its_own_clock(
 
     # The page's sum is the server's: the same moments at the same times.
     clock = Clock(start=match.datetime, periods=2, period=1500, pause=300)
-    for seconds in (-90, 0, 0.4, 1499.5, 1500, 1799, 1800, 3299.2, 3300, 9000):
+    for seconds in (
+        -90,
+        0,
+        0.4,
+        1439.9,
+        1440.06,
+        1490.75,
+        1499.5,
+        1500,
+        1799,
+        1800,
+        3299.2,
+        3300,
+        9000,
+    ):
         now = match.datetime + datetime.timedelta(seconds=seconds)
         counted = page.evaluate(
             """([data, now]) => window.compopsScoreboard.momentAt(data, now)""",
@@ -583,6 +597,9 @@ def test_scoreboard_follows_the_scorer_and_counts_its_own_clock(
             expected.index,
             expected.remaining,
         ), seconds
+        # And shown the same: a period's last minute to a tenth of a second.
+        shown = page.evaluate("m => window.compopsScoreboard.display(m)", counted)
+        assert shown == expected.display, seconds
 
     # The horn needs one tap before a browser will play it.
     page.locator("#sb-sound").click()

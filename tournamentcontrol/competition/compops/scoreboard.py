@@ -37,7 +37,10 @@ class Moment:
     index: int | None
     #: The period being played, or about to be, from 1.
     period: int | None
+    #: Whole seconds left of the phase, rounded up as a countdown reads.
     remaining: int
+    #: The seconds left exactly, for the tenths of a period's last minute.
+    exact: float | None = dataclasses.field(default=None, compare=False)
 
     @property
     def label(self):
@@ -51,6 +54,11 @@ class Moment:
 
     @property
     def display(self):
+        # The last minute of a period is shown to a tenth of a second, cut
+        # short, not rounded: the clock reads 0.0 only when the period is over.
+        exact = self.remaining if self.exact is None else self.exact
+        if self.kind == "period" and exact < 60:
+            return f"{int(exact * 10) / 10:.1f}"
         minutes, seconds = divmod(self.remaining, 60)
         hours, minutes = divmod(minutes, 60)
         if hours:
@@ -93,11 +101,13 @@ class Clock:
 
     def at(self, now):
         if self.start is None:
-            return Moment("ready", None, 1, self.period)
+            return Moment("ready", None, 1, self.period, float(self.period))
         elapsed = (now - self.start).total_seconds()
         if elapsed < 0:
             # Rounded up, as a countdown reads: 0.4 seconds to go shows 00:01.
-            return Moment("before", None, 1, int(-elapsed) + (elapsed % 1 > 0))
+            return Moment(
+                "before", None, 1, int(-elapsed) + (elapsed % 1 > 0), -elapsed
+            )
         period = 0
         for index, (kind, seconds) in enumerate(self.phases):
             period += kind == "period"
@@ -109,28 +119,53 @@ class Clock:
                     index,
                     period + (kind == "break"),
                     int(left) + (left % 1 > 0),
+                    left,
                 )
             elapsed -= seconds
         return Moment("over", None, None, 0)
 
 
+def timing(match):
+    """
+    The periods, the minutes in one and the minutes of a break for ``match``:
+    each its own number if it has one, else its stage's, else its division's.
+    Round matches of rugby sevens have halves of 7 minutes and the final has
+    halves of 10, so the finals stage, or the final alone, says 10.
+    """
+    stage = match.stage
+    owners = (match, stage, stage.division)
+
+    def first(name):
+        return next(
+            (
+                getattr(owner, name)
+                for owner in owners
+                if getattr(owner, name) is not None
+            ),
+            None,
+        )
+
+    return first("periods"), first("period_minutes"), first("break_minutes")
+
+
 def clock_for(match, ground):
     """
-    The clock of ``match`` on ``ground``, or ``None`` when its division gives
-    no period length. It runs from when the scorer started it; else, at a
-    venue whose clocks start on time, from the match's scheduled time.
+    The clock of ``match`` on ``ground``, or ``None`` when nothing gives it a
+    period length (see ``timing``). It runs from when the scorer started it;
+    else, at a venue whose clocks start on time, from the match's scheduled
+    time.
     """
-    division = match.stage.division
-    if not division.period_minutes:
+    periods, period_minutes, break_minutes = timing(match)
+    if not period_minutes:
         return None
     start = match.clock_started_at
     if start is None and ground.venue.scoreboard_auto_start:
         start = match.datetime
     return Clock(
         start=start,
-        periods=division.periods,
-        period=division.period_minutes * 60,
-        pause=division.break_minutes * 60,
+        periods=periods,
+        period=period_minutes * 60,
+        pause=break_minutes * 60,
     )
 
 

@@ -92,7 +92,10 @@ Nothing is stored or pushed for the clock while it runs.
 It counts from one moment, through the periods and breaks of the match's division:
 
 - A division gives `periods` (2 unless changed), `period_minutes` and `break_minutes`.
-  With no period length, the board shows the score and no clock.
+- A stage, or one match, may give any of the three for itself.
+  Each number is the match's own if it has one, else its stage's, else its division's.
+  Rugby sevens plays halves of 7 minutes and its final halves of 10, so the finals stage (or the final alone) sets a period length of 10 and takes the rest from the division.
+- A match that gets no period length from any of them has a board with the score and no clock.
 - A venue has "Start scoreboard clocks on time" (`scoreboard_auto_start`), which is on unless changed.
   With it on, the clock runs from the match's scheduled time.
   With it off, the clock waits until the scorer presses "Start the clock".
@@ -100,7 +103,9 @@ It counts from one moment, through the periods and breaks of the match's divisio
 The server works out where the clock is each time it renders the board, and the page's script counts on from the same numbers.
 The server sends its own time too, so a screen whose clock is wrong still counts correctly.
 
+A break starts the moment a period ends.
 Before a match and between periods, the clock counts down to the next start in another colour.
+In the last minute of a period the clock shows seconds to a tenth (`59.9` down to `0.0`).
 The dots under it are the periods and the breaks between them.
 A horn sounds when a period starts or ends; a browser plays no sound until the page has been touched, so the board has a button to turn the horn on.
 

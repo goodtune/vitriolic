@@ -38,11 +38,17 @@
   function momentAt(data, now) {
     var period = Number(data.period);
     if (!data.start) {
-      return { kind: "ready", index: null, period: 1, remaining: period };
+      return { kind: "ready", index: null, period: 1, remaining: period, exact: period };
     }
     var elapsed = (now - Number(data.start)) / 1000;
     if (elapsed < 0) {
-      return { kind: "before", index: null, period: 1, remaining: Math.ceil(-elapsed) };
+      return {
+        kind: "before",
+        index: null,
+        period: 1,
+        remaining: Math.ceil(-elapsed),
+        exact: -elapsed,
+      };
     }
     var phases = phasesOf(Number(data.periods), period, Number(data.pause));
     var played = 0;
@@ -58,14 +64,21 @@
           index: index,
           period: played + (kind === "break" ? 1 : 0),
           remaining: Math.ceil(seconds - elapsed),
+          exact: seconds - elapsed,
         };
       }
       elapsed -= seconds;
     }
-    return { kind: "over", index: null, period: null, remaining: 0 };
+    return { kind: "over", index: null, period: null, remaining: 0, exact: 0 };
   }
 
-  function display(remaining) {
+  function display(moment) {
+    // The last minute of a period is shown to a tenth of a second, cut
+    // short, not rounded: the clock reads 0.0 only when the period is over.
+    if (moment.kind === "period" && moment.exact < 60) {
+      return (Math.floor(moment.exact * 10) / 10).toFixed(1);
+    }
+    var remaining = moment.remaining;
     var seconds = remaining % 60;
     var minutes = Math.floor(remaining / 60) % 60;
     var hours = Math.floor(remaining / 3600);
@@ -113,7 +126,7 @@
     var moment = momentAt(data, Date.now() + offset);
     var label = moment.kind === "period" ? "Period " + moment.period : LABELS[moment.kind];
     var time = document.getElementById("sb-time");
-    var text = display(moment.remaining);
+    var text = display(moment);
     if (time.textContent !== text) {
       time.textContent = text;
     }
@@ -142,7 +155,8 @@
 
   function start() {
     tick();
-    setInterval(tick, 200);
+    // Often enough for each tenth of a period's last minute to be seen.
+    setInterval(tick, 50);
     // A browser plays no sound until the page has been touched.
     var sound = document.getElementById("sb-sound");
     if (sound) {

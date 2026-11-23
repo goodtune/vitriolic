@@ -1634,6 +1634,31 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
         ),
     )
 
+    # The timing of the stage's matches, for its scoreboard clock, where it is not
+    # its division's: each number left empty is its division's.
+    periods = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        validators=[validators.MinValueValidator(1)],
+        verbose_name=_("Periods"),
+        help_text=_("Leave it empty to use the division's number of periods."),
+    )
+    period_minutes = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        validators=[validators.MinValueValidator(1)],
+        verbose_name=_("Period length"),
+        help_text=_("Minutes in each period. Leave it empty to use the division's."),
+    )
+    break_minutes = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        verbose_name=_("Break length"),
+        help_text=_(
+            "Minutes between one period and the next. Leave it empty to use the division's."
+        ),
+    )
+
     keep_mvp = BooleanField(
         default=True,
         verbose_name="Keep MVP stats",
@@ -2875,6 +2900,30 @@ class Match(
     # When the scorer started the scoreboard clock by hand, at a venue whose
     # clocks do not start on time.
     clock_started_at = DateTimeField(blank=True, null=True)
+    # The timing of this match, for its scoreboard clock, where it is not
+    # its stage's: each number left empty is its stage's.
+    periods = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        validators=[validators.MinValueValidator(1)],
+        verbose_name=_("Periods"),
+        help_text=_("Leave it empty to use the stage's number of periods."),
+    )
+    period_minutes = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        validators=[validators.MinValueValidator(1)],
+        verbose_name=_("Period length"),
+        help_text=_("Minutes in each period. Leave it empty to use the stage's."),
+    )
+    break_minutes = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        verbose_name=_("Break length"),
+        help_text=_(
+            "Minutes between one period and the next. Leave it empty to use the stage's."
+        ),
+    )
     live_stream_thumbnail_image = models.BinaryField(
         blank=True,
         null=True,
