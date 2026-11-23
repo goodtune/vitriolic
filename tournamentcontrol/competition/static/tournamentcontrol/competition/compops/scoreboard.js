@@ -7,8 +7,9 @@
  * period dots, and a horn when a period starts or ends. It is the same sum
  * as Clock.at in compops/scoreboard.py.
  *
- * The page's own clock may be wrong, so the server sends its time too
- * (data-now) and the script counts in the server's time.
+ * The page's own clock may be wrong, so the server sends its time too, with
+ * each rendering (data-now) and every few seconds down the event stream
+ * (sync), and the script counts in the server's time.
  */
 (function () {
   "use strict";
@@ -36,8 +37,24 @@
     }
     return moment.kind === "break" ? "Break" : "Period " + moment.period;
   }
+  // How far the server's time is ahead of the page's. Each time the server
+  // says its time, the saying took a moment to arrive, so it reads early by
+  // that much: of the last few, the largest difference is nearest the truth.
+  // Only the last few count, so a page clock that drifts is followed.
+  var SAMPLES = 6;
+  var samples = [];
   var offset = null;
   var seen = null;
+
+  function sync(serverNow) {
+    samples.push(Number(serverNow) - Date.now());
+    if (samples.length > SAMPLES) {
+      samples.shift();
+    }
+    offset = Math.max.apply(null, samples);
+    return offset;
+  }
+
   var last = null;
   var audio = null;
 
@@ -165,10 +182,7 @@
     var data = clock.dataset;
     if (data.now !== seen) {
       seen = data.now;
-      // Each rendering took a moment to arrive, so its time reads early by
-      // that much. The largest difference seen is the nearest to the truth.
-      var difference = Number(data.now) - Date.now();
-      offset = offset === null ? difference : Math.max(offset, difference);
+      sync(data.now);
     }
     var moment = momentAt(data, Date.now() + offset);
     var label = labelOf(data, moment);
@@ -225,6 +239,8 @@
     momentAt: momentAt,
     display: display,
     labelOf: labelOf,
+    // The server says its time every few seconds, down the event stream.
+    sync: sync,
     horn: horn,
   };
 

@@ -928,7 +928,7 @@ class BoothEventsTests(SseFixture, TestCase):
             await reader.close()
 
 
-@freeze_time("2026-10-08 10:50 +10:00")
+@freeze_time("2026-10-08 10:50 +10:00", real_asyncio=True)
 class ScoreboardEventsTests(SseFixture, TestCase):
     """A board is sent its match, and again when its score changes."""
 
@@ -985,6 +985,42 @@ class ScoreboardEventsTests(SseFixture, TestCase):
             pushed = "".join(await reader.until('id="sb-away-score"'))
             self.assertEqual(
                 pushed.count('<div class="sb-digits" id="sb-home-score">2</div>'), 1
+            )
+        finally:
+            await reader.close()
+
+    async def test_board_is_sent_again_when_its_venues_clocks_are_started(self):
+        response = await self.connect()
+        reader = Reader(response)
+        try:
+            await reader.until('id="sb-away-score"')
+            await Match.objects.filter(pk=self.current.pk).aupdate(
+                home_team_progress_score=3
+            )
+            await self.publish(
+                self.season.pk,
+                "scoreboard-changed",
+                scope=SCOPE,
+                venue=self.field1.venue_id,
+            )
+            pushed = "".join(await reader.until('id="sb-away-score"'))
+            self.assertEqual(
+                pushed.count('<div class="sb-digits" id="sb-home-score">3</div>'), 1
+            )
+        finally:
+            await reader.close()
+
+    @override_settings(COMPOPS_SCOREBOARD_SYNC=0.05)
+    async def test_board_is_told_the_servers_time_every_so_often(self):
+        response = await self.connect()
+        reader = Reader(response)
+        try:
+            told = (await reader.until("compopsScoreboard.sync("))[-1]
+            now = timezone.make_aware(datetime.datetime(2026, 10, 8, 10, 50), TZ)
+            self.assertIn(
+                "window.compopsScoreboard && "
+                f"window.compopsScoreboard.sync({int(now.timestamp() * 1000)})",
+                told,
             )
         finally:
             await reader.close()

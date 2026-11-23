@@ -72,6 +72,7 @@ Every ground of a season has a scoreboard: the score of the match being played, 
 | The board | `compops:scoreboard` | a large screen at the ground |
 | The overlay | `compops:scoreboard-overlay` | a layer over the live stream: one bar, with nothing behind it |
 | The scorer | `compops:scorer` | a phone, with a button to add one and to take one off for each team |
+| The timekeeper | `compops:timekeeper` | whoever sounds the hooter: one button that starts the clocks of every field of a venue |
 
 `compops:scoreboard-index` lists a season's grounds with a link to each page.
 
@@ -115,10 +116,22 @@ A sport with a period name still has a Half time once "Half time length" gives i
 Like the timing, the name is the match's own if it has one, else its stage's, else its division's.
 - A venue has "Start scoreboard clocks on time" (`scoreboard_auto_start`), which is on unless changed.
   With it on, the clock runs from the match's scheduled time.
-  With it off, the clock waits until the scorer presses "Start the clock".
+  With it off, the clock waits until it is started: by the venue's timekeeper for every field together, or by a ground's scorer for that ground alone.
 
 The server works out where the clock is each time it renders the board, and the page's script counts on from the same numbers.
-The server sends its own time too, so a screen whose clock is wrong still counts correctly.
+The server sends its own time too, with each board and every 10 seconds (`COMPOPS_SCOREBOARD_SYNC`) down the board's event stream, so a screen whose clock is wrong, or drifts, still counts the official time.
+The script goes by the last few times it was sent, so a correction takes effect within a minute.
+
+### The timekeeper
+
+One hooter starts every field of a venue, so a venue's clocks are started together.
+The timekeeper's page of a venue (`compops:timekeeper`) is linked from the season's list of scoreboards, for someone who may keep its scoreboards.
+It shows the round being played (the latest kick-off of the day at the venue) and the next to come, each with the matches on its fields.
+A round whose clocks wait has one button, "Start 6 clocks", and one press gives every match of the round the same start.
+A clock that a ground's scorer has already started keeps its own start, and a second press changes nothing.
+Every board, overlay and scorer's page of the venue is sent its board again at once.
+
+At a venue whose clocks start on time there is nothing to press, and the page says so.
 
 A break starts the moment a period ends.
 Before a match and between periods, the clock counts down to the next start in another colour.
@@ -304,7 +317,7 @@ To turn a check off, put its id in `SILENCED_SYSTEM_CHECKS`.
 | Start, test or stop a broadcast; whole-slot actions | `is_staff` and `competition.stream_season` on the season |
 | Watch the booth: the lamp, the strip, the runsheet and the panes | login and `competition.commentate_season` (or `competition.stream_season`) on the season; staff status is not needed |
 | See a ground's scoreboard or its overlay | nothing; anyone with the address may |
-| Keep a scoreboard: change the score, start the clock | login and `competition.score_season` on the season; staff status is not needed |
+| Keep a scoreboard: change the score, start the clock, start a venue's clocks together | login and `competition.score_season` on the season; staff status is not needed |
 | Go on air, end the broadcast or arm the next one from the booth | login and `competition.stream_season` on the season; staff status is not needed |
 
 Every dashboard action is part of the dashboard, so it needs `is_staff` as well as its own permission.
@@ -344,6 +357,7 @@ assign_perm("competition.stream_season", user, season)
 | `COMPOPS_EVENTS_BACKEND` | `"tournamentcontrol.competition.compops.events.memory.MemoryBackend"` | dotted path to the event bus class; the memory backend works for one server process only, so use `"tournamentcontrol.competition.compops.events.redis.RedisBackend"` with more than one worker or with the Celery refresh task |
 | `COMPOPS_EVENTS_OPTIONS` | `{}` | keyword arguments for the backend class; the Redis backend needs `{"url": "redis://localhost:6379/0"}` |
 | `COMPOPS_EVENTS_KEEPALIVE` | `20` | seconds between SSE keep-alive comments |
+| `COMPOPS_SCOREBOARD_SYNC` | `10` | seconds between the times a scoreboard is told the server's time |
 | `COMPOPS_ACTIVITY_LENGTH` | `50` | events kept for the activity feed |
 
 ## Serving

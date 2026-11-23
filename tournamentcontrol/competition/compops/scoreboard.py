@@ -266,6 +266,51 @@ def clock_for(match, ground):
     )
 
 
+@dataclasses.dataclass
+class Round:
+    """The matches of a venue that kick off together, and so start together."""
+
+    kick_off: datetime.datetime
+    #: Each match with its clock (``None`` where it has none), by ground.
+    matches: list
+
+    @property
+    def key(self):
+        """The round in an address: its kick-off, in seconds."""
+        return int(self.kick_off.timestamp())
+
+    @property
+    def waiting(self):
+        """The matches whose clocks wait to be started."""
+        return [
+            match
+            for match, clock in self.matches
+            if clock is not None and clock.start is None
+        ]
+
+
+def venue_rounds(venue, now):
+    """
+    The rounds a venue's timekeeper has in hand at ``now``: the one being
+    played (the latest to have kicked off today) and the next to come. One
+    hooter starts every field of a venue, so its clocks start together.
+    """
+    grounds = {ground.pk: ground for ground in venue.grounds.all()}
+    for ground in grounds.values():
+        # Each match's clock asks its ground for its venue.
+        ground.venue = venue
+    matches = queries.venue_matches(venue, venue.local_date(now))
+    rounds = {}
+    for match in matches:
+        ground = grounds[match.play_at_id]
+        match.ground = ground
+        rounds.setdefault(match.datetime, []).append((match, clock_for(match, ground)))
+    kick_offs = sorted(rounds)
+    current = [kick_off for kick_off in kick_offs if kick_off <= now][-1:]
+    following = [kick_off for kick_off in kick_offs if kick_off > now][:1]
+    return [Round(kick_off, rounds[kick_off]) for kick_off in current + following]
+
+
 def board_match(ground, now):
     """
     The match the ground's scoreboard shows at ``now``: the one being played;

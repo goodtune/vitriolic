@@ -22,7 +22,7 @@ from django.db import transaction
 from django.db.models import F
 from django.db.models.functions import Coalesce, Greatest
 from django.http import Http404, HttpResponse, HttpResponseBadRequest
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import include, path, re_path, reverse
 from django.utils import timezone
 
@@ -60,6 +60,7 @@ from tournamentcontrol.competition.models import (
     Season,
     SimpleScoreMatchStatistic,
     Team,
+    Venue,
 )
 from tournamentcontrol.competition.utils import FauxQueryset
 
@@ -155,6 +156,31 @@ def scoreboard_view(view):
             Ground.objects.select_related("venue"), venue__season=season, slug=ground
         )
         return view(self, request, season, ground, **kwargs)
+
+    return wrapper
+
+
+def venue_view(view):
+    """
+    Resolve the competition, season and venue slugs before calling the view
+    as ``view(self, request, season, venue, **kwargs)``, for someone who may
+    keep the season's scoreboards (login plus ``score_season``).
+    """
+
+    @wraps(view)
+    def wrapper(self, request, competition, season, venue, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect_to_login(request.get_full_path())
+        season = get_object_or_404(
+            Season.objects.select_related("competition").defer(
+                "live_stream_thumbnail_image"
+            ),
+            slug=season,
+            competition__slug=competition,
+        )
+        require(can_score(request.user, season))
+        venue = get_object_or_404(Venue, season=season, slug=venue)
+        return view(self, request, season, venue, **kwargs)
 
     return wrapper
 
@@ -287,6 +313,12 @@ class CompOpsSite(Application):
     def scoreboard_urls(self):
         return [
             path("", self.scoreboard_index, name="scoreboard-index"),
+            path("venue/<slug:venue>/", self.timekeeper, name="timekeeper"),
+            path(
+                "venue/<slug:venue>/start/<int:kick_off>/",
+                self.timekeeper_start,
+                name="timekeeper-start",
+            ),
             path("<slug:ground>/", self.scoreboard, name="scoreboard"),
             path(
                 "<slug:ground>/overlay/",
@@ -1376,6 +1408,7 @@ class CompOpsSite(Application):
             {
                 "season": season,
                 "grounds": grounds,
+                "venues": season.venues.order_by("order"),
                 "can_score": request.user.is_authenticated
                 and can_score(request.user, season),
             },
@@ -1462,6 +1495,57 @@ class CompOpsSite(Application):
             clock_started_at=timezone.now()
         )
         return self._scorer_changed(request, season, ground, match)
+
+    # --- timekeeper -------------------------------------------------
+
+    @venue_view
+    def timekeeper(self, request, season, venue, **kwargs):
+        """
+        The venue's timekeeper: the round being played and the next to come,
+        and one button that starts the clock of every match of a round.
+        """
+        now = timezone.now()
+        context = {
+            "season": season,
+            "venue": venue,
+            "tzinfo": venue.get_tzinfo(),
+            "rounds": scoreboard.venue_rounds(venue, now),
+        }
+        return self.render(request, self.template_path("timekeeper.html"), context)
+
+    @require_POST_m
+    @venue_view
+    def timekeeper_start(self, request, season, venue, kick_off, **kwargs):
+        now = timezone.now()
+        waiting = next(
+            (
+                found.waiting
+                for found in scoreboard.venue_rounds(venue, now)
+                if found.key == kick_off
+            ),
+            None,
+        )
+        if waiting is None:
+            raise Http404("No such round.")
+        # One moment for every field. A clock a scorer has already started
+        # keeps its own start.
+        started = Match._base_manager.filter(
+            pk__in=[match.pk for match in waiting], clock_started_at=None
+        ).update(clock_started_at=now)
+        if started:
+            events.publish(
+                season.pk,
+                "scoreboard-changed",
+                actor=request.user.get_username(),
+                scope=scoreboard.SCOPE,
+                venue=venue.pk,
+            )
+        return redirect(
+            "compops:timekeeper",
+            competition=season.competition.slug,
+            season=season.slug,
+            venue=venue.slug,
+        )
 
     # --- booth index ------------------------------------------------
 

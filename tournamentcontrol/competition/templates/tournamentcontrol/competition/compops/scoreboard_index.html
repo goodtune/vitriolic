@@ -15,5 +15,13 @@
 			<li><p class="empty">This season has no grounds.</p></li>
 		{% endfor %}
 	</ul>
+	{% if can_score and venues %}
+		<h2>Timekeepers</h2>
+		<ul class="list">
+			{% for venue in venues %}
+				<li><a class="item" href="{% url 'compops:timekeeper' competition=season.competition.slug season=season.slug venue=venue.slug %}"><span class="title">{{ venue.title }}</span><span class="comp">Start the clocks of every field together</span></a></li>
+			{% endfor %}
+		</ul>
+	{% endif %}
 </main>
 {% endblock %}

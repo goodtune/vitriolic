@@ -27,6 +27,7 @@ from tournamentcontrol.competition.forms import (
     StageForm,
     VenueForm,
 )
+from tournamentcontrol.competition.models import Match
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.tests.test_compops_results import DATASTAR
 
@@ -794,6 +795,129 @@ class ManualStartTests(ScoreboardFixture):
         with self.login(self.scorer):
             self.get("compops:scorer", **self.kw)
         self.assertEqual(self.last_response.content.count(b"Start the clock"), 0)
+
+
+@freeze_time("2026-10-08 19:00:30 +10:00")
+class TimekeeperTests(ScoreboardFixture):
+    """A venue's clocks are started together, by one press."""
+
+    def setUp(self):
+        super().setUp()
+        self.venue.slug = "the-park"
+        self.venue.slug_locked = True
+        self.venue.scoreboard_auto_start = False
+        self.venue.save()
+        self.field2 = factories.GroundFactory.create(
+            venue=self.venue, title="Field 2", slug="field-2", slug_locked=True
+        )
+        self.other = self.match(19, self.fji, self.nzl, ground=self.field2)
+        self.venue_kw = {
+            "competition": "pacific-cup",
+            "season": "pc26",
+            "venue": "the-park",
+        }
+
+    def start_url(self, hour):
+        return self.reverse(
+            "compops:timekeeper-start",
+            kick_off=int(at(hour).timestamp()),
+            **self.venue_kw,
+        )
+
+    def start(self, hour=19):
+        with (
+            self.login(self.scorer),
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            self.post(self.start_url(hour))
+
+    def started(self):
+        return [
+            Match.objects.get(pk=match.pk).clock_started_at
+            for match in (self.first, self.other, self.second)
+        ]
+
+    def test_timekeeper_needs_a_login_and_the_right_to_score(self):
+        self.assertLoginRequired("compops:timekeeper", **self.venue_kw)
+        with self.login(self.outsider):
+            self.get("compops:timekeeper", **self.venue_kw)
+            self.assert_http_403_forbidden()
+            self.post(self.start_url(19))
+            self.assert_http_403_forbidden()
+        self.assertEqual(self.started(), [None, None, None])
+
+    def test_page_has_the_round_being_played_and_the_next_each_with_a_button(self):
+        with self.login(self.scorer):
+            self.get_check_200("compops:timekeeper", **self.venue_kw)
+        self.assertResponseContains("<h1>Timekeeper · %s</h1>" % self.venue.title)
+        content = self.last_response.content.decode()
+        self.assertEqual(
+            [
+                content.count(f'<form method="post" action="{self.start_url(hour)}">')
+                for hour in (19, 20)
+            ],
+            [1, 1],
+        )
+        self.assertResponseContains(
+            '<button class="btn p" type="submit">Start 2 clocks</button>'
+        )
+        self.assertResponseContains(
+            '<button class="btn p" type="submit">Start 1 clock</button>'
+        )
+
+    def test_one_press_starts_every_field_of_the_round_at_one_moment(self):
+        self.start()
+        self.assert_http_302_found(
+            url=self.reverse("compops:timekeeper", **self.venue_kw)
+        )
+        now = at(19, 0, 30)
+        # The round that follows waits for its own press.
+        self.assertEqual(self.started(), [now, now, None])
+        (event,) = events.get_backend().recent(
+            events.channel(self.season.pk, scoreboard.SCOPE)
+        )
+        self.assertEqual(
+            (event["type"], event["venue"], event["actor"]),
+            ("scoreboard-changed", self.venue.pk, self.scorer.get_username()),
+        )
+        # Its button has gone, and a second press changes nothing.
+        with freeze_time("2026-10-08 19:02 +10:00"):
+            self.start()
+            with self.login(self.scorer):
+                self.get_check_200("compops:timekeeper", **self.venue_kw)
+        self.assertEqual(self.started(), [now, now, None])
+        self.assertEqual(
+            self.last_response.content.decode().count(self.start_url(19)), 0
+        )
+
+    def test_clock_a_scorer_has_started_keeps_its_own_start(self):
+        Match.objects.filter(pk=self.first.pk).update(clock_started_at=at(18, 59))
+        self.start()
+        self.assertEqual(self.started(), [at(18, 59), at(19, 0, 30), None])
+
+    def test_venue_whose_clocks_start_on_time_has_nothing_to_start(self):
+        self.venue.scoreboard_auto_start = True
+        self.venue.save()
+        with self.login(self.scorer):
+            self.get_check_200("compops:timekeeper", **self.venue_kw)
+        self.assertEqual(self.last_response.content.count(b"<button"), 0)
+        self.start()
+        self.assertEqual(self.started(), [None, None, None])
+
+    def test_round_that_is_not_in_hand_is_404(self):
+        with self.login(self.scorer):
+            self.post(self.start_url(23))
+        self.assert_http_404_not_found()
+
+    def test_list_of_scoreboards_leads_a_scorer_to_each_venues_timekeeper(self):
+        url = self.reverse("compops:timekeeper", **self.venue_kw)
+        season = {"competition": "pacific-cup", "season": "pc26"}
+        for user, count in ((self.scorer, 1), (self.outsider, 0)):
+            with self.subTest(user=user), self.login(user):
+                self.get_check_200("compops:scoreboard-index", **season)
+                self.assertEqual(
+                    self.last_response.content.decode().count(f'href="{url}"'), count
+                )
 
 
 class SettingsFormTests(TestCase):
