@@ -53,6 +53,11 @@ test = [
     "django-test-plus",
     "factory_boy",
     "fakeredis>=2.39",
+    # fakeredis 2.40.0, the newest, cannot make a client with redis 8.2: it
+    # reads ``__closure__`` from every ``__init__`` it finds, and 8.2 has one
+    # written in C. Lift this when a fakeredis release works with it. The
+    # package itself asks only for redis>=5.0.1.
+    "redis<8.2",
     "freezegun",
     "mcp",
     "packaging>=25.0",
