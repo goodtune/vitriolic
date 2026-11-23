@@ -1,0 +1,27 @@
+{% extends "tournamentcontrol/competition/compops/base.html" %}
+{% block title %}Scoreboards · {{ season }}{% endblock %}
+{% block body %}
+<header class="topbar">
+	<a class="brand" href="{% url 'compops:index' %}">TOURNAMENT OPS</a>
+	<span class="season">{{ season }}</span>
+	<span class="spacer"></span>
+</header>
+<main class="index">
+	<h1>Scoreboards · {{ season }}</h1>
+	<ul class="list">
+		{% for ground in grounds %}
+			<li><a class="item" href="{% url 'compops:scoreboard' competition=season.competition.slug season=season.slug ground=ground.slug %}"><span class="title">{{ ground.title }}</span><span class="comp">{{ ground.venue.title }}</span></a><a class="btn" href="{% url 'compops:scoreboard-overlay' competition=season.competition.slug season=season.slug ground=ground.slug %}">Overlay</a>{% if can_score %}<a class="btn" href="{% url 'compops:scorer' competition=season.competition.slug season=season.slug ground=ground.slug %}">Scorer</a>{% endif %}</li>
+		{% empty %}
+			<li><p class="empty">This season has no grounds.</p></li>
+		{% endfor %}
+	</ul>
+	{% if can_score and venues %}
+		<h2>Timekeepers</h2>
+		<ul class="list">
+			{% for venue in venues %}
+				<li><a class="item" href="{% url 'compops:timekeeper' competition=season.competition.slug season=season.slug venue=venue.slug %}"><span class="title">{{ venue.title }}</span><span class="comp">Start the clocks of every field together</span></a></li>
+			{% endfor %}
+		</ul>
+	{% endif %}
+</main>
+{% endblock %}

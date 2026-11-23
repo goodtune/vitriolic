@@ -4,6 +4,7 @@ import datetime
 import re
 import threading
 from contextlib import contextmanager
+from pathlib import Path
 from unittest import mock
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
@@ -18,8 +19,9 @@ from guardian.shortcuts import assign_perm
 from playwright.sync_api import expect
 
 from tournamentcontrol.competition.compops import events, streams
+from tournamentcontrol.competition.compops.scoreboard import Clock
 from tournamentcontrol.competition.compops.sites import CompOpsSite
-from tournamentcontrol.competition.models import Match, TeamAssociation
+from tournamentcontrol.competition.models import Division, Match, TeamAssociation
 from tournamentcontrol.competition.tests.factories import (
     GroundFactory,
     MatchFactory,
@@ -525,6 +527,248 @@ def test_booth_is_opened_on_the_next_match_and_put_on_air_from_there(
 
     page.locator("header a.today").click()
     expect(page).to_have_url(asgi_live_server.url + tournament["booth_path"])
+
+
+def test_scoreboard_follows_the_scorer_and_counts_its_own_clock(
+    page,
+    browser,
+    login,
+    asgi_live_server,
+    tournament,
+    django_user_model,
+    screenshot_dir,
+):
+    season = tournament["season"]
+    match = tournament["match"]
+    division = match.stage.division
+    # Two periods of 25 minutes with a break of 5: the match on the ground
+    # kicked off 20 minutes ago, so its first period has 5 minutes left.
+    Division.objects.filter(pk=division.pk).update(period_minutes=25, break_minutes=5)
+    names = {"competition": "pacific-cup", "season": "pc26", "ground": "field-1"}
+    base = asgi_live_server.url
+
+    # Anyone may see the board: this page is not signed in.
+    page.goto(base + reverse("compops:scoreboard", kwargs=names))
+    expect(page.locator("#sb-home-name")).to_have_text("Australia")
+    expect(page.locator("#sb-away-name")).to_have_text("New Zealand")
+    expect(page.locator("#sb-home-score")).to_have_text("0")
+    expect(page.locator("#sb-label")).to_have_text("1st Half")
+    expect(page.locator("#sb-dots li.on")).to_have_count(1)
+
+    # The clock counts by itself, with nothing pushed to it.
+    time = page.locator("#sb-time")
+    expect(time).to_have_text(re.compile(r"^0[0-5]:\d\d$"))
+    before = time.text_content()
+    page.wait_for_timeout(1500)
+    assert time.text_content() != before
+
+    # The page's sum is the server's: the same moments at the same times.
+    clock = Clock(start=match.datetime, periods=2, period=1500, pause=300)
+    for seconds in (
+        -90,
+        0,
+        0.4,
+        1439.9,
+        1440.06,
+        1490.75,
+        1499.5,
+        1500,
+        1799,
+        1800,
+        3299.2,
+        3300,
+        9000,
+    ):
+        now = match.datetime + datetime.timedelta(seconds=seconds)
+        counted = page.evaluate(
+            """([data, now]) => window.compopsScoreboard.momentAt(data, now)""",
+            [
+                {
+                    "start": str(clock.start_ms),
+                    "periods": "2",
+                    "period": "1500",
+                    "pause": "300",
+                },
+                now.timestamp() * 1000,
+            ],
+        )
+        expected = clock.at(now)
+        assert (counted["kind"], counted["index"], counted["remaining"]) == (
+            expected.kind,
+            expected.index,
+            expected.remaining,
+        ), seconds
+        # And shown the same: a period's last minute to a tenth of a second.
+        shown = page.evaluate("m => window.compopsScoreboard.display(m)", counted)
+        assert shown == expected.display, seconds
+        # And called the same: halves, with half time between them.
+        called = page.evaluate(
+            "([data, m]) => window.compopsScoreboard.labelOf(data, m)",
+            [{"names": clock.names_json}, counted],
+        )
+        assert called == expected.label, seconds
+
+    # A half time longer than the other breaks is counted from the list of
+    # phases the server sends, and called half time.
+    quarters = Clock(start=match.datetime, periods=4, period=600, pause=120, half=600)
+    for seconds in (599.5, 600, 719, 1320, 1919.2, 1920, 2640, 3239.9, 3240):
+        now = match.datetime + datetime.timedelta(seconds=seconds)
+        data = {
+            "start": str(quarters.start_ms),
+            "periods": "4",
+            "period": "600",
+            "pause": "120",
+            "phases": quarters.phases_json,
+            "names": quarters.names_json,
+        }
+        counted = page.evaluate(
+            """([data, now]) => {
+                const m = window.compopsScoreboard.momentAt(data, now);
+                return [m.kind, m.index, m.remaining,
+                        window.compopsScoreboard.labelOf(data, m)];
+            }""",
+            [data, now.timestamp() * 1000],
+        )
+        expected = quarters.at(now)
+        assert counted == [
+            expected.kind,
+            expected.index,
+            expected.remaining,
+            expected.label,
+        ], seconds
+
+    # The horn needs one tap before a browser will play it.
+    page.locator("#sb-sound").click()
+    expect(page.locator("#sb-sound")).to_be_hidden()
+
+    # A scorer, who is not staff, keeps the score from a phone.
+    scorer = django_user_model.objects.create_user(
+        username="scorer", password="password"
+    )
+    assign_perm("competition.score_season", scorer, season)
+    phone = browser.new_context(viewport={"width": 390, "height": 844})
+    scoring = phone.new_page()
+    try:
+        login(scoring, base, "scorer")
+        scoring.goto(base + reverse("compops:scorer", kwargs=names))
+        add_home = scoring.get_by_role("button", name="Add one to Australia")
+        add_home.click()
+        expect(scoring.locator("#sc-home-score")).to_have_text("1")
+        add_home.click()
+        scoring.get_by_role("button", name="Add one to New Zealand").click()
+        expect(scoring.locator("#sc-home-score")).to_have_text("2")
+        expect(scoring.locator("#sc-away-score")).to_have_text("1")
+        scoring.screenshot(path=str(screenshot_dir / "compops_scoreboard_scorer.png"))
+
+        # Each tap reaches the board as it is made.
+        expect(page.locator("#sb-home-score")).to_have_text("2")
+        expect(page.locator("#sb-away-score")).to_have_text("1")
+        page.screenshot(path=str(screenshot_dir / "compops_scoreboard_display.png"))
+
+        scoring.get_by_role("button", name="Take one off Australia").click()
+        expect(page.locator("#sb-home-score")).to_have_text("1")
+    finally:
+        phone.close()
+    refreshed = Match.objects.get(pk=match.pk)
+    assert (
+        refreshed.home_team_progress_score,
+        refreshed.away_team_progress_score,
+        refreshed.home_team_score,
+    ) == (1, 1, None)
+
+    # The same board, to lay over the stream.
+    page.goto(base + reverse("compops:scoreboard-overlay", kwargs=names))
+    expect(page.locator("#sb-home-score")).to_have_text("1")
+    expect(page.locator("#sb-sound")).to_have_count(0)
+    page.screenshot(path=str(screenshot_dir / "compops_scoreboard_overlay.png"))
+
+    # Between periods the clock counts down to the next, in another colour.
+    Division.objects.filter(pk=division.pk).update(period_minutes=18)
+    page.goto(base + reverse("compops:scoreboard", kwargs=names))
+    expect(page.locator("#sb-label")).to_have_text("Half time")
+    expect(page.locator("#sb-clock")).to_have_class(re.compile(r"\bbreak\b"))
+    period_colour = "rgb(244, 246, 248)"
+    expect(page.locator("#sb-time")).not_to_have_css("color", period_colour)
+    page.screenshot(path=str(screenshot_dir / "compops_scoreboard_break.png"))
+
+
+def test_scoreboard_drawn_by_a_template_written_in_the_admin(
+    page,
+    browser,
+    login,
+    asgi_live_server,
+    tournament,
+    django_user_model,
+    screenshot_dir,
+):
+    season = tournament["season"]
+    match = tournament["match"]
+    division = match.stage.division
+    Division.objects.filter(pk=division.pk).update(period_minutes=25, break_minutes=5)
+    names = {"competition": "pacific-cup", "season": "pc26", "ground": "field-1"}
+    base = asgi_live_server.url
+    example = Path(__file__).parents[2] / "docs" / "examples" / "scoreboard-split.html"
+
+    # The page opens drawn by the usual template.
+    page.goto(base + reverse("compops:scoreboard", kwargs=names))
+    expect(page.locator("#board")).to_have_attribute("data-template", "default")
+    expect(page.locator(".badge")).to_have_count(0)
+
+    scorer = django_user_model.objects.create_user(
+        username="scorer", password="password"
+    )
+    assign_perm("competition.score_season", scorer, season)
+    phone = browser.new_context(viewport={"width": 390, "height": 844})
+    scoring = phone.new_page()
+    try:
+        login(scoring, base, "scorer")
+        scoring.goto(base + reverse("compops:scorer", kwargs=names))
+        add_home = scoring.get_by_role("button", name="Add one to Australia")
+
+        # The division is given a template of its own. The next update brings
+        # a board drawn by it, and the page loads itself again to match.
+        Division.objects.filter(pk=division.pk).update(
+            scoreboard_template=example.read_text()
+        )
+        add_home.click()
+        expect(page.locator(".badge")).to_be_visible()
+        expect(page.locator("#board")).to_have_attribute(
+            "data-template", re.compile(rf"^division:{division.pk}:")
+        )
+        expect(page.locator("#sb-home-score")).to_have_text("1")
+
+        # It is still a live board: the clock counts and a tap arrives.
+        time = page.locator("#sb-time")
+        before = time.text_content()
+        page.wait_for_timeout(1500)
+        assert time.text_content() != before
+        add_home.click()
+        expect(page.locator("#sb-home-score")).to_have_text("2")
+    finally:
+        phone.close()
+
+    # A picture behind it, and every block readable over it: at least half
+    # opaque, with a border.
+    assert page.evaluate("getComputedStyle(document.body).backgroundImage").startswith(
+        "url("
+    )
+    for panel in page.locator(".panel").all():
+        colour, border = panel.evaluate(
+            """el => {
+                const style = getComputedStyle(el);
+                return [style.backgroundColor, parseFloat(style.borderTopWidth)];
+            }"""
+        )
+        opacity = float(re.search(r"rgba\([^)]*,\s*([\d.]+)\)", colour).group(1))
+        assert opacity >= 0.5 and border >= 1, (colour, border)
+    page.screenshot(path=str(screenshot_dir / "compops_scoreboard_custom_template.png"))
+
+    page.goto(base + reverse("compops:scoreboard-overlay", kwargs=names))
+    expect(page.locator("#sb-home-score")).to_have_text("2")
+    page.screenshot(
+        path=str(screenshot_dir / "compops_scoreboard_custom_overlay.png"),
+        omit_background=True,
+    )
 
 
 def hold(page, button):

@@ -70,19 +70,26 @@ def reset_backend():
         _backend = None
 
 
-def channel(season_id):
+def channel(season_id, scope=None):
     """
     Name the channel of ``season_id`` in the current tenant: ``alpha:season:3``
     when the connection points at the ``alpha`` schema, and ``season:3`` on a
     single-tenant site.
+
+    A ``scope`` names a channel of the season's that is kept apart from its
+    main one (``season:3:scoreboard``): its events reach only those who
+    subscribe to it, and are not in the season's recent activity.
     """
     schema_name = get_schema_name()
-    if schema_name is None:
-        return f"season:{season_id}"
-    return f"{schema_name}:season:{season_id}"
+    name = f"season:{season_id}"
+    if schema_name is not None:
+        name = f"{schema_name}:{name}"
+    if scope is not None:
+        name = f"{name}:{scope}"
+    return name
 
 
-def publish(season_id, type, actor=None, summary="", **data):
+def publish(season_id, type, actor=None, summary="", scope=None, **data):
     event = {
         "type": type,
         "season": season_id,
@@ -91,18 +98,18 @@ def publish(season_id, type, actor=None, summary="", **data):
         "summary": summary,
         **data,
     }
-    name = channel(season_id)
+    name = channel(season_id, scope)
     logger.debug("compops event %s on %s: %s", type, name, summary)
     transaction.on_commit(lambda: get_backend().publish(name, event), robust=True)
 
 
-def subscribe(season_id, idle):
+def subscribe(season_id, idle, scope=None):
     """
     Return the subscription to ``season_id`` in the current tenant, an async
     generator (see ``Backend.subscribe``). The channel is named now, on the
     calling thread; the subscription is made when it is first iterated.
     """
-    return get_backend().subscribe(channel(season_id), idle)
+    return get_backend().subscribe(channel(season_id, scope), idle)
 
 
 def recent(season_id):

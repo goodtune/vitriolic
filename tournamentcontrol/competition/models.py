@@ -290,6 +290,15 @@ class Competition(AdminUrlMixin, OrderedSitemapNode):
     enabled = BooleanField(default=True)
     clubs = ManyToManyField("Club", blank=True, related_name="competitions")
 
+    scoreboard_template = models.TextField(
+        blank=True,
+        verbose_name=_("Scoreboard template"),
+        help_text=_(
+            "A whole page to draw the scoreboards of this competition with, in place of "
+            "the usual one. Leave it empty to use the site's."
+        ),
+    )
+
     # Synchronisation from an upstream competition management provider
     # (MySideline, revolutioniseSPORT, ...). The organisation's page on the
     # provider identifies the provider and lives on the Competition; each
@@ -595,6 +604,15 @@ class Person(AdminUrlMixin, models.Model):
 class Season(AdminUrlMixin, OrderedSitemapNode):
     ordered_within = "competition"
 
+    scoreboard_template = models.TextField(
+        blank=True,
+        verbose_name=_("Scoreboard template"),
+        help_text=_(
+            "A whole page to draw the scoreboards of this season with, in place of "
+            "the usual one. Leave it empty to use the competition's."
+        ),
+    )
+
     competition = ForeignKey(Competition, related_name="seasons", on_delete=PROTECT)
     hashtag = models.CharField(
         max_length=30,
@@ -737,6 +755,7 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
         permissions = [
             ("stream_season", "Can start and stop live streams for the season"),
             ("commentate_season", "Can watch the commentary booths of the season"),
+            ("score_season", "Can keep the scoreboards of the season"),
         ]
 
     def _get_admin_namespace(self):
@@ -990,6 +1009,15 @@ class Venue(Place):
     ordered_within = "season"
 
     season = ForeignKey(Season, related_name="venues", on_delete=PROTECT)
+    scoreboard_auto_start = BooleanField(
+        default=True,
+        verbose_name=_("Start scoreboard clocks on time"),
+        help_text=_(
+            "The clock of each scoreboard at this venue starts at the "
+            "match's scheduled time. Turn it off to have the scorer start "
+            "each clock by hand."
+        ),
+    )
 
     def get_tzinfo(self):
         """The venue's time zone, else the season's, else the current one."""
@@ -1159,6 +1187,59 @@ class Division(
     forfeit_for_score = models.SmallIntegerField(null=True)
     forfeit_against_score = models.SmallIntegerField(null=True)
     include_forfeits_in_played = BooleanField(default=True)
+
+    scoreboard_template = models.TextField(
+        blank=True,
+        verbose_name=_("Scoreboard template"),
+        help_text=_(
+            "A whole page to draw the scoreboards of this division with, in place of "
+            "the usual one. Leave it empty to use the season's."
+        ),
+    )
+
+    # The timing of a match of the division, for its scoreboard clock. With
+    # no period length the scoreboard shows the score and no clock.
+    periods = models.PositiveSmallIntegerField(
+        default=2,
+        blank=True,
+        validators=[validators.MinValueValidator(1)],
+        verbose_name=_("Periods"),
+        help_text=_("How many periods a match is played in: 2 for halves."),
+    )
+    period_minutes = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        validators=[validators.MinValueValidator(1)],
+        verbose_name=_("Period length"),
+        help_text=_(
+            "Minutes in each period. Leave it empty for a scoreboard with no clock."
+        ),
+    )
+    break_minutes = models.PositiveSmallIntegerField(
+        default=0,
+        blank=True,
+        verbose_name=_("Break length"),
+        help_text=_("Minutes between one period and the next."),
+    )
+    half_time_minutes = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        verbose_name=_("Half time length"),
+        help_text=_(
+            "Minutes of the break in the middle of a match with an even number "
+            "of periods. Leave it empty where it is as long as the other breaks."
+        ),
+    )
+    period_name = models.CharField(
+        max_length=30,
+        blank=True,
+        verbose_name=_("Period name"),
+        help_text=_(
+            "What a period is called on the scoreboard, such as Chukka. Leave "
+            "it empty to name it from the number of periods: Half for 2, "
+            "Quarter for 4, otherwise Period."
+        ),
+    )
 
     games_per_day = models.SmallIntegerField(
         null=True,
@@ -1597,6 +1678,54 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
                 "from the previous stage."
             )
         ),
+    )
+
+    scoreboard_template = models.TextField(
+        blank=True,
+        verbose_name=_("Scoreboard template"),
+        help_text=_(
+            "A whole page to draw the scoreboards of this stage with, in place of "
+            "the usual one. Leave it empty to use the division's."
+        ),
+    )
+
+    # The timing of the stage's matches, for its scoreboard clock, where it is not
+    # its division's: each number left empty is its division's.
+    periods = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        validators=[validators.MinValueValidator(1)],
+        verbose_name=_("Periods"),
+        help_text=_("Leave it empty to use the division's number of periods."),
+    )
+    period_minutes = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        validators=[validators.MinValueValidator(1)],
+        verbose_name=_("Period length"),
+        help_text=_("Minutes in each period. Leave it empty to use the division's."),
+    )
+    break_minutes = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        verbose_name=_("Break length"),
+        help_text=_(
+            "Minutes between one period and the next. Leave it empty to use the division's."
+        ),
+    )
+    half_time_minutes = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        verbose_name=_("Half time length"),
+        help_text=_(
+            "Minutes of the break at half time. Leave it empty to use the division's."
+        ),
+    )
+    period_name = models.CharField(
+        max_length=30,
+        blank=True,
+        verbose_name=_("Period name"),
+        help_text=_("What a period is called. Leave it empty to use the division's."),
     )
 
     keep_mvp = BooleanField(
@@ -2832,6 +2961,52 @@ class Match(
     )
     live_stream_status_at = DateTimeField(blank=True, null=True)
     live_stream_thumbnail = models.URLField(blank=True, null=True)
+    # The score while the match is being played, kept by the scoreboard. It
+    # is not the result: ``home_team_score`` and ``away_team_score`` are, and
+    # only they move a ladder.
+    home_team_progress_score = models.PositiveSmallIntegerField(blank=True, null=True)
+    away_team_progress_score = models.PositiveSmallIntegerField(blank=True, null=True)
+    # When the scorer started the scoreboard clock by hand, at a venue whose
+    # clocks do not start on time.
+    clock_started_at = DateTimeField(blank=True, null=True)
+    # The timing of this match, for its scoreboard clock, where it is not
+    # its stage's: each number left empty is its stage's.
+    periods = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        validators=[validators.MinValueValidator(1)],
+        verbose_name=_("Periods"),
+        help_text=_("Leave it empty to use the stage's number of periods."),
+    )
+    period_minutes = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        validators=[validators.MinValueValidator(1)],
+        verbose_name=_("Period length"),
+        help_text=_("Minutes in each period. Leave it empty to use the stage's."),
+    )
+    break_minutes = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        verbose_name=_("Break length"),
+        help_text=_(
+            "Minutes between one period and the next. Leave it empty to use the stage's."
+        ),
+    )
+    half_time_minutes = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        verbose_name=_("Half time length"),
+        help_text=_(
+            "Minutes of the break at half time. Leave it empty to use the stage's."
+        ),
+    )
+    period_name = models.CharField(
+        max_length=30,
+        blank=True,
+        verbose_name=_("Period name"),
+        help_text=_("What a period is called. Leave it empty to use the stage's."),
+    )
     live_stream_thumbnail_image = models.BinaryField(
         blank=True,
         null=True,

@@ -1,0 +1,52 @@
+{% extends "tournamentcontrol/competition/compops/base.html" %}
+{% load static tz %}
+{% comment %}
+The scoreboard of a ground, for a big screen ("display") or to lay over a
+live stream ("overlay").
+
+To brand it, override the small templates it includes, in
+compops/scoreboard/: _brand.html (the tournament, above the score),
+_logo.html (one team's logo), _sponsors.html (below the clock) and
+_style.html (colours and fonts). Leave this template as it is: the live
+updates find the score, the clock and the dots by the ids in the board
+partial, and the clock is counted by scoreboard.js from the data attributes
+of #sb-clock.
+{% endcomment %}
+{% block title %}Scoreboard · {{ ground.title }}{% endblock %}
+{% block extracss %}<link rel="stylesheet" href="{% static 'tournamentcontrol/competition/compops/scoreboard.css' %}">{% include "tournamentcontrol/competition/compops/scoreboard/_style.html" %}{% endblock %}
+{% block body_attrs %}class="scoreboard {{ variant }}" data-signals__ifmissing="{board: '{{ variant }}'}" data-indicator="connected" data-effect="@get('{{ events_url }}', {retryMaxCount: 1000})"{% endblock %}
+{% block body %}{% timezone tzinfo %}
+<header class="sb-brand">{% include "tournamentcontrol/competition/compops/scoreboard/_brand.html" %}</header>
+{% partialdef board inline %}
+{# Asked for again every 20 seconds, so the board moves to the next match by itself. #}
+<main id="board" class="sb-board" data-template="{{ template_key }}" data-on-interval__duration.20s="@get('{{ board_url }}')">
+	{% if match %}
+		<section class="sb-score">
+			<div class="sb-team sb-home">
+				<div class="sb-logo" id="sb-home-logo">{% include "tournamentcontrol/competition/compops/scoreboard/_logo.html" with team=match.home_team code=home.code %}</div>
+				<div class="sb-name" id="sb-home-name">{{ home.name }}</div>
+			</div>
+			<div class="sb-digits" id="sb-home-score">{{ home.score }}</div>
+			<div class="sb-digits" id="sb-away-score">{{ away.score }}</div>
+			<div class="sb-team sb-away">
+				<div class="sb-logo" id="sb-away-logo">{% include "tournamentcontrol/competition/compops/scoreboard/_logo.html" with team=match.away_team code=away.code %}</div>
+				<div class="sb-name" id="sb-away-name">{{ away.name }}</div>
+			</div>
+		</section>
+		{% if clock %}
+			<section id="sb-clock" class="sb-clock {{ moment.kind }}" data-match="{{ match.pk }}" data-now="{{ now_ms }}" data-start="{{ clock.start_ms|default_if_none:'' }}" data-periods="{{ clock.periods }}" data-period="{{ clock.period }}" data-pause="{{ clock.pause }}" data-names="{{ clock.names_json }}" data-phases="{{ clock.phases_json }}">
+				<div class="sb-label" id="sb-label">{{ moment.label }}</div>
+				<div class="sb-time" id="sb-time">{{ moment.display }}</div>
+			</section>
+			{% if dots %}<ol class="sb-dots" id="sb-dots">{% for dot in dots %}<li class="{{ dot.kind }}{% if dot.state %} {{ dot.state }}{% endif %}"></li>{% endfor %}</ol>{% endif %}
+		{% endif %}
+		<p class="sb-meta" id="sb-meta">{{ match.stage.division.title }} · {{ match.time|time:"H:i" }}</p>
+	{% else %}
+		<p class="sb-empty">No matches on {{ ground.title }} today.</p>
+	{% endif %}
+</main>
+{% endpartialdef %}
+<footer class="sb-sponsors">{% include "tournamentcontrol/competition/compops/scoreboard/_sponsors.html" %}</footer>
+{% if variant == "display" %}<button type="button" id="sb-sound" class="sb-sound">Tap to turn the horn on</button>{% endif %}
+{% endtimezone %}{% endblock %}
+{% block extrajs %}<script src="{% static 'tournamentcontrol/competition/compops/scoreboard.js' %}"></script>{% endblock %}

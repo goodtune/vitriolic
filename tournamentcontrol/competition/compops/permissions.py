@@ -8,6 +8,7 @@ from tournamentcontrol.competition.models import Season
 
 STREAM = "competition.stream_season"
 COMMENTATE = "competition.commentate_season"
+SCORE = "competition.score_season"
 CHANGE_MATCH = "competition.change_match"
 STATISTICS = (
     "competition.add_simplescorematchstatistic",
@@ -47,9 +48,19 @@ def can_commentate(user, season):
     )
 
 
+def can_score(user, season):
+    """May keep the season's scoreboards: change a score and start a clock."""
+    return user.has_perm(SCORE) or user.has_perm(SCORE, season)
+
+
 def booth_seasons(user):
     """The seasons whose booths ``user`` may open: see ``can_commentate``."""
     return get_objects_for_user(user, [COMMENTATE, STREAM], Season, any_perm=True)
+
+
+def scorer_seasons(user):
+    """The seasons whose scoreboards ``user`` may keep: see ``can_score``."""
+    return get_objects_for_user(user, SCORE, Season)
 
 
 def can_change_match(user, match):

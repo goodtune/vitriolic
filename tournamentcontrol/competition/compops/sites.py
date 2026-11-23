@@ -19,8 +19,10 @@ from django.conf import settings
 from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import ImproperlyConfigured
 from django.db import transaction
+from django.db.models import F
+from django.db.models.functions import Coalesce, Greatest
 from django.http import Http404, HttpResponse, HttpResponseBadRequest
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import include, path, re_path, reverse
 from django.utils import timezone
 
@@ -30,6 +32,7 @@ from tournamentcontrol.competition.compops import (
     events,
     queries,
     receivers,
+    scoreboard,
     sse,
     streams,
 )
@@ -43,8 +46,10 @@ from tournamentcontrol.competition.compops.permissions import (
     can_change_match,
     can_commentate,
     can_enter_statistics,
+    can_score,
     can_stream,
     require,
+    scorer_seasons,
     staff_required,
 )
 from tournamentcontrol.competition.compops.responses import fragment_response, patches
@@ -55,6 +60,7 @@ from tournamentcontrol.competition.models import (
     Season,
     SimpleScoreMatchStatistic,
     Team,
+    Venue,
 )
 from tournamentcontrol.competition.utils import FauxQueryset
 
@@ -125,6 +131,68 @@ def booth_view(view):
         )
         if ground is None:
             raise Http404("No such streamed ground.")
+        return view(self, request, season, ground, **kwargs)
+
+    return wrapper
+
+
+def scoreboard_view(view):
+    """
+    Resolve the competition, season and ground slugs before calling the view
+    as ``view(self, request, season, ground, **kwargs)``. Any ground of the
+    season has a scoreboard, streamed or not.
+    """
+
+    @wraps(view)
+    def wrapper(self, request, competition, season, ground, **kwargs):
+        season = get_object_or_404(
+            Season.objects.select_related("competition").defer(
+                "live_stream_thumbnail_image"
+            ),
+            slug=season,
+            competition__slug=competition,
+        )
+        ground = get_object_or_404(
+            Ground.objects.select_related("venue"), venue__season=season, slug=ground
+        )
+        return view(self, request, season, ground, **kwargs)
+
+    return wrapper
+
+
+def venue_view(view):
+    """
+    Resolve the competition, season and venue slugs before calling the view
+    as ``view(self, request, season, venue, **kwargs)``, for someone who may
+    keep the season's scoreboards (login plus ``score_season``).
+    """
+
+    @wraps(view)
+    def wrapper(self, request, competition, season, venue, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect_to_login(request.get_full_path())
+        season = get_object_or_404(
+            Season.objects.select_related("competition").defer(
+                "live_stream_thumbnail_image"
+            ),
+            slug=season,
+            competition__slug=competition,
+        )
+        require(can_score(request.user, season))
+        venue = get_object_or_404(Venue, season=season, slug=venue)
+        return view(self, request, season, venue, **kwargs)
+
+    return wrapper
+
+
+def scorer_required(view):
+    """Login plus ``score_season``; a scorer need not be staff."""
+
+    @wraps(view)
+    def wrapper(self, request, season, ground, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect_to_login(request.get_full_path())
+        require(can_score(request.user, season))
         return view(self, request, season, ground, **kwargs)
 
     return wrapper
@@ -239,6 +307,43 @@ class CompOpsSite(Application):
             re_path(r"^(?P<datestr>\d{8})/$", self.day, name="day"),
             re_path(r"^(?P<datestr>\d{8})/", include(self.day_urls())),
             path("booth/", include(self.booth_urls())),
+            path("scoreboard/", include(self.scoreboard_urls())),
+        ]
+
+    def scoreboard_urls(self):
+        return [
+            path("", self.scoreboard_index, name="scoreboard-index"),
+            path("venue/<slug:venue>/", self.timekeeper, name="timekeeper"),
+            path(
+                "venue/<slug:venue>/start/<int:kick_off>/",
+                self.timekeeper_start,
+                name="timekeeper-start",
+            ),
+            path("<slug:ground>/", self.scoreboard, name="scoreboard"),
+            path(
+                "<slug:ground>/overlay/",
+                self.scoreboard_overlay,
+                name="scoreboard-overlay",
+            ),
+            path(
+                "<slug:ground>/board/", self.scoreboard_board, name="scoreboard-board"
+            ),
+            path(
+                "<slug:ground>/events/",
+                sse.scoreboard_events(self),
+                name="scoreboard-events",
+            ),
+            path("<slug:ground>/score/", self.scorer, name="scorer"),
+            path(
+                "<slug:ground>/score/<int:match_pk>/start/",
+                self.scorer_start,
+                name="scorer-start",
+            ),
+            path(
+                "<slug:ground>/score/<int:match_pk>/<str:side>/<str:step>/",
+                self.scorer_score,
+                name="scorer-score",
+            ),
         ]
 
     def booth_urls(self):
@@ -465,18 +570,29 @@ class CompOpsSite(Application):
         """
         The front door. Staff get every season, with those being played,
         coming up or just ended first, each leading to its days. Anyone else
-        gets the seasons whose booths they may open, each leading to them.
+        gets the seasons whose booths they may open or whose scoreboards they
+        may keep, each leading to them.
         """
         now = timezone.now()
         if request.user.is_staff:
             context = {"events": queries.events(now)}
         else:
-            seasons = booth_seasons(request.user)
+            booths = set(booth_seasons(request.user).values_list("pk", flat=True))
+            scores = set(scorer_seasons(request.user).values_list("pk", flat=True))
+            listed = queries.events(
+                now, limit=None, seasons=Season.objects.filter(pk__in=booths | scores)
+            )
+            require(listed.competitions)
+            for _, seasons in listed.competitions:
+                for season in seasons:
+                    season.compops_booth = season.pk in booths
+                    season.compops_score = season.pk in scores
             context = {
-                "events": queries.events(now, limit=None, seasons=seasons),
-                "booths": True,
+                "events": listed,
+                "front_door": True,
+                "booths": bool(booths),
+                "scoreboards": bool(scores),
             }
-            require(context["events"].competitions)
         return self.render(request, self.template_path("index.html"), context)
 
     @staff_required
@@ -1179,6 +1295,259 @@ class CompOpsSite(Application):
         if match_pk is None:
             return reverse("compops:booth", kwargs=kwargs)
         return reverse("compops:booth-match", kwargs={**kwargs, "match_pk": match_pk})
+
+    # --- scoreboard -------------------------------------------------
+
+    def scoreboard_context(self, request, season, ground, variant="display"):
+        """
+        The context of a ground's scoreboard, its overlay and its scorer's
+        page: the match the board shows now, its score and its clock (see
+        ``scoreboard``). ``now_ms`` and the clock's own numbers are what the
+        page's script counts on from.
+        """
+        now = timezone.now()
+        match = scoreboard.board_match(ground, now)
+        clock = scoreboard.clock_for(match, ground) if match else None
+        moment = clock.at(now) if clock else None
+        sides = {}
+        for side in ("home", "away"):
+            sides[side] = match and {
+                "name": str(getattr(match, f"get_{side}_team_plain")()),
+                "code": scoreboard.team_code(match, side),
+                "score": scoreboard.score(match, side),
+            }
+        dots = []
+        # One period has nothing to count, so a match of one has no dots.
+        if clock and clock.periods > 1:
+            for index, (kind, _seconds) in enumerate(clock.phases):
+                if moment.kind == "over" or (
+                    moment.index is not None and index < moment.index
+                ):
+                    state = "done"
+                elif moment.index == index:
+                    state = "on"
+                else:
+                    state = ""
+                dots.append({"kind": kind, "state": state})
+        names = {
+            "competition": season.competition.slug,
+            "season": season.slug,
+            "ground": ground.slug,
+        }
+        # A template written in the admin for the match's stage, division,
+        # season or competition draws the board in place of the project's.
+        template_key, template_source = scoreboard.template_for(season, match)
+        return {
+            "season": season,
+            "ground": ground,
+            "variant": variant,
+            "template_key": template_key or "default",
+            "template_source": template_source,
+            "tzinfo": ground.get_tzinfo(),
+            "now": now,
+            "now_ms": int(now.timestamp() * 1000),
+            "match": match,
+            "home": sides["home"],
+            "away": sides["away"],
+            "sides": list(sides.items()),
+            "clock": clock,
+            "moment": moment,
+            "dots": dots,
+            "can_start": clock is not None and clock.start is None,
+            "board_url": reverse("compops:scoreboard-board", kwargs=names),
+            "events_url": reverse("compops:scoreboard-events", kwargs=names),
+            "scorer_url": reverse("compops:scorer", kwargs=names),
+        }
+
+    def scoreboard_fragments(self, request, season, ground, scorer=False):
+        """The board, or the scorer's copy of it, as it is now."""
+        context = self.scoreboard_context(request, season, ground)
+        if scorer:
+            return [render_fragment(request, "scorer", **context)]
+        if context["template_source"]:
+            return [
+                scoreboard.render_custom(
+                    context["template_source"],
+                    scoreboard.plain_context(context),
+                    board_only=True,
+                )
+            ]
+        return [render_fragment(request, "board", **context)]
+
+    def scoreboard_page(self, request, season, ground, variant):
+        """
+        The whole scoreboard page: drawn by a template written in the admin
+        if one applies (see ``scoreboard.template_for``), else by the
+        project's ``scoreboard.html``.
+        """
+        context = self.scoreboard_context(request, season, ground, variant)
+        if context["template_source"]:
+            return HttpResponse(
+                scoreboard.render_custom(
+                    context["template_source"], scoreboard.plain_context(context)
+                )
+            )
+        return self.render(request, self.template_path("scoreboard.html"), context)
+
+    async def scoreboard_ground(self, season, slug):
+        try:
+            return await Ground.objects.select_related("venue").aget(
+                venue__season=season, slug=slug
+            )
+        except Ground.DoesNotExist:
+            raise Http404("No such ground.")
+
+    @season_view
+    def scoreboard_index(self, request, season, day, **kwargs):
+        grounds = Ground.objects.filter(venue__season=season).order_by(
+            "venue__order", "order"
+        )
+        return self.render(
+            request,
+            self.template_path("scoreboard_index.html"),
+            {
+                "season": season,
+                "grounds": grounds,
+                "venues": season.venues.order_by("order"),
+                "can_score": request.user.is_authenticated
+                and can_score(request.user, season),
+            },
+        )
+
+    @scoreboard_view
+    def scoreboard(self, request, season, ground, **kwargs):
+        """The scoreboard for a big screen. Anyone may see it."""
+        return self.scoreboard_page(request, season, ground, "display")
+
+    @scoreboard_view
+    def scoreboard_overlay(self, request, season, ground, **kwargs):
+        """The same board, to lay over a live stream: no page behind it."""
+        return self.scoreboard_page(request, season, ground, "overlay")
+
+    @scoreboard_view
+    def scoreboard_board(self, request, season, ground, **kwargs):
+        """
+        The board as it is now, which a page asks for every so often so that
+        it moves to the next match by itself. The scorer's page says that it
+        is one (the ``board`` signal) and is sent its own copy.
+        """
+        scorer = (read_signals(request) or {}).get("board") == "scorer"
+        if scorer:
+            if not request.user.is_authenticated:
+                return redirect_to_login(request.get_full_path())
+            require(can_score(request.user, season))
+        (html,) = self.scoreboard_fragments(request, season, ground, scorer)
+        return fragment_response(request, html)
+
+    @scoreboard_view
+    @scorer_required
+    def scorer(self, request, season, ground, **kwargs):
+        """The scorer's page: the board's match, and the buttons that keep it."""
+        context = self.scoreboard_context(request, season, ground)
+        return self.render(request, self.template_path("scorer.html"), context)
+
+    def _scorer_changed(self, request, season, ground, match):
+        """Tell every board of the ground, and answer the scorer."""
+        events.publish(
+            season.pk,
+            "scoreboard-changed",
+            actor=request.user.get_username(),
+            scope=scoreboard.SCOPE,
+            ground=ground.pk,
+            match=match.pk,
+        )
+        return patches(
+            request,
+            lambda: self.scoreboard_fragments(request, season, ground, scorer=True),
+            redirect_to=reverse(
+                "compops:scorer",
+                kwargs={
+                    "competition": season.competition.slug,
+                    "season": season.slug,
+                    "ground": ground.slug,
+                },
+            ),
+        )
+
+    @require_POST_m
+    @scoreboard_view
+    @scorer_required
+    def scorer_score(self, request, season, ground, match_pk, side, step, **kwargs):
+        if side not in ("home", "away") or step not in ("up", "down"):
+            raise Http404("No such score button.")
+        match = get_object_or_404(queries.ground_matches(ground), pk=match_pk)
+        field = f"{side}_team_progress_score"
+        change = 1 if step == "up" else -1
+        # In the database, so two scorers tapping at once both count; and a
+        # score never goes below nothing.
+        Match._base_manager.filter(pk=match.pk).update(
+            **{field: Greatest(Coalesce(F(field), 0) + change, 0)}
+        )
+        return self._scorer_changed(request, season, ground, match)
+
+    @require_POST_m
+    @scoreboard_view
+    @scorer_required
+    def scorer_start(self, request, season, ground, match_pk, **kwargs):
+        match = get_object_or_404(queries.ground_matches(ground), pk=match_pk)
+        # The first press starts the clock; a second changes nothing.
+        Match._base_manager.filter(pk=match.pk, clock_started_at=None).update(
+            clock_started_at=timezone.now()
+        )
+        return self._scorer_changed(request, season, ground, match)
+
+    # --- timekeeper -------------------------------------------------
+
+    @venue_view
+    def timekeeper(self, request, season, venue, **kwargs):
+        """
+        The venue's timekeeper: the round being played and the next to come,
+        and one button that starts the clock of every match of a round.
+        """
+        now = timezone.now()
+        context = {
+            "season": season,
+            "venue": venue,
+            "tzinfo": venue.get_tzinfo(),
+            "rounds": scoreboard.venue_rounds(venue, now),
+        }
+        return self.render(request, self.template_path("timekeeper.html"), context)
+
+    @require_POST_m
+    @venue_view
+    def timekeeper_start(self, request, season, venue, kick_off, **kwargs):
+        now = timezone.now()
+        waiting = next(
+            (
+                found.waiting
+                for found in scoreboard.venue_rounds(venue, now)
+                if found.key == kick_off
+            ),
+            None,
+        )
+        if waiting is None:
+            raise Http404("No such round.")
+        # One moment for every field. A clock a scorer has already started
+        # keeps its own start.
+        started = Match._base_manager.filter(
+            pk__in=[match.pk for match in waiting], clock_started_at=None
+        ).update(clock_started_at=now)
+        if started:
+            events.publish(
+                season.pk,
+                "scoreboard-changed",
+                actor=request.user.get_username(),
+                scope=scoreboard.SCOPE,
+                venue=venue.pk,
+            )
+        return redirect(
+            "compops:timekeeper",
+            competition=season.competition.slug,
+            season=season.slug,
+            venue=venue.slug,
+        )
+
+    # --- booth index ------------------------------------------------
 
     @login_required_m
     @season_view

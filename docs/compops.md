@@ -63,6 +63,149 @@ Someone who is not staff gets a shorter home page: the seasons whose booths they
 A season is placed by the date where it is played, from its `timezone`.
 Any day of any season can be opened, so a past day can be corrected or shown in training, and a coming one explored before it starts.
 
+## Scoreboards
+
+Every ground of a season has a scoreboard: the score of the match being played, and a clock that counts its periods down.
+
+| Page | Route | For |
+| --- | --- | --- |
+| The board | `compops:scoreboard` | a large screen at the ground |
+| The overlay | `compops:scoreboard-overlay` | a layer over the live stream: one bar, with nothing behind it |
+| The scorer | `compops:scorer` | a phone, with a button to add one and to take one off for each team |
+| The timekeeper | `compops:timekeeper` | whoever sounds the hooter: one button that starts the clocks of every field of a venue |
+
+`compops:scoreboard-index` lists a season's grounds with a link to each page.
+
+### The score
+
+The scoreboard keeps a progress score on the match (`home_team_progress_score` and `away_team_progress_score`).
+It is not the result.
+The result is still `home_team_score` and `away_team_score`, entered on the ops page, and only the result moves a ladder.
+Until a progress score is kept, the board shows the result if the match has one.
+
+Each press of a scorer's button is published on a channel of its own, `season:<id>:scoreboard`.
+The boards of that ground are sent the new score at once.
+The ops desk's activity does not list the presses.
+
+### The clock
+
+Nothing is stored or pushed for the clock while it runs.
+It counts from one moment, through the periods and breaks of the match's division:
+
+- A division gives `periods` (2 unless changed), `period_minutes` and `break_minutes`.
+- A division may also give `half_time_minutes`, for a sport whose half time is longer than its other breaks.
+  It is the length of the break in the middle of a match with an even number of periods.
+  Netball plays quarters with 4 minutes between them and 12 at half time, so its break length is 4 and its half time length is 12.
+  Left empty, half time is as long as any other break; a match with an odd number of periods has no half time.
+- A stage, or one match, may give any of the four for itself.
+  Each number is the match's own if it has one, else its stage's, else its division's.
+  Rugby sevens plays halves of 7 minutes and its final halves of 10, so the finals stage (or the final alone) sets a period length of 10 and takes the rest from the division.
+- A match that gets no period length from any of them has a board with the score and no clock.
+
+The board names each period from how many the match has:
+
+| Periods | Each is called | The breaks |
+| --- | --- | --- |
+| 1 | nothing: no name is shown, and no dots | none |
+| 2 | 1st Half, 2nd Half | Half time |
+| 4 | 1st Quarter to 4th Quarter | Quarter time, Half time, Three-quarter time |
+| any other | 1st Period, 2nd Period and so on | Break, but Half time in the middle of an even number |
+
+"Period name" on a division, a stage or a match gives another word for a sport that has one: with "Chukka" the periods are 1st Chukka, 2nd Chukka and so on, and each break is a Break.
+A sport with a period name still has a Half time once "Half time length" gives it a length of its own.
+Like the timing, the name is the match's own if it has one, else its stage's, else its division's.
+- A venue has "Start scoreboard clocks on time" (`scoreboard_auto_start`), which is on unless changed.
+  With it on, the clock runs from the match's scheduled time.
+  With it off, the clock waits until it is started: by the venue's timekeeper for every field together, or by a ground's scorer for that ground alone.
+
+The server works out where the clock is each time it renders the board, and the page's script counts on from the same numbers.
+The server sends its own time too, with each board and every 10 seconds (`COMPOPS_SCOREBOARD_SYNC`) down the board's event stream, so a screen whose clock is wrong, or drifts, still counts the official time.
+The script goes by the last few times it was sent, so a correction takes effect within a minute.
+
+### The timekeeper
+
+One hooter starts every field of a venue, so a venue's clocks are started together.
+The timekeeper's page of a venue (`compops:timekeeper`) is linked from the season's list of scoreboards, for someone who may keep its scoreboards.
+It shows the round being played (the latest kick-off of the day at the venue) and the next to come, each with the matches on its fields.
+A round whose clocks wait has one button, "Start 6 clocks", and one press gives every match of the round the same start.
+A clock that a ground's scorer has already started keeps its own start, and a second press changes nothing.
+Every board, overlay and scorer's page of the venue is sent its board again at once.
+
+At a venue whose clocks start on time there is nothing to press, and the page says so.
+
+A break starts the moment a period ends.
+Before a match and between periods, the clock counts down to the next start in another colour.
+In the last minute of a period the clock shows seconds to a tenth (`59.9` down to `0.0`).
+The dots under it are the periods and the breaks between them.
+A horn sounds when a period starts or ends; a browser plays no sound until the page has been touched, so the board has a button to turn the horn on.
+
+### Which match the board shows
+
+The board shows the match being played on its ground.
+Before the first match of the day, and from two minutes after a match's clock ends, it shows the next match with a countdown to its start.
+A match with no clock, or whose clock was never started, keeps the board until the next match's scheduled time.
+The page asks for the board again every 20 seconds, so it moves on by itself.
+
+### Branding
+
+Override the small templates the board includes, in `tournamentcontrol/competition/compops/scoreboard/`:
+
+| Template | Where | Given |
+| --- | --- | --- |
+| `_brand.html` | above the score | `season`, `ground` |
+| `_logo.html` | each team's circle | `team` (`None` until it is decided), `code` |
+| `_sponsors.html` | below the clock | `season`, `ground` |
+| `_style.html` | in the page's head | nothing; set the `--sb-` variables of `scoreboard.css` in a `<style>` |
+
+Leave `scoreboard.html` as it is.
+The live updates find the score, the clock and the dots by the ids in its `board` partial, and the script counts the clock from the data attributes of `#sb-clock`.
+
+No model has a logo yet, so `_logo.html` shows a few letters for the team: its club's abbreviation, else the start of its name.
+
+A project can also replace the whole page for every board of the site: put its own `tournamentcontrol/competition/compops/scoreboard.html` ahead of this one on the template path.
+That template must keep the `board` partial, and inside it the ids and the data attributes of `#sb-clock`.
+
+### Write a whole page in the admin
+
+A competition, a season, a division and a stage each have a "Scoreboard template" field in the admin.
+It holds a whole page, as a Django template, that draws the boards of that scope in place of the usual one.
+The template nearest the match is used: its stage's, else its division's, else the season's, else the competition's, else the project's template.
+A ground with no match today takes the season's, else the competition's.
+
+`docs/examples/scoreboard-split.html` is a template to start from: the scores on the left, the clock on the right, the event's badge above the clock, and a picture behind them.
+
+The look is the designer's.
+The live updates need four things of the template, and it is the designer's work to keep them:
+
+| In the template | What it is for |
+| --- | --- |
+| `{{ scripts }}` in the head | Datastar and the clock's script |
+| `{{ attrs }}` on the `<body>` | opens the event stream |
+| `{% board %}` and `{% endboard %}` | around the part that changes during a match; the updates replace what is between them |
+| `{{ clock_attrs }}` on the clock's element, with `#sb-time` inside it | what the script counts the clock from, and where it writes the time |
+
+`#sb-label` (the phase's name, such as "1st Half"; empty for a match of one period), `#sb-dots` (one `li` for each period and break; `dots` is empty for a match of one period) and `#sb-sound` (the button that turns the horn on) are used if they are there.
+The script sets the class of the clock's element to the phase (`before`, `period`, `break`, `over` or `ready`), for the template's styles to colour.
+`{{ styles }}` is the usual style sheet, for a template that wants to start from the usual look.
+
+The form tries a template before it saves it, and refuses one that does not compile or has no `{% board %}`.
+
+A template written in the admin is given less than a template of the project's, because whoever may edit a stage may write one:
+
+- It has Django's own tags and filters and `{% board %}`.
+  It cannot `{% load %}` a tag library, or include or extend another template.
+- It is given plain values, never a model: `competition`, `season`, `venue` and `ground` (each a `title`, most a `slug`), `match` (`pk`, `time`, `label`, `round`, `division`, `stage`), `home` and `away` (`name`, `code`, `score`), `clock` (`periods`, `period_minutes`, `break_minutes`, `half_time_minutes`), `moment` (`kind`, `label`, `display`, `period`), `dots` and `variant` (`display` or `overlay`).
+  A model would let a template read anything it leads to, such as a season's YouTube secrets.
+
+Images are the designer's to host: a template names them by address, or draws them itself as the example does.
+
+A page that is open takes up a new template by itself.
+Each board says which template drew it; when an update brings a board drawn by another, or by an edited one, the page loads itself again.
+
+### Not yet
+
+The clock cannot be paused or put right, there is no extra time, and the progress score is not offered as the result when a match ends.
+
 ## Template partials on Django 5.2
 
 Skip this section on Django 6.0 and later.
@@ -173,6 +316,8 @@ To turn a check off, put its id in `SILENCED_SYSTEM_CHECKS`.
 | Enter scorers | `is_staff`, `competition.add_simplescorematchstatistic` and `change_simplescorematchstatistic` |
 | Start, test or stop a broadcast; whole-slot actions | `is_staff` and `competition.stream_season` on the season |
 | Watch the booth: the lamp, the strip, the runsheet and the panes | login and `competition.commentate_season` (or `competition.stream_season`) on the season; staff status is not needed |
+| See a ground's scoreboard or its overlay | nothing; anyone with the address may |
+| Keep a scoreboard: change the score, start the clock, start a venue's clocks together | login and `competition.score_season` on the season; staff status is not needed |
 | Go on air, end the broadcast or arm the next one from the booth | login and `competition.stream_season` on the season; staff status is not needed |
 
 Every dashboard action is part of the dashboard, so it needs `is_staff` as well as its own permission.
@@ -195,6 +340,10 @@ comms = Group.objects.get(name="Comms team")
 assign_perm("competition.commentate_season", comms, season)
 ```
 
+Grant a scorer `competition.score_season` in the same way; it lets them keep the scoreboard of every ground of the season, and nothing else.
+The home page is a scorer's front door too: it lists the seasons whose scoreboards they may keep, each leading to its list of scoreboards (`compops:scoreboard-index`), where every ground has a link to its scorer's page.
+Someone who may both open a season's booths and keep its scoreboards gets the booths from the season's row, and a Scoreboards button beside it.
+
 Grant the commentator pair who run the broadcast `stream_season` in the same way:
 
 ```python
@@ -208,6 +357,7 @@ assign_perm("competition.stream_season", user, season)
 | `COMPOPS_EVENTS_BACKEND` | `"tournamentcontrol.competition.compops.events.memory.MemoryBackend"` | dotted path to the event bus class; the memory backend works for one server process only, so use `"tournamentcontrol.competition.compops.events.redis.RedisBackend"` with more than one worker or with the Celery refresh task |
 | `COMPOPS_EVENTS_OPTIONS` | `{}` | keyword arguments for the backend class; the Redis backend needs `{"url": "redis://localhost:6379/0"}` |
 | `COMPOPS_EVENTS_KEEPALIVE` | `20` | seconds between SSE keep-alive comments |
+| `COMPOPS_SCOREBOARD_SYNC` | `10` | seconds between the times a scoreboard is told the server's time |
 | `COMPOPS_ACTIVITY_LENGTH` | `50` | events kept for the activity feed |
 
 ## Serving

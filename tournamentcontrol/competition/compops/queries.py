@@ -347,6 +347,13 @@ def _streamed_matches(day, **filters):
     return _scheduled_matches(day, live_stream=True, **filters)
 
 
+def venue_matches(venue, day):
+    """Every scheduled match of the day on a ground of the venue, in ground order."""
+    return _scheduled_matches(day, play_at__ground__venue=venue).order_by(
+        "time", "play_at__ground__order", "pk"
+    )
+
+
 def ground_matches(ground):
     """Every scheduled match on the ground, on any day: one is looked up by pk."""
     return _with_related(
