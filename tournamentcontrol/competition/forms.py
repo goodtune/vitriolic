@@ -50,6 +50,9 @@ from touchtechnology.common.forms.widgets import (
 )
 from touchtechnology.content.forms import PlaceholderConfigurationBase
 from tournamentcontrol.competition.calc import BonusPointCalculator, Calculator
+from tournamentcontrol.competition.compops.scoreboard import (
+    check_template as check_scoreboard_template,
+)
 from tournamentcontrol.competition.draw.algorithms import seeded_tournament
 from tournamentcontrol.competition.draw.builders import build
 from tournamentcontrol.competition.draw.generators import DrawGenerator
@@ -703,7 +706,31 @@ class UpstreamTitleMixin:
             self.instance.upstream_title_synced = self.instance.upstream_title
 
 
-class CompetitionForm(SuperUserSlugMixin, ModelForm):
+class ScoreboardTemplateMixin:
+    """
+    A form with ``scoreboard_template``: a whole page, written here, to draw
+    the scoreboards of a competition, season, division or stage with. It is
+    tried out before it is saved (see ``scoreboard.check_template``), so a
+    template that cannot draw a board never reaches a screen.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        field = self.fields.get("scoreboard_template")
+        if field is not None:
+            field.widget.attrs.update(
+                {"rows": 12, "spellcheck": "false", "class": "scoreboard-template"}
+            )
+
+    def clean_scoreboard_template(self):
+        source = self.cleaned_data.get("scoreboard_template") or ""
+        problem = check_scoreboard_template(source)
+        if problem:
+            raise forms.ValidationError(problem)
+        return source
+
+
+class CompetitionForm(ScoreboardTemplateMixin, SuperUserSlugMixin, ModelForm):
     class Meta:
         model = Competition
         fields = (
@@ -711,6 +738,7 @@ class CompetitionForm(SuperUserSlugMixin, ModelForm):
             "short_title",
             "enabled",
             "copy",
+            "scoreboard_template",
             "slug",
             "slug_locked",
             "clubs",
@@ -730,7 +758,9 @@ class CompetitionForm(SuperUserSlugMixin, ModelForm):
             raise forms.ValidationError(str(exc))
 
 
-class SeasonForm(SuperUserSlugMixin, BootstrapFormControlMixin, ModelForm):
+class SeasonForm(
+    ScoreboardTemplateMixin, SuperUserSlugMixin, BootstrapFormControlMixin, ModelForm
+):
     class Meta:
         model = Season
         fields = (
@@ -753,6 +783,7 @@ class SeasonForm(SuperUserSlugMixin, BootstrapFormControlMixin, ModelForm):
             "mvp_results_public",
             "enable_experimental_views",
             "upstream_url",
+            "scoreboard_template",
             "slug",
             "slug_locked",
         )
@@ -863,7 +894,9 @@ class GroundFormSet(BaseGroundFormSet):
         return super()._construct_form(i, **kwargs)
 
 
-class DivisionForm(UpstreamTitleMixin, SuperUserSlugMixin, ModelForm):
+class DivisionForm(
+    ScoreboardTemplateMixin, UpstreamTitleMixin, SuperUserSlugMixin, ModelForm
+):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.instance.season.mode != DAILY:
@@ -896,6 +929,7 @@ class DivisionForm(UpstreamTitleMixin, SuperUserSlugMixin, ModelForm):
             "periods",
             "period_minutes",
             "break_minutes",
+            "scoreboard_template",
             "slug",
             "slug_locked",
         )
@@ -1044,7 +1078,7 @@ class DivisionBulkCreateForm(DivisionForm):
         )
 
 
-class StageForm(SuperUserSlugMixin, ModelForm):
+class StageForm(ScoreboardTemplateMixin, SuperUserSlugMixin, ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.instance.order <= 1:
@@ -1072,6 +1106,7 @@ class StageForm(SuperUserSlugMixin, ModelForm):
             "period_minutes",
             "break_minutes",
             "color",
+            "scoreboard_template",
             "slug",
             "slug_locked",
         )

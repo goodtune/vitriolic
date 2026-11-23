@@ -157,4 +157,52 @@ class Migration(migrations.Migration):
                 verbose_name="Break length",
             ),
         ),
+        migrations.AddField(
+            model_name="competition",
+            name="scoreboard_template",
+            field=models.TextField(
+                blank=True,
+                help_text=(
+                    "A whole page to draw the scoreboards of this competition with, in "
+                    "place of the usual one. Leave it empty to use the site's."
+                ),
+                verbose_name="Scoreboard template",
+            ),
+        ),
+        migrations.AddField(
+            model_name="season",
+            name="scoreboard_template",
+            field=models.TextField(
+                blank=True,
+                help_text=(
+                    "A whole page to draw the scoreboards of this season with, in "
+                    "place of the usual one. Leave it empty to use the competition's."
+                ),
+                verbose_name="Scoreboard template",
+            ),
+        ),
+        migrations.AddField(
+            model_name="division",
+            name="scoreboard_template",
+            field=models.TextField(
+                blank=True,
+                help_text=(
+                    "A whole page to draw the scoreboards of this division with, in "
+                    "place of the usual one. Leave it empty to use the season's."
+                ),
+                verbose_name="Scoreboard template",
+            ),
+        ),
+        migrations.AddField(
+            model_name="stage",
+            name="scoreboard_template",
+            field=models.TextField(
+                blank=True,
+                help_text=(
+                    "A whole page to draw the scoreboards of this stage with, in "
+                    "place of the usual one. Leave it empty to use the division's."
+                ),
+                verbose_name="Scoreboard template",
+            ),
+        ),
     ]

@@ -4,6 +4,7 @@ import datetime
 import re
 import threading
 from contextlib import contextmanager
+from pathlib import Path
 from unittest import mock
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
@@ -654,6 +655,85 @@ def test_scoreboard_follows_the_scorer_and_counts_its_own_clock(
     period_colour = "rgb(244, 246, 248)"
     expect(page.locator("#sb-time")).not_to_have_css("color", period_colour)
     page.screenshot(path=str(screenshot_dir / "compops_scoreboard_break.png"))
+
+
+def test_scoreboard_drawn_by_a_template_written_in_the_admin(
+    page,
+    browser,
+    login,
+    asgi_live_server,
+    tournament,
+    django_user_model,
+    screenshot_dir,
+):
+    season = tournament["season"]
+    match = tournament["match"]
+    division = match.stage.division
+    Division.objects.filter(pk=division.pk).update(period_minutes=25, break_minutes=5)
+    names = {"competition": "pacific-cup", "season": "pc26", "ground": "field-1"}
+    base = asgi_live_server.url
+    example = Path(__file__).parents[2] / "docs" / "examples" / "scoreboard-split.html"
+
+    # The page opens drawn by the usual template.
+    page.goto(base + reverse("compops:scoreboard", kwargs=names))
+    expect(page.locator("#board")).to_have_attribute("data-template", "default")
+    expect(page.locator(".badge")).to_have_count(0)
+
+    scorer = django_user_model.objects.create_user(
+        username="scorer", password="password"
+    )
+    assign_perm("competition.score_season", scorer, season)
+    phone = browser.new_context(viewport={"width": 390, "height": 844})
+    scoring = phone.new_page()
+    try:
+        login(scoring, base, "scorer")
+        scoring.goto(base + reverse("compops:scorer", kwargs=names))
+        add_home = scoring.get_by_role("button", name="Add one to Australia")
+
+        # The division is given a template of its own. The next update brings
+        # a board drawn by it, and the page loads itself again to match.
+        Division.objects.filter(pk=division.pk).update(
+            scoreboard_template=example.read_text()
+        )
+        add_home.click()
+        expect(page.locator(".badge")).to_be_visible()
+        expect(page.locator("#board")).to_have_attribute(
+            "data-template", re.compile(rf"^division:{division.pk}:")
+        )
+        expect(page.locator("#sb-home-score")).to_have_text("1")
+
+        # It is still a live board: the clock counts and a tap arrives.
+        time = page.locator("#sb-time")
+        before = time.text_content()
+        page.wait_for_timeout(1500)
+        assert time.text_content() != before
+        add_home.click()
+        expect(page.locator("#sb-home-score")).to_have_text("2")
+    finally:
+        phone.close()
+
+    # A picture behind it, and every block readable over it: at least half
+    # opaque, with a border.
+    assert page.evaluate("getComputedStyle(document.body).backgroundImage").startswith(
+        "url("
+    )
+    for panel in page.locator(".panel").all():
+        colour, border = panel.evaluate(
+            """el => {
+                const style = getComputedStyle(el);
+                return [style.backgroundColor, parseFloat(style.borderTopWidth)];
+            }"""
+        )
+        opacity = float(re.search(r"rgba\([^)]*,\s*([\d.]+)\)", colour).group(1))
+        assert opacity >= 0.5 and border >= 1, (colour, border)
+    page.screenshot(path=str(screenshot_dir / "compops_scoreboard_custom_template.png"))
+
+    page.goto(base + reverse("compops:scoreboard-overlay", kwargs=names))
+    expect(page.locator("#sb-home-score")).to_have_text("2")
+    page.screenshot(
+        path=str(screenshot_dir / "compops_scoreboard_custom_overlay.png"),
+        omit_background=True,
+    )
 
 
 def hold(page, button):

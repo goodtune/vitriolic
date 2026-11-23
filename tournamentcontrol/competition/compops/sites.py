@@ -1254,7 +1254,7 @@ class CompOpsSite(Application):
 
     # --- scoreboard -------------------------------------------------
 
-    def scoreboard_context(self, request, season, ground):
+    def scoreboard_context(self, request, season, ground, variant="display"):
         """
         The context of a ground's scoreboard, its overlay and its scorer's
         page: the match the board shows now, its score and its clock (see
@@ -1289,9 +1289,15 @@ class CompOpsSite(Application):
             "season": season.slug,
             "ground": ground.slug,
         }
+        # A template written in the admin for the match's stage, division,
+        # season or competition draws the board in place of the project's.
+        template_key, template_source = scoreboard.template_for(season, match)
         return {
             "season": season,
             "ground": ground,
+            "variant": variant,
+            "template_key": template_key or "default",
+            "template_source": template_source,
             "tzinfo": ground.get_tzinfo(),
             "now": now,
             "now_ms": int(now.timestamp() * 1000),
@@ -1311,7 +1317,32 @@ class CompOpsSite(Application):
     def scoreboard_fragments(self, request, season, ground, scorer=False):
         """The board, or the scorer's copy of it, as it is now."""
         context = self.scoreboard_context(request, season, ground)
-        return [render_fragment(request, "scorer" if scorer else "board", **context)]
+        if scorer:
+            return [render_fragment(request, "scorer", **context)]
+        if context["template_source"]:
+            return [
+                scoreboard.render_custom(
+                    context["template_source"],
+                    scoreboard.plain_context(context),
+                    board_only=True,
+                )
+            ]
+        return [render_fragment(request, "board", **context)]
+
+    def scoreboard_page(self, request, season, ground, variant):
+        """
+        The whole scoreboard page: drawn by a template written in the admin
+        if one applies (see ``scoreboard.template_for``), else by the
+        project's ``scoreboard.html``.
+        """
+        context = self.scoreboard_context(request, season, ground, variant)
+        if context["template_source"]:
+            return HttpResponse(
+                scoreboard.render_custom(
+                    context["template_source"], scoreboard.plain_context(context)
+                )
+            )
+        return self.render(request, self.template_path("scoreboard.html"), context)
 
     async def scoreboard_ground(self, season, slug):
         try:
@@ -1335,16 +1366,12 @@ class CompOpsSite(Application):
     @scoreboard_view
     def scoreboard(self, request, season, ground, **kwargs):
         """The scoreboard for a big screen. Anyone may see it."""
-        context = self.scoreboard_context(request, season, ground)
-        context["variant"] = "display"
-        return self.render(request, self.template_path("scoreboard.html"), context)
+        return self.scoreboard_page(request, season, ground, "display")
 
     @scoreboard_view
     def scoreboard_overlay(self, request, season, ground, **kwargs):
         """The same board, to lay over a live stream: no page behind it."""
-        context = self.scoreboard_context(request, season, ground)
-        context["variant"] = "overlay"
-        return self.render(request, self.template_path("scoreboard.html"), context)
+        return self.scoreboard_page(request, season, ground, "overlay")
 
     @scoreboard_view
     def scoreboard_board(self, request, season, ground, **kwargs):

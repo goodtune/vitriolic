@@ -5,9 +5,11 @@ score reaching a board as it is tapped, are in ``tests/e2e/test_compops.py``.
 """
 
 import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from django.contrib.auth.models import Group
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 from freezegun import freeze_time
 from guardian.shortcuts import assign_perm
@@ -17,8 +19,10 @@ from touchtechnology.admin.tests.shells import by_shell
 from tournamentcontrol.competition.compops import events, scoreboard
 from tournamentcontrol.competition.compops.scoreboard import Clock, Moment
 from tournamentcontrol.competition.forms import (
+    CompetitionForm,
     DivisionForm,
     MatchEditForm,
+    SeasonForm,
     StageForm,
     VenueForm,
 )
@@ -340,7 +344,7 @@ class DisplayTests(ScoreboardFixture):
             content,
         )
         self.assertIn(
-            f'<main id="board" class="sb-board" '
+            f'<main id="board" class="sb-board" data-template="default" '
             f"data-on-interval__duration.20s=\"@get('{board_url}')\">",
             content,
         )
@@ -683,3 +687,204 @@ class SettingsFormTests(TestCase):
             ),
             (True, True),
         )
+
+
+#: The worked example of the docs, which a designer starts from.
+EXAMPLE = Path(__file__).parents[3] / "docs" / "examples" / "scoreboard-split.html"
+
+CUSTOM = (
+    "<!doctype html><html><head><title>{{ ground.title }}</title>"
+    '{{ styles }}{{ scripts }}</head><body class="mine {{ variant }}" {{ attrs }}>'
+    '<h1 class="mine">{{ season.title }}</h1>'
+    "{% board %}"
+    '<b id="sb-home-score">{{ home.name }} {{ home.score }}</b>'
+    '<b id="sb-away-score">{{ away.name }} {{ away.score }}</b>'
+    '<div {{ clock_attrs }}><i id="sb-label">{{ moment.label }}</i>'
+    '<i id="sb-time">{{ moment.display }}</i></div>'
+    "{% endboard %}</body></html>"
+)
+
+
+@freeze_time("2026-10-08 19:05 +10:00")
+class CustomTemplateTests(ScoreboardFixture):
+    """A whole scoreboard page, written in the admin for a scope."""
+
+    def write(self, owner, source=CUSTOM):
+        owner.scoreboard_template = source
+        owner.save()
+
+    def test_nearest_scope_to_the_match_has_its_template_used(self):
+        competition = self.season.competition
+        owners = [self.stage, self.division, self.season, competition]
+        used = []
+        for owner in owners:
+            self.write(owner, f"{CUSTOM}<!-- {type(owner).__name__} -->")
+        for owner in owners:
+            self.first.refresh_from_db()
+            self.season.refresh_from_db()
+            key, source = scoreboard.template_for(self.season, self.first)
+            used.append((key.rsplit(":", 1)[0], source.rsplit(" ", 2)[1]))
+            # The next out is used once this one is emptied.
+            self.write(owner, "  ")
+        self.first.refresh_from_db()
+        self.season.refresh_from_db()
+        self.assertEqual(
+            (used, scoreboard.template_for(self.season, self.first)),
+            (
+                [
+                    (f"stage:{self.stage.pk}", "Stage"),
+                    (f"division:{self.division.pk}", "Division"),
+                    (f"season:{self.season.pk}", "Season"),
+                    (f"competition:{competition.pk}", "Competition"),
+                ],
+                (None, None),
+            ),
+        )
+
+    def test_ground_with_no_match_today_takes_the_seasons_template(self):
+        self.write(self.division)
+        self.write(self.season, f"{CUSTOM}<!-- Season -->")
+        key, source = scoreboard.template_for(self.season, None)
+        self.assertEqual(
+            (key.rsplit(":", 1)[0], source.endswith("<!-- Season -->")),
+            (f"season:{self.season.pk}", True),
+        )
+
+    def test_page_is_drawn_by_the_template(self):
+        self.write(self.division)
+        self.get("compops:scoreboard", **self.kw)
+        self.assert_http_200_ok()
+        content = self.last_response.content.decode()
+        key, _ = scoreboard.template_for(self.season, self.first)
+        board_url = self.reverse("compops:scoreboard-board", **self.kw)
+        events_url = self.reverse("compops:scoreboard-events", **self.kw)
+        start = int(at(19).timestamp() * 1000)
+        now = int(at(19, 5).timestamp() * 1000)
+        for piece in (
+            f'<h1 class="mine">{self.season.title}</h1>',
+            # The part the live updates replace, and which template drew it.
+            f'<div id="board" data-template="{key}" '
+            f"data-on-interval__duration.20s=\"@get('{board_url}')\">"
+            '<b id="sb-home-score">Australia 0</b>',
+            # What the page's script counts the clock from.
+            f'<div id="sb-clock" data-match="{self.first.pk}" data-now="{now}" '
+            f'data-start="{start}" data-periods="2" data-period="900" '
+            'data-pause="120"><i id="sb-label">Period 1</i>'
+            '<i id="sb-time">10:00</i></div>',
+            # What every scoreboard page needs, whatever it looks like.
+            'class="mine display" data-signals__ifmissing="{board: \'display\'}" '
+            'data-indicator="connected" '
+            f"data-effect=\"@get('{events_url}', {{retryMaxCount: 1000}})\"",
+            '<script src="/static/tournamentcontrol/competition/compops/scoreboard.js">'
+            "</script>",
+        ):
+            with self.subTest(piece[:40]):
+                self.assertIn(piece, content)
+        # None of the usual page is there.
+        self.assertEqual(content.count("sb-brand"), 0)
+
+    def test_overlay_is_drawn_by_the_same_template(self):
+        self.write(self.division)
+        self.get("compops:scoreboard-overlay", **self.kw)
+        self.assertIn('class="mine overlay"', self.last_response.content.decode())
+
+    def test_live_update_is_the_templates_board_alone(self):
+        self.write(self.division)
+        self.get("compops:scoreboard-board", **self.kw)
+        content = self.last_response.content.decode()
+        self.assertEqual(
+            (
+                content.startswith('<div id="board" data-template="division:'),
+                content.endswith("</div></div>"),
+                content.count("<html"),
+            ),
+            (True, True, 0),
+        )
+
+    def test_template_is_given_plain_values_and_nothing_to_follow(self):
+        # A season holds its YouTube secrets; a template could follow an
+        # object to them, so it is never given one.
+        self.season.live_stream_client_secret = "hush"
+        self.season.live_stream_refresh_token = "hush"
+        self.write(
+            self.season,
+            "{% board %}[{{ season.live_stream_client_secret }}]"
+            "[{{ season.live_stream_refresh_token }}][{{ season.competition }}]"
+            "[{{ request }}][{{ user }}][{{ home.team }}][{{ match.division }}]"
+            "{% endboard %}",
+        )
+        self.get("compops:scoreboard", **self.kw)
+        content = self.last_response.content.decode()
+        self.assertEqual(content.count("hush"), 0)
+        self.assertIn("[][][][][][][Men&#x27;s Open]", content)
+
+    def test_usual_board_says_it_was_drawn_by_the_usual_template(self):
+        self.get("compops:scoreboard", **self.kw)
+        self.assertIn(
+            '<main id="board" class="sb-board" data-template="default"',
+            self.last_response.content.decode(),
+        )
+
+    def test_key_changes_when_the_template_is_edited(self):
+        self.write(self.division)
+        before, _ = scoreboard.template_for(self.season, self.first)
+        self.write(self.division, CUSTOM.replace("mine", "ours"))
+        self.first.refresh_from_db()
+        after, _ = scoreboard.template_for(self.season, self.first)
+        self.assertEqual(
+            (before.rsplit(":", 1)[0], after.rsplit(":", 1)[0], before == after),
+            (f"division:{self.division.pk}",) * 2 + (False,),
+        )
+
+
+class TemplateCheckTests(TestCase):
+    def test_template_must_draw_a_board_and_reach_for_nothing_else(self):
+        cases = {
+            "nothing written": ("", None),
+            "a page with a board": (CUSTOM, None),
+            "no board": (
+                "<p>{{ home.score }}</p>",
+                "Put {% board %} and {% endboard %} around the part that changes "
+                "while a match is played: the live updates replace what is "
+                "between them.",
+            ),
+            "another tag library": (
+                "{% load static %}{% board %}{% endboard %}",
+                "This is not a template: 'static' is not a registered tag library. "
+                "Must be one of:\n",
+            ),
+            "another template": (
+                '{% board %}{% include "base.html" %}{% endboard %}',
+                "A scoreboard template cannot include or extend another "
+                "template (base.html).",
+            ),
+            "a tag left open": (
+                "{% board %}{% if home %}",
+                "This is not a template: Unclosed tag on line 1: 'if'. "
+                "Looking for one of: elif, else, endif.",
+            ),
+        }
+        for name, (source, problem) in cases.items():
+            with self.subTest(name):
+                self.assertEqual(scoreboard.check_template(source), problem)
+
+    def test_example_in_the_docs_is_a_template_that_draws_a_board(self):
+        self.assertEqual(scoreboard.check_template(EXAMPLE.read_text()), None)
+
+    def test_each_scopes_form_takes_a_template_and_refuses_a_bad_one(self):
+        match = factories.MatchFactory.create()
+        stage = match.stage
+        season = stage.division.season
+        forms = {
+            "competition": CompetitionForm(instance=season.competition),
+            "season": SeasonForm(instance=season),
+            "division": DivisionForm(instance=stage.division),
+            "stage": StageForm(instance=stage),
+        }
+        for name, form in forms.items():
+            with self.subTest(name):
+                form.cleaned_data = {"scoreboard_template": "<p>No board</p>"}
+                with self.assertRaisesMessage(ValidationError, "Put {% board %}"):
+                    form.clean_scoreboard_template()
+                form.cleaned_data = {"scoreboard_template": CUSTOM}
+                self.assertEqual(form.clean_scoreboard_template(), CUSTOM)

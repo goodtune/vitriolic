@@ -132,6 +132,46 @@ The live updates find the score, the clock and the dots by the ids in its `board
 
 No model has a logo yet, so `_logo.html` shows a few letters for the team: its club's abbreviation, else the start of its name.
 
+A project can also replace the whole page for every board of the site: put its own `tournamentcontrol/competition/compops/scoreboard.html` ahead of this one on the template path.
+That template must keep the `board` partial, and inside it the ids and the data attributes of `#sb-clock`.
+
+### Write a whole page in the admin
+
+A competition, a season, a division and a stage each have a "Scoreboard template" field in the admin.
+It holds a whole page, as a Django template, that draws the boards of that scope in place of the usual one.
+The template nearest the match is used: its stage's, else its division's, else the season's, else the competition's, else the project's template.
+A ground with no match today takes the season's, else the competition's.
+
+`docs/examples/scoreboard-split.html` is a template to start from: the scores on the left, the clock on the right, the event's badge above the clock, and a picture behind them.
+
+The look is the designer's.
+The live updates need four things of the template, and it is the designer's work to keep them:
+
+| In the template | What it is for |
+| --- | --- |
+| `{{ scripts }}` in the head | Datastar and the clock's script |
+| `{{ attrs }}` on the `<body>` | opens the event stream |
+| `{% board %}` and `{% endboard %}` | around the part that changes during a match; the updates replace what is between them |
+| `{{ clock_attrs }}` on the clock's element, with `#sb-time` inside it | what the script counts the clock from, and where it writes the time |
+
+`#sb-label` (the phase's name), `#sb-dots` (one `li` for each period and break) and `#sb-sound` (the button that turns the horn on) are used if they are there.
+The script sets the class of the clock's element to the phase (`before`, `period`, `break`, `over` or `ready`), for the template's styles to colour.
+`{{ styles }}` is the usual style sheet, for a template that wants to start from the usual look.
+
+The form tries a template before it saves it, and refuses one that does not compile or has no `{% board %}`.
+
+A template written in the admin is given less than a template of the project's, because whoever may edit a stage may write one:
+
+- It has Django's own tags and filters and `{% board %}`.
+  It cannot `{% load %}` a tag library, or include or extend another template.
+- It is given plain values, never a model: `competition`, `season`, `venue` and `ground` (each a `title`, most a `slug`), `match` (`pk`, `time`, `label`, `round`, `division`, `stage`), `home` and `away` (`name`, `code`, `score`), `clock` (`periods`, `period_minutes`, `break_minutes`), `moment` (`kind`, `label`, `display`, `period`), `dots` and `variant` (`display` or `overlay`).
+  A model would let a template read anything it leads to, such as a season's YouTube secrets.
+
+Images are the designer's to host: a template names them by address, or draws them itself as the example does.
+
+A page that is open takes up a new template by itself.
+Each board says which template drew it; when an update brings a board drawn by another, or by an edited one, the page loads itself again.
+
 ### Not yet
 
 The clock cannot be paused or put right, there is no extra time, and the progress score is not offered as the result when a match ends.

@@ -19,7 +19,7 @@ of #sb-clock.
 <header class="sb-brand">{% include "tournamentcontrol/competition/compops/scoreboard/_brand.html" %}</header>
 {% partialdef board inline %}
 {# Asked for again every 20 seconds, so the board moves to the next match by itself. #}
-<main id="board" class="sb-board" data-on-interval__duration.20s="@get('{{ board_url }}')">
+<main id="board" class="sb-board" data-template="{{ template_key }}" data-on-interval__duration.20s="@get('{{ board_url }}')">
 	{% if match %}
 		<section class="sb-score">
 			<div class="sb-team sb-home">

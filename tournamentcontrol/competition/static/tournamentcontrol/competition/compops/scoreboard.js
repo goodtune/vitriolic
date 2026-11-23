@@ -109,7 +109,23 @@
     });
   }
 
+  // The template that drew the board. When a live update brings a board
+  // drawn by another (the next match's division has its own, or this one
+  // was edited), the rest of the page is the old template's, so the page
+  // loads itself again.
+  var drawnBy = null;
+
   function tick() {
+    var board = document.getElementById("board");
+    var template = board ? board.getAttribute("data-template") : null;
+    if (drawnBy !== null && template !== null && template !== drawnBy) {
+      drawnBy = template;
+      window.location.reload();
+      return;
+    }
+    if (template !== null) {
+      drawnBy = template;
+    }
     var clock = document.getElementById("sb-clock");
     if (!clock) {
       last = null;
@@ -125,13 +141,15 @@
     }
     var moment = momentAt(data, Date.now() + offset);
     var label = moment.kind === "period" ? "Period " + moment.period : LABELS[moment.kind];
+    // A template of the project's, or one written in the admin, may leave
+    // out the label or the dots; the time is what a clock is for.
     var time = document.getElementById("sb-time");
     var text = display(moment);
-    if (time.textContent !== text) {
+    if (time && time.textContent !== text) {
       time.textContent = text;
     }
     var name = document.getElementById("sb-label");
-    if (name.textContent !== label) {
+    if (name && name.textContent !== label) {
       name.textContent = label;
     }
     ["ready", "before", "period", "break", "over"].forEach(function (kind) {

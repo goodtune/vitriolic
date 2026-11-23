@@ -14,8 +14,16 @@ numbers (``scoreboard.js``), so the two agree without a push every second.
 
 import dataclasses
 import datetime
+import hashlib
+
+from django.template import Context, Engine, TemplateDoesNotExist, TemplateSyntaxError
+from django.templatetags.static import static
+from django.utils import timezone
+from django.utils.html import format_html
+from django.utils.translation import gettext as _
 
 from tournamentcontrol.competition.compops import queries
+from tournamentcontrol.competition.compops.board_tag import RENDERED
 
 #: The channel of a season's bus that its scoreboards listen to. A tap of a
 #: scorer's button is news to a board, and noise in the ops desk's activity.
@@ -212,3 +220,198 @@ def score(match, side):
     if progress is not None:
         return progress
     return getattr(match, f"{side}_team_score") or 0
+
+
+# --- templates written in the admin ---------------------------------------
+
+#: The engine that renders a scoreboard template written in the admin. Such a
+#: template is text that someone typed, so it is given very little: Django's
+#: own tags and filters and ``{% board %}``, no other tag library, and no
+#: loader, so it can neither include nor extend a template of the project.
+ENGINE = Engine(
+    dirs=[],
+    app_dirs=False,
+    loaders=[],
+    libraries={},
+    builtins=["tournamentcontrol.competition.compops.board_tag"],
+    autoescape=True,
+)
+
+#: The scopes a template may be written at, nearest to the match first.
+SCOPES = ("stage", "division", "season", "competition")
+
+
+def template_for(season, match=None):
+    """
+    The scoreboard template written in the admin that applies, as
+    ``(key, source)``: that of the match's stage, else its division, else the
+    season, else the competition. ``(None, None)`` when none of them has one,
+    and the project's own template draws the board.
+
+    The key names the scope and carries a digest of the source, so a page
+    can tell that another template has taken over, or that its own was
+    edited, and load itself again.
+    """
+    owners = []
+    if match is not None:
+        owners += [("stage", match.stage), ("division", match.stage.division)]
+    owners += [("season", season), ("competition", season.competition)]
+    for scope, owner in owners:
+        source = owner.scoreboard_template
+        if source.strip():
+            digest = hashlib.sha256(source.encode()).hexdigest()[:12]
+            return f"{scope}:{owner.pk}:{digest}", source
+    return None, None
+
+
+def plain_context(context):
+    """
+    What a template written in the admin is given: names, numbers and times
+    as plain values, and never a model instance. A template can follow an
+    object to anything it holds (a season holds its YouTube secrets), and
+    whoever may edit a stage would then read it off a scoreboard.
+    """
+    season, ground, match = context["season"], context["ground"], context["match"]
+    clock, moment = context["clock"], context["moment"]
+    plain = {
+        "variant": context["variant"],
+        "template_key": context["template_key"],
+        "competition": {
+            "title": season.competition.title,
+            "slug": season.competition.slug,
+        },
+        "season": {"title": season.title, "slug": season.slug},
+        "venue": {"title": ground.venue.title},
+        "ground": {"title": ground.title, "slug": ground.slug},
+        "match": None,
+        "home": context["home"],
+        "away": context["away"],
+        "clock": None,
+        "moment": None,
+        "dots": context["dots"],
+        "board_url": context["board_url"],
+        "events_url": context["events_url"],
+    }
+    if match is not None:
+        kick_off = timezone.localtime(match.datetime, context["tzinfo"])
+        plain["match"] = {
+            "pk": match.pk,
+            "time": kick_off.strftime("%H:%M"),
+            "label": match.label or "",
+            "round": match.round,
+            "division": match.stage.division.title,
+            "stage": match.stage.title,
+        }
+    if clock is not None:
+        plain["clock"] = {
+            "periods": clock.periods,
+            "period_minutes": clock.period // 60,
+            "break_minutes": clock.pause // 60,
+        }
+        plain["moment"] = {
+            "kind": moment.kind,
+            "label": moment.label,
+            "display": moment.display,
+            "period": moment.period,
+        }
+        # What scoreboard.js counts the clock from; the element that carries
+        # them also holds #sb-time and, if wanted, #sb-label.
+        plain["clock_attrs"] = format_html(
+            'id="sb-clock" data-match="{}" data-now="{}" data-start="{}" '
+            'data-periods="{}" data-period="{}" data-pause="{}"',
+            match.pk,
+            context["now_ms"],
+            "" if clock.start_ms is None else clock.start_ms,
+            clock.periods,
+            clock.period,
+            clock.pause,
+        )
+    else:
+        plain["clock_attrs"] = ""
+    # What every scoreboard page needs, whatever it looks like.
+    plain["attrs"] = format_html(
+        'data-signals__ifmissing="{{board: \'{}\'}}" data-indicator="connected" '
+        "data-effect=\"@get('{}', {{retryMaxCount: 1000}})\"",
+        context["variant"],
+        context["events_url"],
+    )
+    plain["scripts"] = format_html(
+        '<script type="module" src="{}"></script><script src="{}"></script>',
+        static("tournamentcontrol/competition/compops/datastar-1.0.4.js"),
+        static("tournamentcontrol/competition/compops/scoreboard.js"),
+    )
+    plain["styles"] = format_html(
+        '<link rel="stylesheet" href="{}">',
+        static("tournamentcontrol/competition/compops/scoreboard.css"),
+    )
+    return plain
+
+
+def render_custom(source, context, board_only=False):
+    """
+    Render a template written in the admin with ``context`` (see
+    ``plain_context``): the whole page, or only what its ``{% board %}`` tag
+    drew, which is what a live update sends.
+    """
+    boards = []
+    page = ENGINE.from_string(source).render(Context({**context, RENDERED: boards}))
+    if board_only:
+        return boards[0] if boards else ""
+    return page
+
+
+#: A context for trying a template out before it is saved.
+SAMPLE = {
+    "variant": "display",
+    "template_key": "sample",
+    "competition": {"title": "Competition", "slug": "competition"},
+    "season": {"title": "Season", "slug": "season"},
+    "venue": {"title": "Venue"},
+    "ground": {"title": "Ground", "slug": "ground"},
+    "match": {
+        "pk": 1,
+        "time": "19:00",
+        "label": "",
+        "round": 1,
+        "division": "Division",
+        "stage": "Stage",
+    },
+    "home": {"name": "Home", "code": "HOM", "score": 0},
+    "away": {"name": "Away", "code": "AWA", "score": 0},
+    "clock": {"periods": 2, "period_minutes": 20, "break_minutes": 5},
+    "moment": {"kind": "period", "label": "Period 1", "display": "20:00", "period": 1},
+    "dots": [{"kind": "period", "state": "on"}],
+    "clock_attrs": "",
+    "attrs": "",
+    "scripts": "",
+    "styles": "",
+    "board_url": "",
+    "events_url": "",
+}
+
+
+def check_template(source):
+    """
+    Why ``source`` cannot be a scoreboard template, or ``None`` when it can:
+    it must compile and render with what a board is given, and it must mark
+    the part the live updates replace with ``{% board %}``.
+    """
+    if not source.strip():
+        return None
+    boards = []
+    try:
+        ENGINE.from_string(source).render(Context({**SAMPLE, RENDERED: boards}))
+    except TemplateDoesNotExist as exc:
+        return _(
+            "A scoreboard template cannot include or extend another "
+            "template (%(name)s)."
+        ) % {"name": exc}
+    except TemplateSyntaxError as exc:
+        return _("This is not a template: %(error)s") % {"error": exc}
+    if not boards:
+        return _(
+            "Put {% board %} and {% endboard %} around the part that changes "
+            "while a match is played: the live updates replace what is "
+            "between them."
+        )
+    return None

@@ -290,6 +290,15 @@ class Competition(AdminUrlMixin, OrderedSitemapNode):
     enabled = BooleanField(default=True)
     clubs = ManyToManyField("Club", blank=True, related_name="competitions")
 
+    scoreboard_template = models.TextField(
+        blank=True,
+        verbose_name=_("Scoreboard template"),
+        help_text=_(
+            "A whole page to draw the scoreboards of this competition with, in place of "
+            "the usual one. Leave it empty to use the site's."
+        ),
+    )
+
     # Synchronisation from an upstream competition management provider
     # (MySideline, revolutioniseSPORT, ...). The organisation's page on the
     # provider identifies the provider and lives on the Competition; each
@@ -594,6 +603,15 @@ class Person(AdminUrlMixin, models.Model):
 
 class Season(AdminUrlMixin, OrderedSitemapNode):
     ordered_within = "competition"
+
+    scoreboard_template = models.TextField(
+        blank=True,
+        verbose_name=_("Scoreboard template"),
+        help_text=_(
+            "A whole page to draw the scoreboards of this season with, in place of "
+            "the usual one. Leave it empty to use the competition's."
+        ),
+    )
 
     competition = ForeignKey(Competition, related_name="seasons", on_delete=PROTECT)
     hashtag = models.CharField(
@@ -1170,6 +1188,15 @@ class Division(
     forfeit_against_score = models.SmallIntegerField(null=True)
     include_forfeits_in_played = BooleanField(default=True)
 
+    scoreboard_template = models.TextField(
+        blank=True,
+        verbose_name=_("Scoreboard template"),
+        help_text=_(
+            "A whole page to draw the scoreboards of this division with, in place of "
+            "the usual one. Leave it empty to use the season's."
+        ),
+    )
+
     # The timing of a match of the division, for its scoreboard clock. With
     # no period length the scoreboard shows the score and no clock.
     periods = models.PositiveSmallIntegerField(
@@ -1631,6 +1658,15 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
                 "Set this to <b>Yes</b> if this stage should carry over values "
                 "from the previous stage."
             )
+        ),
+    )
+
+    scoreboard_template = models.TextField(
+        blank=True,
+        verbose_name=_("Scoreboard template"),
+        help_text=_(
+            "A whole page to draw the scoreboards of this stage with, in place of "
+            "the usual one. Leave it empty to use the division's."
         ),
     )
 

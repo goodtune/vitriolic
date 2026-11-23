@@ -1,0 +1,89 @@
+{% comment %}
+A scoreboard template to paste into the admin: the scores on the left, the
+clock on the right, the event's badge above the clock, and a picture behind
+it all. See "Write a whole page in the admin" in docs/compops.md.
+
+What the live updates need, and nothing else is fixed:
+
+- the scripts variable in the head, and the attrs variable on the body;
+- the board tag and its endboard around what changes during a match;
+- the clock_attrs variable on the clock's element, with #sb-time inside it
+  (and #sb-label and #sb-dots if they are wanted).
+{% endcomment %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ ground.title }} · {{ competition.title }}</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&display=swap">
+{{ scripts }}
+<style>
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font-family:"Barlow Condensed","Helvetica Neue",Arial,sans-serif;color:#fff;background:#17602f url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1600 900%22 preserveAspectRatio=%22xMidYMid slice%22%3E%3Cdefs%3E%3ClinearGradient id=%22sky%22 x1=%220%22 y1=%220%22 x2=%220%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%2316324f%22/%3E%3Cstop offset=%221%22 stop-color=%22%232b6a8f%22/%3E%3C/linearGradient%3E%3ClinearGradient id=%22grass%22 x1=%220%22 y1=%220%22 x2=%220%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%232f8f4e%22/%3E%3Cstop offset=%221%22 stop-color=%22%2317602f%22/%3E%3C/linearGradient%3E%3CradialGradient id=%22light%22 cx=%220.5%22 cy=%220%22 r=%220.9%22%3E%3Cstop offset=%220%22 stop-color=%22%23fff%22 stop-opacity=%220.35%22/%3E%3Cstop offset=%221%22 stop-color=%22%23fff%22 stop-opacity=%220%22/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width=%221600%22 height=%22900%22 fill=%22url(%23sky)%22/%3E%3Cpath d=%22M0 330 L1600 330 L1600 900 L0 900 Z%22 fill=%22url(%23grass)%22/%3E%3Cg fill=%22%23ffffff%22 fill-opacity=%220.07%22%3E%3Cpath d=%22M0 330 L160 330 L60 900 L0 900Z%22/%3E%3Cpath d=%22M320 330 L480 330 L400 900 L220 900Z%22/%3E%3Cpath d=%22M640 330 L800 330 L800 900 L600 900Z%22/%3E%3Cpath d=%22M960 330 L1120 330 L1200 900 L1000 900Z%22/%3E%3Cpath d=%22M1280 330 L1440 330 L1600 800 L1600 900 L1380 900Z%22/%3E%3C/g%3E%3Cg stroke=%22%23ffffff%22 stroke-opacity=%220.75%22 stroke-width=%225%22 fill=%22none%22%3E%3Cpath d=%22M120 420 L1480 420%22/%3E%3Cpath d=%22M0 640 L1600 640%22/%3E%3Cpath d=%22M800 420 L800 900%22/%3E%3Cellipse cx=%22800%22 cy=%22640%22 rx=%22170%22 ry=%2252%22/%3E%3C/g%3E%3Cg fill=%22%230b1a26%22 fill-opacity=%220.55%22%3E%3Crect x=%220%22 y=%22250%22 width=%221600%22 height=%2280%22/%3E%3C/g%3E%3Cg fill=%22%23ffe9a8%22%3E%3Ccircle cx=%22150%22 cy=%22120%22 r=%229%22/%3E%3Ccircle cx=%22180%22 cy=%22120%22 r=%229%22/%3E%3Ccircle cx=%22210%22 cy=%22120%22 r=%229%22/%3E%3Ccircle cx=%221390%22 cy=%22120%22 r=%229%22/%3E%3Ccircle cx=%221420%22 cy=%22120%22 r=%229%22/%3E%3Ccircle cx=%221450%22 cy=%22120%22 r=%229%22/%3E%3C/g%3E%3Cg stroke=%22%230b1a26%22 stroke-width=%228%22%3E%3Cpath d=%22M180 130 L180 330%22/%3E%3Cpath d=%22M1420 130 L1420 330%22/%3E%3C/g%3E%3Crect width=%221600%22 height=%22900%22 fill=%22url(%23light)%22/%3E%3C/svg%3E") center/cover no-repeat;overflow:hidden}
+/* Every block of information: at least half opaque, with a border, so it reads over the picture. */
+.panel{background:rgba(8,14,22,.66);border:.4vh solid rgba(255,255,255,.55);border-radius:2vh;backdrop-filter:blur(6px)}
+#board{display:grid;grid-template-columns:1.6fr 1fr;grid-template-rows:auto 1fr auto;gap:3vh 2.5vw;height:100vh;padding:4vh 3vw 8vh}
+.teams{grid-column:1;grid-row:1 / span 2;display:grid;grid-template-rows:1fr 1fr;gap:3vh;min-height:0}
+.team{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:2vw;padding:0 2.5vw;min-height:0}
+.code{display:grid;place-items:center;width:15vh;height:15vh;border:.5vh solid rgba(255,255,255,.7);border-radius:50%;background:rgba(255,255,255,.12);font-size:5.6vh;font-weight:700}
+.name{font-size:6.4vh;font-weight:600;line-height:1;text-transform:uppercase;overflow-wrap:break-word}
+.score{min-width:.9em;font-size:25vh;font-weight:700;line-height:1;text-align:right;color:#ffd60a;font-variant-numeric:tabular-nums}
+.badge{grid-column:2;grid-row:1;display:grid;place-items:center;padding:2vh 2vw}
+.badge svg{width:100%;height:20vh}
+#sb-clock{grid-column:2;grid-row:2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1vh;min-height:0}
+#sb-label{font-size:4vh;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#cfd8e3}
+#sb-time{font-size:24vh;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+/* The countdown to a period's start is in another colour from the period's own. */
+#sb-clock.before #sb-time,#sb-clock.break #sb-time,#sb-clock.ready #sb-time{color:#4cc9f0}
+#sb-clock.over #sb-time{color:#aab4c0}
+#sb-dots{display:flex;gap:2.4vh;margin:1vh 0 0;padding:0;list-style:none}
+#sb-dots li{width:3.4vh;height:3.4vh;border:.45vh solid #cfd8e3;border-radius:50%}
+#sb-dots li.break{width:2vh;height:2vh;align-self:center}
+#sb-dots li.on{background:#ffd60a;border-color:#ffd60a}
+#sb-dots li.done{background:#cfd8e3}
+.meta{grid-column:1 / span 2;grid-row:3;display:flex;justify-content:space-between;gap:2vw;padding:1.6vh 2.5vw;font-size:3.4vh;font-weight:600;letter-spacing:.05em;text-transform:uppercase}
+.empty{grid-column:1 / span 2;grid-row:1 / span 3;display:grid;place-items:center;font-size:7vh;font-weight:600}
+#sb-sound{position:fixed;right:3vw;bottom:1.6vh;padding:.8vh 2vh;border:1px solid rgba(255,255,255,.55);border-radius:999px;background:rgba(8,14,22,.66);color:#fff;font:inherit;font-size:2.2vh;cursor:pointer}
+/* Over a live stream: no picture, one strip along the bottom. */
+body.overlay{background:transparent}
+.overlay #board{position:fixed;left:3vw;bottom:5vh;display:flex;align-items:center;gap:1.2vw;height:auto;padding:0}
+.overlay .teams{display:flex;gap:1.2vw}
+.overlay .team{display:flex;gap:1.2vw;padding:1vh 1.6vw}
+.overlay .code,.overlay .badge,.overlay .meta,.overlay #sb-label,.overlay #sb-dots{display:none}
+.overlay .name{font-size:4vh}
+.overlay .score{min-width:0;font-size:5.5vh}
+.overlay #sb-clock{padding:1vh 1.6vw}
+.overlay #sb-time{font-size:5.5vh}
+</style>
+</head>
+<body class="{{ variant }}" {{ attrs }}>
+{% board %}
+	{% if match %}
+		<div class="teams">
+			<div class="team panel"><span class="code">{{ home.code }}</span><span class="name" id="sb-home-name">{{ home.name }}</span><span class="score" id="sb-home-score">{{ home.score }}</span></div>
+			<div class="team panel"><span class="code">{{ away.code }}</span><span class="name" id="sb-away-name">{{ away.name }}</span><span class="score" id="sb-away-score">{{ away.score }}</span></div>
+		</div>
+		{# The event's badge. Put an <img> of the real one here. #}
+		<div class="badge panel">
+			<svg viewBox="0 0 520 160" role="img" aria-label="{{ competition.title }}">
+				<path d="M20 20 H500 V100 L260 150 L20 100 Z" fill="#ffd60a" stroke="#fff" stroke-width="6"/>
+				<text x="260" y="62" text-anchor="middle" font-size="40" font-weight="700" fill="#0b1a26">{{ competition.title|upper }}</text>
+				<text x="260" y="100" text-anchor="middle" font-size="26" font-weight="600" fill="#0b1a26">{{ season.title|upper }}</text>
+			</svg>
+		</div>
+		{% if clock %}
+			<div class="panel {{ moment.kind }}" {{ clock_attrs }}>
+				<span id="sb-label">{{ moment.label }}</span>
+				<span id="sb-time">{{ moment.display }}</span>
+				<ol id="sb-dots">{% for dot in dots %}<li class="{{ dot.kind }} {{ dot.state }}"></li>{% endfor %}</ol>
+			</div>
+		{% endif %}
+		<div class="meta panel"><span>{{ match.division }} · {{ match.stage }}</span><span>{{ ground.title }} · {{ match.time }}</span></div>
+	{% else %}
+		<div class="empty panel">No matches on {{ ground.title }} today</div>
+	{% endif %}
+{% endboard %}
+{% if variant == "display" %}<button type="button" id="sb-sound">Tap to turn the horn on</button>{% endif %}
+</body>
+</html>
