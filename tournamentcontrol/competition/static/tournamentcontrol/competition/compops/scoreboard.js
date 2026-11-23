@@ -2,7 +2,7 @@
  * The clock of a scoreboard (and of its scorer's page).
  *
  * Nothing pushes the clock. The server renders #sb-clock with the moment the
- * clock runs from and the lengths of the match's periods and breaks, and this
+ * clock runs from and the list of the match's periods and breaks, and this
  * script counts from them: the time left, the phase's name and colour, the
  * period dots, and a horn when a period starts or ends. It is the same sum
  * as Clock.at in compops/scoreboard.py.
@@ -41,7 +41,21 @@
   var last = null;
   var audio = null;
 
-  function phasesOf(periods, period, pause) {
+  // The periods and breaks, as the server lists them (data-phases): a break
+  // need not be as long as the next, half time for one. A template that
+  // left the list out gets breaks that are all the same.
+  function phasesOf(data) {
+    try {
+      var listed = JSON.parse(data.phases || "null");
+      if (Array.isArray(listed) && listed.length) {
+        return listed;
+      }
+    } catch (error) {
+      // Counted from the numbers below.
+    }
+    var periods = Number(data.periods);
+    var period = Number(data.period);
+    var pause = Number(data.pause);
     var phases = [];
     for (var number = 0; number < periods; number++) {
       if (number && pause) {
@@ -67,7 +81,7 @@
         exact: -elapsed,
       };
     }
-    var phases = phasesOf(Number(data.periods), period, Number(data.pause));
+    var phases = phasesOf(data);
     var played = 0;
     for (var index = 0; index < phases.length; index++) {
       var kind = phases[index][0];

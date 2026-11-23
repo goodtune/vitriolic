@@ -81,12 +81,12 @@ def ordinal(number):
 PERIOD_NAMES = {2: "Half", 4: "Quarter"}
 
 #: What the break after so many periods is called, in a match of so many.
+#: The break in the middle of any even number of periods is half time.
 BREAK_NAMES = {
-    (2, 1): "Half time",
     (4, 1): "Quarter time",
-    (4, 2): "Half time",
     (4, 3): "Three-quarter time",
 }
+HALF_TIME = "Half time"
 
 #: What the clock says when it is not in a period or a break.
 LABELS = {"ready": "Ready", "before": "Starts in", "over": "Full time"}
@@ -105,16 +105,30 @@ class Clock:
     #: What a period is called ("Chukka"), where it is not to be named from
     #: how many there are.
     name: str = ""
+    #: Seconds in the break at half time, where it is not as long as the
+    #: others: the break in the middle of an even number of periods.
+    half: int | None = None
+
+    def is_half_time(self, played):
+        """Whether the break after ``played`` periods is the one at half time."""
+        return self.periods % 2 == 0 and played * 2 == self.periods
 
     @property
     def phases(self):
         """The periods and the breaks between them, as (kind, seconds)."""
         phases = []
         for number in range(self.periods):
-            if number and self.pause:
-                phases.append(("break", self.pause))
+            pause = self.pause
+            if self.half is not None and self.is_half_time(number):
+                pause = self.half
+            if number and pause:
+                phases.append(("break", pause))
             phases.append(("period", self.period))
         return phases
+
+    @property
+    def phases_json(self):
+        return json.dumps(self.phases)
 
     @property
     def names(self):
@@ -122,15 +136,22 @@ class Clock:
         What each phase is called, in order: "1st Half", "Half time", "2nd
         Half". The periods are named from how many there are (halves,
         quarters, else periods) unless the match gives a name, and then its
-        breaks are only breaks. The one period of a match that has only one
-        has no name: there is nothing to tell it from.
+        breaks are only breaks, but for a half time that has a length of its
+        own. The one period of a match that has only one has no name: there
+        is nothing to tell it from.
         """
         word = self.name or PERIOD_NAMES.get(self.periods, "Period")
         names = []
         played = 0
         for kind, _seconds in self.phases:
             if kind == "break":
-                named = None if self.name else BREAK_NAMES.get((self.periods, played))
+                named = None
+                if self.is_half_time(played) and (
+                    not self.name or self.half is not None
+                ):
+                    named = HALF_TIME
+                elif not self.name:
+                    named = BREAK_NAMES.get((self.periods, played))
                 names.append(named or "Break")
             else:
                 played += 1
@@ -189,8 +210,9 @@ class Clock:
 
 def timing(match):
     """
-    The periods, the minutes in one, the minutes of a break and what a period
-    is called for ``match``: each its own if it has one, else its stage's,
+    The periods, the minutes in one, the minutes of a break, what a period is
+    called and the minutes of half time (``None`` where it is as long as any
+    other break) for ``match``: each its own if it has one, else its stage's,
     else its division's.
     Round matches of rugby sevens have halves of 7 minutes and the final has
     halves of 10, so the finals stage, or the final alone, says 10.
@@ -212,7 +234,13 @@ def timing(match):
     name = next(
         (owner.period_name for owner in owners if owner.period_name.strip()), ""
     )
-    return first("periods"), first("period_minutes"), first("break_minutes"), name
+    return (
+        first("periods"),
+        first("period_minutes"),
+        first("break_minutes"),
+        name,
+        first("half_time_minutes"),
+    )
 
 
 def clock_for(match, ground):
@@ -222,7 +250,7 @@ def clock_for(match, ground):
     else, at a venue whose clocks start on time, from the match's scheduled
     time.
     """
-    periods, period_minutes, break_minutes, name = timing(match)
+    periods, period_minutes, break_minutes, name, half_time_minutes = timing(match)
     if not period_minutes:
         return None
     start = match.clock_started_at
@@ -234,6 +262,7 @@ def clock_for(match, ground):
         period=period_minutes * 60,
         pause=break_minutes * 60,
         name=name.strip(),
+        half=None if half_time_minutes is None else half_time_minutes * 60,
     )
 
 
@@ -367,6 +396,8 @@ def plain_context(context):
             "periods": clock.periods,
             "period_minutes": clock.period // 60,
             "break_minutes": clock.pause // 60,
+            "half_time_minutes": (clock.pause if clock.half is None else clock.half)
+            // 60,
         }
         plain["moment"] = {
             "kind": moment.kind,
@@ -378,7 +409,8 @@ def plain_context(context):
         # them also holds #sb-time and, if wanted, #sb-label.
         plain["clock_attrs"] = format_html(
             'id="sb-clock" data-match="{}" data-now="{}" data-start="{}" '
-            'data-periods="{}" data-period="{}" data-pause="{}" data-names="{}"',
+            'data-periods="{}" data-period="{}" data-pause="{}" data-names="{}" '
+            'data-phases="{}"',
             match.pk,
             context["now_ms"],
             "" if clock.start_ms is None else clock.start_ms,
@@ -386,6 +418,7 @@ def plain_context(context):
             clock.period,
             clock.pause,
             clock.names_json,
+            clock.phases_json,
         )
     else:
         plain["clock_attrs"] = ""

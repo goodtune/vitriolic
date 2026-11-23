@@ -608,6 +608,35 @@ def test_scoreboard_follows_the_scorer_and_counts_its_own_clock(
         )
         assert called == expected.label, seconds
 
+    # A half time longer than the other breaks is counted from the list of
+    # phases the server sends, and called half time.
+    quarters = Clock(start=match.datetime, periods=4, period=600, pause=120, half=600)
+    for seconds in (599.5, 600, 719, 1320, 1919.2, 1920, 2640, 3239.9, 3240):
+        now = match.datetime + datetime.timedelta(seconds=seconds)
+        data = {
+            "start": str(quarters.start_ms),
+            "periods": "4",
+            "period": "600",
+            "pause": "120",
+            "phases": quarters.phases_json,
+            "names": quarters.names_json,
+        }
+        counted = page.evaluate(
+            """([data, now]) => {
+                const m = window.compopsScoreboard.momentAt(data, now);
+                return [m.kind, m.index, m.remaining,
+                        window.compopsScoreboard.labelOf(data, m)];
+            }""",
+            [data, now.timestamp() * 1000],
+        )
+        expected = quarters.at(now)
+        assert counted == [
+            expected.kind,
+            expected.index,
+            expected.remaining,
+            expected.label,
+        ], seconds
+
     # The horn needs one tap before a browser will play it.
     page.locator("#sb-sound").click()
     expect(page.locator("#sb-sound")).to_be_hidden()

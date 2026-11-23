@@ -241,4 +241,42 @@ class Migration(migrations.Migration):
                 verbose_name="Period name",
             ),
         ),
+        migrations.AddField(
+            model_name="division",
+            name="half_time_minutes",
+            field=models.PositiveSmallIntegerField(
+                blank=True,
+                help_text=(
+                    "Minutes of the break in the middle of a match with an even "
+                    "number of periods. Leave it empty where it is as long as the "
+                    "other breaks."
+                ),
+                null=True,
+                verbose_name="Half time length",
+            ),
+        ),
+        migrations.AddField(
+            model_name="stage",
+            name="half_time_minutes",
+            field=models.PositiveSmallIntegerField(
+                blank=True,
+                help_text=(
+                    "Minutes of the break at half time. Leave it empty to use the division's."
+                ),
+                null=True,
+                verbose_name="Half time length",
+            ),
+        ),
+        migrations.AddField(
+            model_name="match",
+            name="half_time_minutes",
+            field=models.PositiveSmallIntegerField(
+                blank=True,
+                help_text=(
+                    "Minutes of the break at half time. Leave it empty to use the stage's."
+                ),
+                null=True,
+                verbose_name="Half time length",
+            ),
+        ),
     ]

@@ -143,6 +143,70 @@ class ClockTests(TestCase):
             ],
         )
 
+    def test_half_time_may_be_longer_than_the_other_breaks(self):
+        # Netball: quarters of 15 minutes, 4 minutes between, 12 at half time.
+        clock = Clock(at(19), 4, 900, 240, half=720)
+        self.assertEqual(
+            (clock.phases, clock.length),
+            (
+                [
+                    ("period", 900),
+                    ("break", 240),
+                    ("period", 900),
+                    ("break", 720),
+                    ("period", 900),
+                    ("break", 240),
+                    ("period", 900),
+                ],
+                datetime.timedelta(minutes=80),
+            ),
+        )
+        # 38 minutes in is 4 minutes into half time, with 8 to go.
+        self.assertEqual(
+            clock.at(at(19, 38)), Moment("break", 3, 3, 480, label="Half time")
+        )
+
+    def test_half_time_is_the_break_in_the_middle_of_an_even_number(self):
+        def breaks(periods, **kwargs):
+            clock = Clock(at(19), periods, 600, 120, **kwargs)
+            return [
+                (name, seconds)
+                for name, (kind, seconds) in zip(clock.names, clock.phases)
+                if kind == "break"
+            ]
+
+        self.assertEqual(
+            [
+                breaks(2, half=600),
+                # An odd number of periods has no middle to break at.
+                breaks(3, half=600),
+                breaks(6),
+                # A sport that names its periods has a half time once it has
+                # a length of its own, and none of half time is no break.
+                breaks(6, name="Chukka", half=300),
+                breaks(4, half=0),
+            ],
+            [
+                [("Half time", 600)],
+                [("Break", 120), ("Break", 120)],
+                [
+                    ("Break", 120),
+                    ("Break", 120),
+                    ("Half time", 120),
+                    ("Break", 120),
+                    ("Break", 120),
+                ],
+                [
+                    ("Break", 120),
+                    ("Break", 120),
+                    ("Half time", 300),
+                    ("Break", 120),
+                    ("Break", 120),
+                ],
+                [("Quarter time", 120), ("Three-quarter time", 120)],
+            ],
+        )
+
     def test_match_of_one_period_has_no_name_for_it(self):
         # There is nothing to tell it from: no name, and no dots to count.
         clock = Clock(at(19), 1, 600, 120)
@@ -339,6 +403,33 @@ class BoardMatchTests(ScoreboardFixture):
             [(2, 420, 120), (2, 600, 120), (4, 300, 0)],
         )
 
+    def test_stage_or_match_may_have_a_half_time_of_its_own(self):
+        self.division.periods = 4
+        self.division.period_minutes = 10
+        self.division.break_minutes = 2
+        self.division.save()
+        finals = factories.StageFactory.create(
+            division=self.division, half_time_minutes=10
+        )
+        final = factories.MatchFactory.create(
+            stage=finals, play_at=self.field1, datetime=at(21), date=DAY
+        )
+        decider = factories.MatchFactory.create(
+            stage=finals,
+            play_at=self.field1,
+            datetime=at(22),
+            date=DAY,
+            half_time_minutes=15,
+        )
+        self.assertEqual(
+            [
+                scoreboard.clock_for(match, self.field1).half
+                for match in (self.first, final, decider)
+            ],
+            # Nothing says: half time is as long as any other break.
+            [None, 600, 900],
+        )
+
     def test_stage_or_match_may_name_its_periods_for_itself(self):
         self.division.period_name = "Chukka"
         self.division.save()
@@ -416,7 +507,8 @@ class DisplayTests(ScoreboardFixture):
             f'data-match="{self.first.pk}" data-now="{now}" data-start="{start}" '
             'data-periods="2" data-period="900" data-pause="120" '
             'data-names="[&quot;1st Half&quot;, &quot;Half time&quot;, '
-            '&quot;2nd Half&quot;]">',
+            '&quot;2nd Half&quot;]" data-phases="[[&quot;period&quot;, 900], '
+            '[&quot;break&quot;, 120], [&quot;period&quot;, 900]]">',
             self.last_response.content.decode(),
         )
 
@@ -708,8 +800,18 @@ class SettingsFormTests(TestCase):
     def test_division_form_has_the_timing_of_its_matches(self):
         fields = DivisionForm(instance=factories.DivisionFactory.create()).fields
         self.assertEqual(
-            [name for name in fields if "period" in name or "break" in name],
-            ["periods", "period_minutes", "break_minutes", "period_name"],
+            [
+                name
+                for name in fields
+                if "period" in name or "break" in name or "half" in name
+            ],
+            [
+                "periods",
+                "period_minutes",
+                "break_minutes",
+                "half_time_minutes",
+                "period_name",
+            ],
         )
 
     def test_division_saved_without_its_timing_keeps_what_it_has(self):
@@ -760,7 +862,13 @@ class SettingsFormTests(TestCase):
         )
 
     def test_stage_and_match_forms_have_a_timing_of_their_own(self):
-        timing = ["periods", "period_minutes", "break_minutes", "period_name"]
+        timing = [
+            "periods",
+            "period_minutes",
+            "break_minutes",
+            "half_time_minutes",
+            "period_name",
+        ]
         match = factories.MatchFactory.create()
         for form in (
             StageForm(instance=match.stage),
@@ -772,7 +880,7 @@ class SettingsFormTests(TestCase):
                         [name for name in form.fields if name in timing],
                         [form.fields[name].required for name in timing],
                     ),
-                    (timing, [False, False, False, False]),
+                    (timing, [False, False, False, False, False]),
                 )
 
     def test_venue_form_has_whether_its_clocks_start_on_time(self):
@@ -867,7 +975,9 @@ class CustomTemplateTests(ScoreboardFixture):
             f'<div id="sb-clock" data-match="{self.first.pk}" data-now="{now}" '
             f'data-start="{start}" data-periods="2" data-period="900" '
             'data-pause="120" data-names="[&quot;1st Half&quot;, &quot;Half time&quot;, '
-            '&quot;2nd Half&quot;]"><i id="sb-label">1st Half</i>'
+            '&quot;2nd Half&quot;]" data-phases="[[&quot;period&quot;, 900], '
+            '[&quot;break&quot;, 120], [&quot;period&quot;, 900]]">'
+            '<i id="sb-label">1st Half</i>'
             '<i id="sb-time">10:00</i></div>',
             # What every scoreboard page needs, whatever it looks like.
             'class="mine display" data-signals__ifmissing="{board: \'display\'}" '

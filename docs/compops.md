@@ -92,7 +92,11 @@ Nothing is stored or pushed for the clock while it runs.
 It counts from one moment, through the periods and breaks of the match's division:
 
 - A division gives `periods` (2 unless changed), `period_minutes` and `break_minutes`.
-- A stage, or one match, may give any of the three for itself.
+- A division may also give `half_time_minutes`, for a sport whose half time is longer than its other breaks.
+  It is the length of the break in the middle of a match with an even number of periods.
+  Netball plays quarters with 4 minutes between them and 12 at half time, so its break length is 4 and its half time length is 12.
+  Left empty, half time is as long as any other break; a match with an odd number of periods has no half time.
+- A stage, or one match, may give any of the four for itself.
   Each number is the match's own if it has one, else its stage's, else its division's.
   Rugby sevens plays halves of 7 minutes and its final halves of 10, so the finals stage (or the final alone) sets a period length of 10 and takes the rest from the division.
 - A match that gets no period length from any of them has a board with the score and no clock.
@@ -104,9 +108,10 @@ The board names each period from how many the match has:
 | 1 | nothing: no name is shown, and no dots | none |
 | 2 | 1st Half, 2nd Half | Half time |
 | 4 | 1st Quarter to 4th Quarter | Quarter time, Half time, Three-quarter time |
-| any other | 1st Period, 2nd Period and so on | Break |
+| any other | 1st Period, 2nd Period and so on | Break, but Half time in the middle of an even number |
 
 "Period name" on a division, a stage or a match gives another word for a sport that has one: with "Chukka" the periods are 1st Chukka, 2nd Chukka and so on, and each break is a Break.
+A sport with a period name still has a Half time once "Half time length" gives it a length of its own.
 Like the timing, the name is the match's own if it has one, else its stage's, else its division's.
 - A venue has "Start scoreboard clocks on time" (`scoreboard_auto_start`), which is on unless changed.
   With it on, the clock runs from the match's scheduled time.
@@ -176,7 +181,7 @@ A template written in the admin is given less than a template of the project's, 
 
 - It has Django's own tags and filters and `{% board %}`.
   It cannot `{% load %}` a tag library, or include or extend another template.
-- It is given plain values, never a model: `competition`, `season`, `venue` and `ground` (each a `title`, most a `slug`), `match` (`pk`, `time`, `label`, `round`, `division`, `stage`), `home` and `away` (`name`, `code`, `score`), `clock` (`periods`, `period_minutes`, `break_minutes`), `moment` (`kind`, `label`, `display`, `period`), `dots` and `variant` (`display` or `overlay`).
+- It is given plain values, never a model: `competition`, `season`, `venue` and `ground` (each a `title`, most a `slug`), `match` (`pk`, `time`, `label`, `round`, `division`, `stage`), `home` and `away` (`name`, `code`, `score`), `clock` (`periods`, `period_minutes`, `break_minutes`, `half_time_minutes`), `moment` (`kind`, `label`, `display`, `period`), `dots` and `variant` (`display` or `overlay`).
   A model would let a template read anything it leads to, such as a season's YouTube secrets.
 
 Images are the designer's to host: a template names them by address, or draws them itself as the example does.

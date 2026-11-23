@@ -1221,6 +1221,15 @@ class Division(
         verbose_name=_("Break length"),
         help_text=_("Minutes between one period and the next."),
     )
+    half_time_minutes = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        verbose_name=_("Half time length"),
+        help_text=_(
+            "Minutes of the break in the middle of a match with an even number "
+            "of periods. Leave it empty where it is as long as the other breaks."
+        ),
+    )
     period_name = models.CharField(
         max_length=30,
         blank=True,
@@ -1702,6 +1711,14 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
         verbose_name=_("Break length"),
         help_text=_(
             "Minutes between one period and the next. Leave it empty to use the division's."
+        ),
+    )
+    half_time_minutes = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        verbose_name=_("Half time length"),
+        help_text=_(
+            "Minutes of the break at half time. Leave it empty to use the division's."
         ),
     )
     period_name = models.CharField(
@@ -2974,6 +2991,14 @@ class Match(
         verbose_name=_("Break length"),
         help_text=_(
             "Minutes between one period and the next. Leave it empty to use the stage's."
+        ),
+    )
+    half_time_minutes = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        verbose_name=_("Half time length"),
+        help_text=_(
+            "Minutes of the break at half time. Leave it empty to use the stage's."
         ),
     )
     period_name = models.CharField(
