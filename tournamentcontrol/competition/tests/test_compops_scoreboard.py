@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 
 from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
+from django.urls import reverse
 from django.utils import timezone
 from freezegun import freeze_time
 from guardian.shortcuts import assign_perm
@@ -499,8 +500,8 @@ class DisplayTests(ScoreboardFixture):
         self.get("compops:scoreboard-index", competition="pacific-cup", season="pc26")
         self.assert_http_200_ok()
         self.assertResponseContains(
-            f'<a class="btn" href="{self.reverse("compops:scorer", **self.kw)}">'
-            "Scorer</a>"
+            f'<a class="btn" href="{self.reverse("compops:scoreboard-overlay", **self.kw)}">'
+            "Overlay</a>"
         )
 
 
@@ -985,3 +986,71 @@ class TemplateCheckTests(TestCase):
                     form.clean_scoreboard_template()
                 form.cleaned_data = {"scoreboard_template": CUSTOM}
                 self.assertEqual(form.clean_scoreboard_template(), CUSTOM)
+
+
+class FrontDoorTests(ScoreboardFixture):
+    """``score_season`` alone finds the season's scoreboards from the front door."""
+
+    def row(self, name, season=None):
+        season = season or self.season
+        url = reverse(
+            f"compops:{name}",
+            kwargs={"competition": season.competition.slug, "season": season.slug},
+        )
+        return (
+            f'<a class="item" href="{url}">'
+            f'<span class="title">{season.title}</span>'
+            f'<span class="comp">{season.competition.title}</span>'
+            '<span class="when">8 Oct 2026</span></a>'
+        )
+
+    def scoreboards_button(self):
+        url = reverse(
+            "compops:scoreboard-index",
+            kwargs={"competition": "pacific-cup", "season": "pc26"},
+        )
+        return f'<a class="btn" href="{url}">Scoreboards</a>'
+
+    @freeze_time(at(12))
+    def test_front_door_leads_a_scorer_to_the_scoreboards_they_may_keep(self):
+        # Played the same day, with no permission on it.
+        closed = factories.MatchFactory.create(date=DAY).stage.division.season
+        with self.login(self.scorer):
+            self.get("compops:index")
+        self.assert_http_200_ok()
+        self.assertResponseContains("<h1>Scoreboards</h1>")
+        self.assertResponseContains(self.row("scoreboard-index"))
+        content = self.last_response.content.decode()
+        self.assertEqual(
+            (
+                content.count(self.row("scoreboard-index", closed)),
+                content.count(self.scoreboards_button()),
+                content.count("All events"),
+            ),
+            (0, 0, 0),
+        )
+
+    @freeze_time(at(12))
+    def test_front_door_leads_to_the_booths_and_the_scoreboards_of_who_has_both(self):
+        assign_perm("competition.commentate_season", self.scorer, self.season)
+        with self.login(self.scorer):
+            self.get("compops:index")
+        self.assertResponseContains("<h1>Events</h1>")
+        self.assertResponseContains(self.row("booth-index"))
+        self.assertResponseContains(self.scoreboards_button())
+
+    def test_front_door_is_closed_to_someone_with_no_season(self):
+        with self.login(self.outsider):
+            self.get("compops:index")
+        self.assert_http_403_forbidden()
+
+    def test_list_of_scoreboards_offers_the_scorer_only_to_who_may_score(self):
+        url = self.reverse("compops:scorer", **self.kw)
+        link = f'<a class="btn" href="{url}">Scorer</a>'
+        season = {"competition": "pacific-cup", "season": "pc26"}
+        for user, count in ((self.scorer, 1), (self.outsider, 0)):
+            with self.subTest(user=user), self.login(user):
+                self.get_check_200("compops:scoreboard-index", **season)
+                self.assertEqual(self.last_response.content.decode().count(link), count)
+        self.get_check_200("compops:scoreboard-index", **season)
+        self.assertEqual(self.last_response.content.decode().count(link), 0)

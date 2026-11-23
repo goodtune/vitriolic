@@ -58,6 +58,11 @@ def booth_seasons(user):
     return get_objects_for_user(user, [COMMENTATE, STREAM], Season, any_perm=True)
 
 
+def scorer_seasons(user):
+    """The seasons whose scoreboards ``user`` may keep: see ``can_score``."""
+    return get_objects_for_user(user, SCORE, Season)
+
+
 def can_change_match(user, match):
     return user.has_perm(CHANGE_MATCH) or user.has_perm(CHANGE_MATCH, match)
 

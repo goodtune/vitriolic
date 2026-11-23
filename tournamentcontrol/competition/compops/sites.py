@@ -49,6 +49,7 @@ from tournamentcontrol.competition.compops.permissions import (
     can_score,
     can_stream,
     require,
+    scorer_seasons,
     staff_required,
 )
 from tournamentcontrol.competition.compops.responses import fragment_response, patches
@@ -537,18 +538,29 @@ class CompOpsSite(Application):
         """
         The front door. Staff get every season, with those being played,
         coming up or just ended first, each leading to its days. Anyone else
-        gets the seasons whose booths they may open, each leading to them.
+        gets the seasons whose booths they may open or whose scoreboards they
+        may keep, each leading to them.
         """
         now = timezone.now()
         if request.user.is_staff:
             context = {"events": queries.events(now)}
         else:
-            seasons = booth_seasons(request.user)
+            booths = set(booth_seasons(request.user).values_list("pk", flat=True))
+            scores = set(scorer_seasons(request.user).values_list("pk", flat=True))
+            listed = queries.events(
+                now, limit=None, seasons=Season.objects.filter(pk__in=booths | scores)
+            )
+            require(listed.competitions)
+            for _, seasons in listed.competitions:
+                for season in seasons:
+                    season.compops_booth = season.pk in booths
+                    season.compops_score = season.pk in scores
             context = {
-                "events": queries.events(now, limit=None, seasons=seasons),
-                "booths": True,
+                "events": listed,
+                "front_door": True,
+                "booths": bool(booths),
+                "scoreboards": bool(scores),
             }
-            require(context["events"].competitions)
         return self.render(request, self.template_path("index.html"), context)
 
     @staff_required
@@ -1361,7 +1373,12 @@ class CompOpsSite(Application):
         return self.render(
             request,
             self.template_path("scoreboard_index.html"),
-            {"season": season, "grounds": grounds},
+            {
+                "season": season,
+                "grounds": grounds,
+                "can_score": request.user.is_authenticated
+                and can_score(request.user, season),
+            },
         )
 
     @scoreboard_view

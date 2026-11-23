@@ -323,6 +323,8 @@ assign_perm("competition.commentate_season", comms, season)
 ```
 
 Grant a scorer `competition.score_season` in the same way; it lets them keep the scoreboard of every ground of the season, and nothing else.
+The home page is a scorer's front door too: it lists the seasons whose scoreboards they may keep, each leading to its list of scoreboards (`compops:scoreboard-index`), where every ground has a link to its scorer's page.
+Someone who may both open a season's booths and keep its scoreboards gets the booths from the season's row, and a Scoreboards button beside it.
 
 Grant the commentator pair who run the broadcast `stream_season` in the same way:
 
