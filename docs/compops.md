@@ -47,7 +47,14 @@ The site has three levels, each leading down to the next.
 - A booth (`compops:booth`) shows today at its ground.
   A stream usually starts before its match does, to introduce it.
   So when nothing is on air, and no match that has kicked off is still to be ended, the lamp is the next match's: it names that match, shows STANDBY once the match is armed, and puts it on air before its kick-off time.
-  The arrows in its header step to the ground's nearest earlier and later days with matches, as `?day=YYYYMMDD`.
+  It follows the ground: its lamp is the match on air, or the next to go, and its strip is the match before, the match now and the match after by the clock.
+  The match now changes at the next match's kick-off time, not when a match ends.
+- A booth opened on one match (`compops:booth-match`) is that match's, whatever the clock says.
+  Its lamp, its buttons and its panes are about that match, and its strip is the matches either side of it.
+  Each match in a strip or a runsheet is a link to its own booth, so a commentator can be sent the address and get set before their match starts.
+  One match of a ground is on air at a time: while another is, the view says which, links to it and offers no button to go on air.
+  The page sends its match as the `view` signal with every request it makes, its event stream among them; "Follow the ground" leads back.
+- The arrows in a booth's header step to the ground's nearest earlier and later days with matches, as `?day=YYYYMMDD`.
   Another day's booth is for looking over: it shows that day's matches and panes, and has no button that acts on the broadcast.
   Its top bar leads back up to the season and the home page, and steps to the nearest earlier and later days with matches.
 

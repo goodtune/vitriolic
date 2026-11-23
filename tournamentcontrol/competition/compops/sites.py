@@ -255,6 +255,22 @@ class CompOpsSite(Application):
             ),
             path("<slug:ground>/arm/", self.booth_arm, name="booth-arm"),
             path("<slug:ground>/runsheet/", self.booth_runsheet, name="booth-runsheet"),
+            # The booth opened on one match, and the actions of that view.
+            path(
+                "<slug:ground>/match/<int:match_pk>/",
+                self.booth_match,
+                name="booth-match",
+            ),
+            path(
+                "<slug:ground>/match/<int:match_pk>/onair/<str:status>/",
+                self.booth_onair,
+                name="booth-match-onair",
+            ),
+            path(
+                "<slug:ground>/match/<int:match_pk>/arm/",
+                self.booth_arm,
+                name="booth-match-arm",
+            ),
             path(
                 "<slug:ground>/match/<int:match_pk>/teams/",
                 self.booth_teams,
@@ -876,17 +892,16 @@ class CompOpsSite(Application):
         """
         now = timezone.now()
         today = ground.local_date(now)
-        day = self._booth_day(request, today)
+        # A booth opened on one match is that match's: see ``_booth_view``.
+        view = self._booth_view(request, ground)
+        day = view.date if view else self._booth_day(request, today)
         preview = day != today
         previous, current, following = queries.ground_day(ground, day, now)
         # The lamp and the arm follow only the matches opted into streaming,
         # as the strip does; the runsheet itself lists every match.
         ground_ids = self._booth_ground_ids(ground)
-        streamed = [
-            m
-            for m in queries.ground_runsheet(ground, day)
-            if streams.opted_in(m, ground_ids)
-        ]
+        runsheet = list(queries.ground_runsheet(ground, day))
+        streamed = [m for m in runsheet if streams.opted_in(m, ground_ids)]
         # The lamp follows the match actually on air, which can be one that
         # has overrun into the next kick-off; the strip follows the schedule.
         on_air = next(
@@ -897,43 +912,102 @@ class CompOpsSite(Application):
             ),
             None,
         )
-        broadcast = on_air or current
-        armable_match = self._armable_match(streamed, broadcast, now)
-        if preview:
-            armable_match = None
-        # A stream usually starts before its match does, to introduce it. So
-        # with nothing on air, and no match being played that has still to be
-        # ended, the lamp is the next match's: it shows that match armed, and
-        # puts it on air, before the schedule says it has kicked off.
-        upcoming = (
-            on_air is None
-            and armable_match is not None
-            and (
-                current is None
-                or streams.effective_status(current.live_stream_status) == "complete"
+        blocked_by = None
+        if view:
+            # The strip is the matches either side of this one on the
+            # ground's day, whether streamed or not.
+            position = next(i for i, m in enumerate(runsheet) if m.pk == view.pk)
+            view = runsheet[position]
+            previous = runsheet[position - 1] if position else None
+            following = runsheet[position + 1] if position + 1 < len(runsheet) else None
+            current = broadcast = view
+            status = streams.effective_status(view.live_stream_status)
+            upcoming = view.datetime > now and status not in (
+                "live",
+                "testing",
+                "complete",
             )
-        )
-        if upcoming:
-            broadcast = armable_match
-        status = (
-            streams.effective_status(broadcast.live_stream_status)
-            if broadcast
-            else None
-        )
-        armable, reason = True, ""
-        if preview:
-            armable = False
-        elif status == "live":
-            armable, reason = False, "End the current broadcast first."
-        elif armable_match is None:
-            armable, reason = False, f"No more broadcasts on {ground.title} today."
-        elif not armable_match.external_identifier:
-            armable, reason = (
-                False,
-                f"{self._teams(armable_match)} has no YouTube broadcast.",
+            # One match of a ground is on air at a time.
+            if on_air is not None and on_air.pk != view.pk:
+                blocked_by = on_air
+            opted_in = streams.opted_in(view, ground_ids)
+            armable_match = (
+                view
+                if opted_in and not preview and status not in ("live", "complete")
+                else None
             )
-        elif streams.effective_status(armable_match.live_stream_status) == "testing":
-            armable, reason = False, "Already armed."
+            armable, reason = True, ""
+            if preview:
+                armable = False
+            elif not opted_in:
+                armable, reason = False, f"{self._teams(view)} is not streamed."
+            elif status == "live":
+                armable, reason = False, f"{self._teams(view)} is on air."
+            elif status == "complete":
+                armable, reason = False, "This broadcast has ended."
+            elif blocked_by:
+                armable, reason = (
+                    False,
+                    f"{self._teams(blocked_by)} is on air. End that broadcast first.",
+                )
+            elif not view.external_identifier:
+                armable, reason = (
+                    False,
+                    f"{self._teams(view)} has no YouTube broadcast.",
+                )
+            elif status == "testing":
+                armable, reason = False, "Already armed."
+        else:
+            broadcast = on_air or current
+            armable_match = self._armable_match(streamed, broadcast, now)
+            if preview:
+                armable_match = None
+            # A stream usually starts before its match does, to introduce it.
+            # So with nothing on air, and no match being played that has
+            # still to be ended, the lamp is the next match's: it shows that
+            # match armed, and puts it on air, before the schedule says it
+            # has kicked off.
+            upcoming = (
+                on_air is None
+                and armable_match is not None
+                and (
+                    current is None
+                    or streams.effective_status(current.live_stream_status)
+                    == "complete"
+                )
+            )
+            if upcoming:
+                broadcast = armable_match
+            status = (
+                streams.effective_status(broadcast.live_stream_status)
+                if broadcast
+                else None
+            )
+            armable, reason = True, ""
+            if preview:
+                armable = False
+            elif status == "live":
+                armable, reason = False, "End the current broadcast first."
+            elif armable_match is None:
+                armable, reason = False, f"No more broadcasts on {ground.title} today."
+            elif not armable_match.external_identifier:
+                armable, reason = (
+                    False,
+                    f"{self._teams(armable_match)} has no YouTube broadcast.",
+                )
+            elif (
+                streams.effective_status(armable_match.live_stream_status) == "testing"
+            ):
+                armable, reason = False, "Already armed."
+        can_stream = not preview and self._booth_can_stream(request, season)
+        names = {
+            "competition": season.competition.slug,
+            "season": season.slug,
+            "ground": ground.slug,
+        }
+        if view:
+            names["match_pk"] = view.pk
+        route = "compops:booth-match-{}" if view else "compops:booth-{}"
         return {
             "season": season,
             "ground": ground,
@@ -941,25 +1015,58 @@ class CompOpsSite(Application):
             "daystr": day.strftime("%Y%m%d"),
             "preview": preview,
             "now": now,
+            "view": view,
             "previous": previous,
             "current": current,
             "broadcast": broadcast,
             "upcoming": upcoming,
             "next": following,
-            # The match the panes are about: the one on air, else the one the
-            # schedule says is on. A day with nothing on yet, looked at from
-            # another, opens on its first.
+            # The match the panes are about: the view's own; else the one on
+            # air, else the one the schedule says is on. A day with nothing
+            # on yet, looked at from another, opens on its first.
             "focus": broadcast or current or (following if preview else None),
             "armable_match": armable_match,
             "status": status,
             "armable": armable,
             "arm_reason": reason,
-            "can_stream": not preview and self._booth_can_stream(request, season),
+            "blocked_by": blocked_by,
+            # A match is put on air unless it is, or has been, or another is.
+            "can_go_live": bool(
+                broadcast
+                and broadcast.external_identifier
+                and status not in ("live", "complete")
+                and blocked_by is None
+                and (view is None or armable_match is not None)
+            ),
+            "live_url": reverse(
+                route.format("onair"), kwargs={**names, "status": "live"}
+            ),
+            "end_url": reverse(
+                route.format("onair"), kwargs={**names, "status": "complete"}
+            ),
+            "arm_url": reverse(route.format("arm"), kwargs=names),
+            "can_stream": can_stream,
             "panes": PANE_LABELS,
             "tzinfo": ground.get_tzinfo(),
             "user": request.user,
             "errors": [],
         }
+
+    @staticmethod
+    def _booth_view(request, ground):
+        """
+        The match a booth request is about, when the booth was opened on one
+        (``booth-match``) and does not follow the ground: the match of the
+        address, or of the ``view`` signal the page then sends with every
+        request it makes, its event stream included. ``None`` for the booth
+        that follows the ground.
+        """
+        pk = getattr(request, "compops_booth_view", None)
+        if pk is None and request.method == "GET":
+            pk = (read_signals(request) or {}).get("view")
+        if pk is None:
+            return None
+        return get_object_or_404(queries.ground_matches(ground), pk=pk)
 
     @staticmethod
     def _booth_day(request, today):
@@ -1045,7 +1152,7 @@ class CompOpsSite(Application):
         return patches(
             request,
             lambda: [render_fragment(request, "lamp", **{**context, "errors": errors})],
-            redirect_to=self._booth_url(season, ground),
+            redirect_to=self._booth_url(request, season, ground),
             page=lambda: self.booth_page(request, season, ground, errors=errors),
             mode=ElementPatchMode.REPLACE,
         )
@@ -1058,18 +1165,20 @@ class CompOpsSite(Application):
         return patches(
             request,
             lambda: self._booth_fragments(request, season, ground, ("lamp", "strip")),
-            redirect_to=self._booth_url(season, ground),
+            redirect_to=self._booth_url(request, season, ground),
         )
 
-    def _booth_url(self, season, ground):
-        return reverse(
-            "compops:booth",
-            kwargs={
-                "competition": season.competition.slug,
-                "season": season.slug,
-                "ground": ground.slug,
-            },
-        )
+    def _booth_url(self, request, season, ground):
+        """The booth the request came from: the ground's, or one match's."""
+        kwargs = {
+            "competition": season.competition.slug,
+            "season": season.slug,
+            "ground": ground.slug,
+        }
+        match_pk = getattr(request, "compops_booth_view", None)
+        if match_pk is None:
+            return reverse("compops:booth", kwargs=kwargs)
+        return reverse("compops:booth-match", kwargs={**kwargs, "match_pk": match_pk})
 
     @login_required_m
     @season_view
@@ -1087,6 +1196,13 @@ class CompOpsSite(Application):
     @booth_view
     @booth_required
     def booth(self, request, season, ground, **kwargs):
+        return self.booth_page(request, season, ground)
+
+    @booth_view
+    @booth_required
+    def booth_match(self, request, season, ground, match_pk, **kwargs):
+        """The booth opened on one match of the ground; see ``_booth_view``."""
+        request.compops_booth_view = match_pk
         return self.booth_page(request, season, ground)
 
     def booth_page(self, request, season, ground, **overrides):
@@ -1120,14 +1236,23 @@ class CompOpsSite(Application):
     @require_POST_m
     @booth_view
     @booth_required
-    def booth_onair(self, request, season, ground, status, **kwargs):
+    def booth_onair(self, request, season, ground, status, match_pk=None, **kwargs):
         require(can_stream(request.user, season))
         if status not in ("live", "complete"):
             raise Http404("Unknown broadcast status.")
+        # From a booth opened on one match, the action is that match's.
+        request.compops_booth_view = match_pk
         context = self.booth_context(request, season, ground)
         errors = []
         broadcast = context["broadcast"]
-        if broadcast is None or (context["upcoming"] and status == "complete"):
+        if context["view"] and status == "live" and context["blocked_by"]:
+            errors.append(
+                f"{self._teams(context['blocked_by'])} is on air. "
+                "End that broadcast first."
+            )
+        elif context["view"] and status == "complete" and context["status"] != "live":
+            errors.append(f"{self._teams(broadcast)} is not on air.")
+        elif broadcast is None or (context["upcoming"] and status == "complete"):
             # The lamp may be the next match's, to put on air early; a match
             # that is not on air is not there to be ended.
             errors.append("Nothing is on this ground right now.")
@@ -1147,8 +1272,9 @@ class CompOpsSite(Application):
     @require_POST_m
     @booth_view
     @booth_required
-    def booth_arm(self, request, season, ground, **kwargs):
+    def booth_arm(self, request, season, ground, match_pk=None, **kwargs):
         require(can_stream(request.user, season))
+        request.compops_booth_view = match_pk
         context = self.booth_context(request, season, ground)
         if not context["armable"]:
             return self._booth_refused(

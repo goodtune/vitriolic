@@ -2,12 +2,12 @@
 {% load static tz compops_tags %}
 {% block title %}Booth · {{ ground.title }}{% endblock %}
 {% block extracss %}<link rel="stylesheet" href="{% static 'tournamentcontrol/competition/compops/booth.css' %}">{% endblock %}
-{% block body_attrs %}class="booth" data-signals__ifmissing="{pane: '{{ pane|default:'' }}', match: {{ pane_match.pk|default:'null' }}, modal: false, day: '{% if preview %}{{ daystr }}{% endif %}'}" data-indicator="connected" data-effect="$pane; $match; @get('{% url 'compops:booth-events' competition=season.competition.slug season=season.slug ground=ground.slug %}', {retryMaxCount: 1000})"{% endblock %}
+{% block body_attrs %}class="booth" data-signals__ifmissing="{pane: '{{ pane|default:'' }}', match: {{ pane_match.pk|default:'null' }}, modal: false, day: '{% if preview %}{{ daystr }}{% endif %}', view: {{ view.pk|default:'null' }}}" data-indicator="connected" data-effect="$pane; $match; @get('{% url 'compops:booth-events' competition=season.competition.slug season=season.slug ground=ground.slug %}', {retryMaxCount: 1000})"{% endblock %}
 {% block body %}{% timezone tzinfo %}
 <header>
 	<span class="brand">BOOTH</span>
 	<span class="ground">{{ ground.title }}</span>
-	<nav class="days">{% if previous_day %}<a href="?day={{ previous_day|date:'Ymd' }}" rel="prev" title="{{ previous_day|date:'l j F' }}">‹</a>{% else %}<span class="step">‹</span>{% endif %}<span class="day">{{ day|date:"l j F" }}</span>{% if next_day %}<a href="?day={{ next_day|date:'Ymd' }}" rel="next" title="{{ next_day|date:'l j F' }}">›</a>{% else %}<span class="step">›</span>{% endif %}{% if preview %}<a class="today" href="{% url 'compops:booth' competition=season.competition.slug season=season.slug ground=ground.slug %}">Today</a>{% endif %}</nav>
+	<nav class="days">{% if previous_day %}<a href="?day={{ previous_day|date:'Ymd' }}" rel="prev" title="{{ previous_day|date:'l j F' }}">‹</a>{% else %}<span class="step">‹</span>{% endif %}<span class="day">{{ day|date:"l j F" }}</span>{% if next_day %}<a href="?day={{ next_day|date:'Ymd' }}" rel="next" title="{{ next_day|date:'l j F' }}">›</a>{% else %}<span class="step">›</span>{% endif %}{% if preview %}<a class="today" href="{% url 'compops:booth' competition=season.competition.slug season=season.slug ground=ground.slug %}">Today</a>{% elif view %}<a class="today" href="{% url 'compops:booth' competition=season.competition.slug season=season.slug ground=ground.slug %}">Follow the ground</a>{% endif %}</nav>
 	<span class="spacer"></span>
 	<span class="sse" data-class:down="!$connected"><i></i> <span data-text="$connected ? 'updates connected' : 'reconnecting'">updates connected</span></span>
 	{# The time at the ground, kept by the browser between the page's loads. #}
@@ -34,33 +34,36 @@ without the mark and releases it.
 	<div class="controls">
 		{% if can_stream and broadcast and broadcast.external_identifier %}
 			{% if status == "live" %}
-				{% url 'compops:booth-onair' competition=season.competition.slug season=season.slug ground=ground.slug status='complete' as end_url %}
 				<form method="post" action="{{ end_url }}" data-on:submit="@post('{{ end_url }}', {contentType: 'form'})">{% csrf_token %}<button class="bigbtn end" type="submit" data-hold="1500">HOLD TO END BROADCAST</button></form>
-			{% elif status != "complete" %}
-				{% url 'compops:booth-onair' competition=season.competition.slug season=season.slug ground=ground.slug status='live' as live_url %}
+			{% elif status == "complete" %}<button class="bigbtn end" type="button" disabled>ENDED</button>
+			{% elif can_go_live %}
 				<form method="post" action="{{ live_url }}" data-on:submit="@post('{{ live_url }}', {contentType: 'form'})">{% csrf_token %}<button class="bigbtn" type="submit" data-hold="1500">HOLD TO GO ON AIR</button></form>
-			{% else %}<button class="bigbtn end" type="button" disabled>ENDED</button>{% endif %}
+			{% endif %}
 		{% endif %}
-		<div class="nocontrol">{% if preview %}The broadcast is run from today's booth.{% else %}
+		<div class="nocontrol">{% if preview %}The broadcast is run from today's booth.{% elif view %}
+			{# A booth opened on one match: what stands between it and the air. #}
+			{% if blocked_by %}<a href="{% url 'compops:booth-match' competition=season.competition.slug season=season.slug ground=ground.slug match_pk=blocked_by.pk %}">{{ blocked_by.get_home_team_plain }} v {{ blocked_by.get_away_team_plain }} is on air</a>{% if can_stream %} · end that broadcast first{% endif %}{% elif can_stream %}{% if armable %}<form class="inline" method="post" action="{{ arm_url }}" data-on:submit="@post('{{ arm_url }}', {contentType: 'form'})">{% csrf_token %}<button class="link" type="submit">arm now</button></form>{% elif arm_reason and status != "live" and status != "complete" %}{{ arm_reason }}{% endif %}{% endif %}
+		{% else %}
 			{% if armable_match %}Next on {{ ground.title }} today: {{ armable_match.time|time:"H:i" }} {{ armable_match.get_home_team_plain }} v {{ armable_match.get_away_team_plain }}{% else %}No more broadcasts on {{ ground.title }} today{% endif %}{% if can_stream %}
-			{% if armable %}{% url 'compops:booth-arm' competition=season.competition.slug season=season.slug ground=ground.slug as arm_url %} · <form class="inline" method="post" action="{{ arm_url }}" data-on:submit="@post('{{ arm_url }}', {contentType: 'form'})">{% csrf_token %}<button class="link" type="submit">arm now</button></form>{% elif arm_reason and armable_match or arm_reason and status == "live" %} · {{ arm_reason }}{% endif %}
+			{% if armable %} · <form class="inline" method="post" action="{{ arm_url }}" data-on:submit="@post('{{ arm_url }}', {contentType: 'form'})">{% csrf_token %}<button class="link" type="submit">arm now</button></form>{% elif arm_reason and armable_match or arm_reason and status == "live" %} · {{ arm_reason }}{% endif %}
 		{% endif %}{% endif %}</div>
 	</div>
 </section>
 {% endpartialdef %}
 {% partialdef strip inline %}
 <section id="strip" class="strip">
+	{# Each match is a link to the booth opened on it (booth-match). #}
 	<div class="card">
 		<div class="lab">Previous on {{ ground.title }}</div>
-		{% if previous %}<div class="teams">{{ previous.get_home_team_plain }} <small>v</small> {{ previous.get_away_team_plain }}</div><div class="res">{% if previous.is_forfeit %}forfeit{% else %}{{ previous.home_team_score|default_if_none:"–" }} – {{ previous.away_team_score|default_if_none:"–" }}{% endif %}</div><div class="sub">{{ previous.time|time:"H:i" }} · {{ previous.stage.division.title }}</div>{% else %}<div class="sub">—</div>{% endif %}
+		{% if previous %}<a class="teams" href="{% url 'compops:booth-match' competition=season.competition.slug season=season.slug ground=ground.slug match_pk=previous.pk %}">{{ previous.get_home_team_plain }} <small>v</small> {{ previous.get_away_team_plain }}</a><div class="res">{% if previous.is_forfeit %}forfeit{% else %}{{ previous.home_team_score|default_if_none:"–" }} – {{ previous.away_team_score|default_if_none:"–" }}{% endif %}</div><div class="sub">{{ previous.time|time:"H:i" }} · {{ previous.stage.division.title }}</div>{% else %}<div class="sub">—</div>{% endif %}
 	</div>
 	<div class="card now">
-		<div class="lab">Now{% if current %} · {{ current.time|time:"H:i" }} · {{ current.stage.division.title }}{% if current.stage_group %} · {{ current.stage_group.title }}{% endif %}{% endif %}</div>
-		{% if current %}<div class="teams">{{ current.get_home_team_plain }} <small>v</small> {{ current.get_away_team_plain }}</div>{% if current.home_team_score is not None %}<div class="res">{{ current.home_team_score }} – {{ current.away_team_score }}</div>{% endif %}<div class="sub">Kicked off {{ current.time|time:"H:i" }}</div>{% else %}<div class="sub">Nothing on this ground right now</div>{% endif %}
+		<div class="lab">{% if not view %}Now{% elif current.datetime > now %}This match{% else %}This match, kicked off{% endif %}{% if current %} · {{ current.time|time:"H:i" }} · {{ current.stage.division.title }}{% if current.stage_group %} · {{ current.stage_group.title }}{% endif %}{% endif %}</div>
+		{% if current %}<a class="teams" href="{% url 'compops:booth-match' competition=season.competition.slug season=season.slug ground=ground.slug match_pk=current.pk %}">{{ current.get_home_team_plain }} <small>v</small> {{ current.get_away_team_plain }}</a>{% if current.home_team_score is not None %}<div class="res">{{ current.home_team_score }} – {{ current.away_team_score }}</div>{% endif %}<div class="sub">{% if current.datetime > now %}Kicks off{% else %}Kicked off{% endif %} {{ current.time|time:"H:i" }}</div>{% else %}<div class="sub">Nothing on this ground right now</div>{% endif %}
 	</div>
 	<div class="card">
 		<div class="lab">Next on {{ ground.title }}</div>
-		{% if next %}<div class="teams">{{ next.get_home_team_plain }} <small>v</small> {{ next.get_away_team_plain }}</div><div class="sub">{{ next.time|time:"H:i" }} · {{ next.stage.division.title }}</div><div class="prep"><button type="button" data-on:click="@get('{% url 'compops:booth-pane' competition=season.competition.slug season=season.slug ground=ground.slug match_pk=next.pk pane='sheets' %}')">prep team sheets →</button></div>{% else %}<div class="sub">No more today</div>{% endif %}
+		{% if next %}<a class="teams" href="{% url 'compops:booth-match' competition=season.competition.slug season=season.slug ground=ground.slug match_pk=next.pk %}">{{ next.get_home_team_plain }} <small>v</small> {{ next.get_away_team_plain }}</a><div class="sub">{{ next.time|time:"H:i" }} · {{ next.stage.division.title }}</div><div class="prep"><button type="button" data-on:click="@get('{% url 'compops:booth-pane' competition=season.competition.slug season=season.slug ground=ground.slug match_pk=next.pk pane='sheets' %}')">prep team sheets →</button></div>{% else %}<div class="sub">No more today</div>{% endif %}
 	</div>
 </section>
 {% endpartialdef %}
@@ -148,7 +151,7 @@ without the mark and releases it.
 		<h4>{{ ground.title }} · {{ day|date:"D j M" }}</h4>
 		<table class="rs">
 			{% for m in runsheet %}
-				<tr{% if current and m.pk == current.pk %} class="now"{% endif %}><td class="n">{{ m.time|time:"H:i" }}</td><td>{{ m.stage.division.title }}</td><td>{{ m.get_home_team_plain }} v {{ m.get_away_team_plain }}</td><td class="num">{% if m.home_team_score is not None %}{{ m.home_team_score }} – {{ m.away_team_score }}{% endif %}</td>{% if m.live_stream_status|effective_status == "live" %}<td class="onair">ON AIR</td>{% elif not m.external_identifier %}<td class="warn">no broadcast</td>{% else %}<td class="sub">{{ m.live_stream_status|default:"ready" }}</td>{% endif %}</tr>
+				<tr{% if current and m.pk == current.pk %} class="now"{% endif %}><td class="n">{{ m.time|time:"H:i" }}</td><td>{{ m.stage.division.title }}</td><td><a href="{% url 'compops:booth-match' competition=season.competition.slug season=season.slug ground=ground.slug match_pk=m.pk %}">{{ m.get_home_team_plain }} v {{ m.get_away_team_plain }}</a></td><td class="num">{% if m.home_team_score is not None %}{{ m.home_team_score }} – {{ m.away_team_score }}{% endif %}</td>{% if m.live_stream_status|effective_status == "live" %}<td class="onair">ON AIR</td>{% elif not m.external_identifier %}<td class="warn">no broadcast</td>{% else %}<td class="sub">{{ m.live_stream_status|default:"ready" }}</td>{% endif %}</tr>
 			{% empty %}<tr><td class="empty">No matches on this ground today.</td></tr>{% endfor %}
 		</table>
 	</div>
