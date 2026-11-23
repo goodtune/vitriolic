@@ -1273,7 +1273,8 @@ class CompOpsSite(Application):
                 "score": scoreboard.score(match, side),
             }
         dots = []
-        if clock:
+        # One period has nothing to count, so a match of one has no dots.
+        if clock and clock.periods > 1:
             for index, (kind, _seconds) in enumerate(clock.phases):
                 if moment.kind == "over" or (
                     moment.index is not None and index < moment.index

@@ -1221,6 +1221,16 @@ class Division(
         verbose_name=_("Break length"),
         help_text=_("Minutes between one period and the next."),
     )
+    period_name = models.CharField(
+        max_length=30,
+        blank=True,
+        verbose_name=_("Period name"),
+        help_text=_(
+            "What a period is called on the scoreboard, such as Chukka. Leave "
+            "it empty to name it from the number of periods: Half for 2, "
+            "Quarter for 4, otherwise Period."
+        ),
+    )
 
     games_per_day = models.SmallIntegerField(
         null=True,
@@ -1693,6 +1703,12 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
         help_text=_(
             "Minutes between one period and the next. Leave it empty to use the division's."
         ),
+    )
+    period_name = models.CharField(
+        max_length=30,
+        blank=True,
+        verbose_name=_("Period name"),
+        help_text=_("What a period is called. Leave it empty to use the division's."),
     )
 
     keep_mvp = BooleanField(
@@ -2959,6 +2975,12 @@ class Match(
         help_text=_(
             "Minutes between one period and the next. Leave it empty to use the stage's."
         ),
+    )
+    period_name = models.CharField(
+        max_length=30,
+        blank=True,
+        verbose_name=_("Period name"),
+        help_text=_("What a period is called. Leave it empty to use the stage's."),
     )
     live_stream_thumbnail_image = models.BinaryField(
         blank=True,

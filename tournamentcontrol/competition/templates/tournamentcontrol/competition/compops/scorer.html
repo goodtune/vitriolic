@@ -28,7 +28,7 @@
 			</section>
 		{% endfor %}
 		{% if clock %}
-			<section id="sb-clock" class="sb-clock sc-clock {{ moment.kind }}" data-match="{{ match.pk }}" data-now="{{ now_ms }}" data-start="{{ clock.start_ms|default_if_none:'' }}" data-periods="{{ clock.periods }}" data-period="{{ clock.period }}" data-pause="{{ clock.pause }}">
+			<section id="sb-clock" class="sb-clock sc-clock {{ moment.kind }}" data-match="{{ match.pk }}" data-now="{{ now_ms }}" data-start="{{ clock.start_ms|default_if_none:'' }}" data-periods="{{ clock.periods }}" data-period="{{ clock.period }}" data-pause="{{ clock.pause }}" data-names="{{ clock.names_json }}">
 				<div class="sb-label" id="sb-label">{{ moment.label }}</div>
 				<div class="sb-time" id="sb-time">{{ moment.display }}</div>
 			</section>

@@ -13,12 +13,29 @@
 (function () {
   "use strict";
 
+  // What the clock says when it is not in a period or a break. A period's
+  // name and a break's come from the server (data-names): "1st Half", "Half
+  // time", or nothing at all for the one period of a match that has one.
   var LABELS = {
     ready: "Ready",
     before: "Starts in",
-    break: "Break",
     over: "Full time",
   };
+
+  function labelOf(data, moment) {
+    if (moment.index === null) {
+      return LABELS[moment.kind];
+    }
+    try {
+      var names = JSON.parse(data.names || "[]");
+      if (typeof names[moment.index] === "string") {
+        return names[moment.index];
+      }
+    } catch (error) {
+      // A template that left the names out gets the plain ones.
+    }
+    return moment.kind === "break" ? "Break" : "Period " + moment.period;
+  }
   var offset = null;
   var seen = null;
   var last = null;
@@ -140,7 +157,7 @@
       offset = offset === null ? difference : Math.max(offset, difference);
     }
     var moment = momentAt(data, Date.now() + offset);
-    var label = moment.kind === "period" ? "Period " + moment.period : LABELS[moment.kind];
+    var label = labelOf(data, moment);
     // A template of the project's, or one written in the admin, may leave
     // out the label or the dots; the time is what a clock is for.
     var time = document.getElementById("sb-time");
@@ -190,7 +207,12 @@
   }
 
   // For the tests, and for a page that wants to sound the horn itself.
-  window.compopsScoreboard = { momentAt: momentAt, display: display, horn: horn };
+  window.compopsScoreboard = {
+    momentAt: momentAt,
+    display: display,
+    labelOf: labelOf,
+    horn: horn,
+  };
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", start);

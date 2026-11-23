@@ -96,6 +96,18 @@ It counts from one moment, through the periods and breaks of the match's divisio
   Each number is the match's own if it has one, else its stage's, else its division's.
   Rugby sevens plays halves of 7 minutes and its final halves of 10, so the finals stage (or the final alone) sets a period length of 10 and takes the rest from the division.
 - A match that gets no period length from any of them has a board with the score and no clock.
+
+The board names each period from how many the match has:
+
+| Periods | Each is called | The breaks |
+| --- | --- | --- |
+| 1 | nothing: no name is shown, and no dots | none |
+| 2 | 1st Half, 2nd Half | Half time |
+| 4 | 1st Quarter to 4th Quarter | Quarter time, Half time, Three-quarter time |
+| any other | 1st Period, 2nd Period and so on | Break |
+
+"Period name" on a division, a stage or a match gives another word for a sport that has one: with "Chukka" the periods are 1st Chukka, 2nd Chukka and so on, and each break is a Break.
+Like the timing, the name is the match's own if it has one, else its stage's, else its division's.
 - A venue has "Start scoreboard clocks on time" (`scoreboard_auto_start`), which is on unless changed.
   With it on, the clock runs from the match's scheduled time.
   With it off, the clock waits until the scorer presses "Start the clock".
@@ -154,7 +166,7 @@ The live updates need four things of the template, and it is the designer's work
 | `{% board %}` and `{% endboard %}` | around the part that changes during a match; the updates replace what is between them |
 | `{{ clock_attrs }}` on the clock's element, with `#sb-time` inside it | what the script counts the clock from, and where it writes the time |
 
-`#sb-label` (the phase's name), `#sb-dots` (one `li` for each period and break) and `#sb-sound` (the button that turns the horn on) are used if they are there.
+`#sb-label` (the phase's name, such as "1st Half"; empty for a match of one period), `#sb-dots` (one `li` for each period and break; `dots` is empty for a match of one period) and `#sb-sound` (the button that turns the horn on) are used if they are there.
 The script sets the class of the clock's element to the phase (`before`, `period`, `break`, `over` or `ready`), for the template's styles to colour.
 `{{ styles }}` is the usual style sheet, for a template that wants to start from the usual look.
 

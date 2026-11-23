@@ -205,4 +205,40 @@ class Migration(migrations.Migration):
                 verbose_name="Scoreboard template",
             ),
         ),
+        migrations.AddField(
+            model_name="division",
+            name="period_name",
+            field=models.CharField(
+                blank=True,
+                help_text=(
+                    "What a period is called on the scoreboard, such as Chukka. Leave it empty to name it from the number of periods: Half for 2, Quarter for 4, otherwise Period."
+                ),
+                max_length=30,
+                verbose_name="Period name",
+            ),
+        ),
+        migrations.AddField(
+            model_name="stage",
+            name="period_name",
+            field=models.CharField(
+                blank=True,
+                help_text=(
+                    "What a period is called. Leave it empty to use the division's."
+                ),
+                max_length=30,
+                verbose_name="Period name",
+            ),
+        ),
+        migrations.AddField(
+            model_name="match",
+            name="period_name",
+            field=models.CharField(
+                blank=True,
+                help_text=(
+                    "What a period is called. Leave it empty to use the stage's."
+                ),
+                max_length=30,
+                verbose_name="Period name",
+            ),
+        ),
     ]

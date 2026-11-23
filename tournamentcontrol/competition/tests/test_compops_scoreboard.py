@@ -99,23 +99,88 @@ class ClockTests(TestCase):
         )
 
     def test_moment_is_named_and_shown_as_a_time(self):
+        waiting = Clock(start=None, periods=2, period=900, pause=120)
+        moments = [
+            self.clock.at(at(17, 30)),
+            self.clock.at(at(19, 5)),
+            self.clock.at(at(19, 15, 59)),
+            self.clock.at(at(19, 20)),
+            self.clock.at(at(20)),
+            waiting.at(at(19)),
+        ]
         self.assertEqual(
-            [
-                (moment.label, moment.display)
-                for moment in (
-                    Moment("before", None, 1, 5400),
-                    Moment("period", 0, 1, 600),
-                    Moment("break", 1, 2, 61),
-                    Moment("over", None, None, 0),
-                    Moment("ready", None, 1, 900),
-                )
-            ],
+            [(moment.label, moment.display) for moment in moments],
             [
                 ("Starts in", "1:30:00"),
-                ("Period 1", "10:00"),
-                ("Break", "01:01"),
+                ("1st Half", "10:00"),
+                ("Half time", "01:01"),
+                ("2nd Half", "12:00"),
                 ("Full time", "00:00"),
                 ("Ready", "15:00"),
+            ],
+        )
+
+    def test_periods_are_named_from_how_many_there_are(self):
+        def names(periods, pause=120, name=""):
+            return Clock(at(19), periods, 600, pause, name).names
+
+        self.assertEqual(
+            [names(2), names(3), names(4), names(4, pause=0)],
+            [
+                ["1st Half", "Half time", "2nd Half"],
+                ["1st Period", "Break", "2nd Period", "Break", "3rd Period"],
+                [
+                    "1st Quarter",
+                    "Quarter time",
+                    "2nd Quarter",
+                    "Half time",
+                    "3rd Quarter",
+                    "Three-quarter time",
+                    "4th Quarter",
+                ],
+                ["1st Quarter", "2nd Quarter", "3rd Quarter", "4th Quarter"],
+            ],
+        )
+
+    def test_match_of_one_period_has_no_name_for_it(self):
+        # There is nothing to tell it from: no name, and no dots to count.
+        clock = Clock(at(19), 1, 600, 120)
+        self.assertEqual((clock.names, clock.at(at(19, 5)).label), ([""], ""))
+
+    def test_period_may_be_given_a_name_of_its_own(self):
+        # The breaks of a sport that names its own periods are only breaks.
+        self.assertEqual(
+            Clock(at(19), 4, 420, 180, "Chukka").names,
+            [
+                "1st Chukka",
+                "Break",
+                "2nd Chukka",
+                "Break",
+                "3rd Chukka",
+                "Break",
+                "4th Chukka",
+            ],
+        )
+
+    def test_numbers_are_said_as_places(self):
+        self.assertEqual(
+            [
+                scoreboard.ordinal(n)
+                for n in (1, 2, 3, 4, 11, 12, 13, 21, 22, 23, 101, 111)
+            ],
+            [
+                "1st",
+                "2nd",
+                "3rd",
+                "4th",
+                "11th",
+                "12th",
+                "13th",
+                "21st",
+                "22nd",
+                "23rd",
+                "101st",
+                "111th",
             ],
         )
 
@@ -273,6 +338,26 @@ class BoardMatchTests(ScoreboardFixture):
             [(2, 420, 120), (2, 600, 120), (4, 300, 0)],
         )
 
+    def test_stage_or_match_may_name_its_periods_for_itself(self):
+        self.division.period_name = "Chukka"
+        self.division.save()
+        finals = factories.StageFactory.create(division=self.division)
+        final = factories.MatchFactory.create(
+            stage=finals,
+            play_at=self.field1,
+            datetime=at(21),
+            date=DAY,
+            period_name="Round",
+        )
+        self.first.refresh_from_db()
+        self.assertEqual(
+            [
+                scoreboard.clock_for(match, self.field1).names[0]
+                for match in (self.first, final)
+            ],
+            ["1st Chukka", "1st Round"],
+        )
+
     def test_stage_may_give_a_clock_to_a_division_that_has_none(self):
         self.division.period_minutes = None
         self.division.save()
@@ -313,7 +398,7 @@ class DisplayTests(ScoreboardFixture):
             '<div class="sb-name" id="sb-home-name">Australia</div>',
             '<div class="sb-name" id="sb-away-name">New Zealand</div>',
             '<span class="sb-code">AUS</span>',
-            '<div class="sb-label" id="sb-label">Period 1</div>',
+            '<div class="sb-label" id="sb-label">1st Half</div>',
             '<div class="sb-time" id="sb-time">10:00</div>',
             '<ol class="sb-dots" id="sb-dots"><li class="period on"></li>'
             '<li class="break"></li><li class="period"></li></ol>',
@@ -328,7 +413,9 @@ class DisplayTests(ScoreboardFixture):
         self.assertIn(
             f'<section id="sb-clock" class="sb-clock period" '
             f'data-match="{self.first.pk}" data-now="{now}" data-start="{start}" '
-            'data-periods="2" data-period="900" data-pause="120">',
+            'data-periods="2" data-period="900" data-pause="120" '
+            'data-names="[&quot;1st Half&quot;, &quot;Half time&quot;, '
+            '&quot;2nd Half&quot;]">',
             self.last_response.content.decode(),
         )
 
@@ -385,6 +472,15 @@ class DisplayTests(ScoreboardFixture):
             (content.count('id="sb-home-score"'), content.count('id="sb-clock"')),
             (1, 0),
         )
+
+    def test_match_of_one_period_shows_no_name_and_no_dots(self):
+        self.division.periods = 1
+        self.division.save()
+        self.get("compops:scoreboard", **self.kw)
+        content = self.last_response.content.decode()
+        self.assertResponseContains('<div class="sb-label" id="sb-label"></div>')
+        self.assertResponseContains('<div class="sb-time" id="sb-time">10:00</div>')
+        self.assertEqual(content.count('id="sb-dots"'), 0)
 
     def test_ground_with_nothing_today_says_so(self):
         other = factories.GroundFactory.create(
@@ -611,8 +707,8 @@ class SettingsFormTests(TestCase):
     def test_division_form_has_the_timing_of_its_matches(self):
         fields = DivisionForm(instance=factories.DivisionFactory.create()).fields
         self.assertEqual(
-            [name for name in fields if name.endswith(("periods", "_minutes"))],
-            ["periods", "period_minutes", "break_minutes"],
+            [name for name in fields if "period" in name or "break" in name],
+            ["periods", "period_minutes", "break_minutes", "period_name"],
         )
 
     def test_division_saved_without_its_timing_keeps_what_it_has(self):
@@ -663,7 +759,7 @@ class SettingsFormTests(TestCase):
         )
 
     def test_stage_and_match_forms_have_a_timing_of_their_own(self):
-        timing = ["periods", "period_minutes", "break_minutes"]
+        timing = ["periods", "period_minutes", "break_minutes", "period_name"]
         match = factories.MatchFactory.create()
         for form in (
             StageForm(instance=match.stage),
@@ -675,7 +771,7 @@ class SettingsFormTests(TestCase):
                         [name for name in form.fields if name in timing],
                         [form.fields[name].required for name in timing],
                     ),
-                    (timing, [False, False, False]),
+                    (timing, [False, False, False, False]),
                 )
 
     def test_venue_form_has_whether_its_clocks_start_on_time(self):
@@ -769,7 +865,8 @@ class CustomTemplateTests(ScoreboardFixture):
             # What the page's script counts the clock from.
             f'<div id="sb-clock" data-match="{self.first.pk}" data-now="{now}" '
             f'data-start="{start}" data-periods="2" data-period="900" '
-            'data-pause="120"><i id="sb-label">Period 1</i>'
+            'data-pause="120" data-names="[&quot;1st Half&quot;, &quot;Half time&quot;, '
+            '&quot;2nd Half&quot;]"><i id="sb-label">1st Half</i>'
             '<i id="sb-time">10:00</i></div>',
             # What every scoreboard page needs, whatever it looks like.
             'class="mine display" data-signals__ifmissing="{board: \'display\'}" '

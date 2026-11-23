@@ -20,6 +20,8 @@ body.scoreboard{
 .sb-digits{min-width:22vh;padding:1vh 2vh;border:.6vh solid var(--sb-line);border-radius:1.5vh;background:var(--sb-panel);font:700 30vh/1 var(--sb-display);font-variant-numeric:tabular-nums;text-align:center;color:var(--sb-score)}
 .sb-clock{display:flex;flex-direction:column;align-items:center;min-width:60vh;padding:1.5vh 6vh 2vh;border:.6vh solid var(--sb-line);border-radius:1.5vh;background:var(--sb-panel)}
 .sb-label{font:600 3.2vh/1 var(--sb-display);letter-spacing:.08em;text-transform:uppercase;color:var(--sb-muted)}
+/* The one period of a match that has only one has no name. */
+.sb-label:empty{display:none}
 .sb-time{font:700 22vh/1 var(--sb-display);font-variant-numeric:tabular-nums;color:var(--sb-clock)}
 /* The countdown to a period's start is in another colour from the period's own. */
 .sb-clock.before .sb-time,.sb-clock.break .sb-time,.sb-clock.ready .sb-time{color:var(--sb-wait)}

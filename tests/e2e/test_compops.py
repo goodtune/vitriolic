@@ -552,7 +552,7 @@ def test_scoreboard_follows_the_scorer_and_counts_its_own_clock(
     expect(page.locator("#sb-home-name")).to_have_text("Australia")
     expect(page.locator("#sb-away-name")).to_have_text("New Zealand")
     expect(page.locator("#sb-home-score")).to_have_text("0")
-    expect(page.locator("#sb-label")).to_have_text("Period 1")
+    expect(page.locator("#sb-label")).to_have_text("1st Half")
     expect(page.locator("#sb-dots li.on")).to_have_count(1)
 
     # The clock counts by itself, with nothing pushed to it.
@@ -601,6 +601,12 @@ def test_scoreboard_follows_the_scorer_and_counts_its_own_clock(
         # And shown the same: a period's last minute to a tenth of a second.
         shown = page.evaluate("m => window.compopsScoreboard.display(m)", counted)
         assert shown == expected.display, seconds
+        # And called the same: halves, with half time between them.
+        called = page.evaluate(
+            "([data, m]) => window.compopsScoreboard.labelOf(data, m)",
+            [{"names": clock.names_json}, counted],
+        )
+        assert called == expected.label, seconds
 
     # The horn needs one tap before a browser will play it.
     page.locator("#sb-sound").click()
@@ -650,7 +656,7 @@ def test_scoreboard_follows_the_scorer_and_counts_its_own_clock(
     # Between periods the clock counts down to the next, in another colour.
     Division.objects.filter(pk=division.pk).update(period_minutes=18)
     page.goto(base + reverse("compops:scoreboard", kwargs=names))
-    expect(page.locator("#sb-label")).to_have_text("Break")
+    expect(page.locator("#sb-label")).to_have_text("Half time")
     expect(page.locator("#sb-clock")).to_have_class(re.compile(r"\bbreak\b"))
     period_colour = "rgb(244, 246, 248)"
     expect(page.locator("#sb-time")).not_to_have_css("color", period_colour)

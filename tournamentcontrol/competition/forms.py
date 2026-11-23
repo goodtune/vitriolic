@@ -929,6 +929,7 @@ class DivisionForm(
             "periods",
             "period_minutes",
             "break_minutes",
+            "period_name",
             "scoreboard_template",
             "slug",
             "slug_locked",
@@ -1105,6 +1106,7 @@ class StageForm(ScoreboardTemplateMixin, SuperUserSlugMixin, ModelForm):
             "periods",
             "period_minutes",
             "break_minutes",
+            "period_name",
             "color",
             "scoreboard_template",
             "slug",
@@ -1653,6 +1655,7 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
             "periods",
             "period_minutes",
             "break_minutes",
+            "period_name",
             "videos",
             "live_stream_thumbnail_image",
         )
