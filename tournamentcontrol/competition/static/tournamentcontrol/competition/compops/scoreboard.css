@@ -1,0 +1,71 @@
+/* A ground's scoreboard: one screen, read from across a field. Sizes are in
+   viewport units so it fills whatever screen it is put on. To brand it, set
+   the --sb- variables (see scoreboard/_style.html). */
+body.scoreboard{
+	--sb-bg:#0b0e13;--sb-panel:#151a22;--sb-line:#2a323d;--sb-ink:#f4f6f8;--sb-muted:#8d97a4;
+	--sb-score:#ffd60a;--sb-clock:#f4f6f8;--sb-wait:#4cc9f0;--sb-over:#8d97a4;--sb-on:#ffd60a;
+	--sb-font:"Barlow","Helvetica Neue",Arial,sans-serif;
+	--sb-display:"Barlow Condensed","Barlow","Helvetica Neue",Arial,sans-serif;
+	display:grid;grid-template-rows:auto 1fr auto;height:100vh;overflow:hidden;
+	background:var(--sb-bg);color:var(--sb-ink);font-family:var(--sb-font);
+}
+.sb-brand{display:flex;justify-content:space-between;align-items:center;gap:2vw;padding:2vh 3vw;font:600 3vh/1 var(--sb-display);letter-spacing:.04em;text-transform:uppercase;color:var(--sb-muted)}
+.sb-board{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3vh;min-height:0;padding:0 3vw}
+.sb-score{display:grid;grid-template-columns:1fr auto auto 1fr;align-items:center;gap:2.5vw;width:100%}
+.sb-team{display:flex;flex-direction:column;align-items:center;gap:2vh;min-width:0}
+.sb-logo{display:grid;place-items:center;width:20vh;height:20vh;border:.6vh solid var(--sb-line);border-radius:50%;background:var(--sb-panel);overflow:hidden}
+.sb-logo img{width:100%;height:100%;object-fit:contain}
+.sb-code{font:700 7vh/1 var(--sb-display);letter-spacing:.03em}
+.sb-name{max-width:100%;font:600 5vh/1.05 var(--sb-display);text-align:center;text-transform:uppercase;overflow-wrap:anywhere}
+.sb-digits{min-width:22vh;padding:1vh 2vh;border:.6vh solid var(--sb-line);border-radius:1.5vh;background:var(--sb-panel);font:700 30vh/1 var(--sb-display);font-variant-numeric:tabular-nums;text-align:center;color:var(--sb-score)}
+.sb-clock{display:flex;flex-direction:column;align-items:center;min-width:60vh;padding:1.5vh 6vh 2vh;border:.6vh solid var(--sb-line);border-radius:1.5vh;background:var(--sb-panel)}
+.sb-label{font:600 3.2vh/1 var(--sb-display);letter-spacing:.08em;text-transform:uppercase;color:var(--sb-muted)}
+.sb-time{font:700 22vh/1 var(--sb-display);font-variant-numeric:tabular-nums;color:var(--sb-clock)}
+/* The countdown to a period's start is in another colour from the period's own. */
+.sb-clock.before .sb-time,.sb-clock.break .sb-time,.sb-clock.ready .sb-time{color:var(--sb-wait)}
+.sb-clock.over .sb-time{color:var(--sb-over)}
+.sb-dots{display:flex;gap:3vh;margin:0;padding:0;list-style:none}
+.sb-dots li{width:4vh;height:4vh;border:.5vh solid var(--sb-muted);border-radius:50%}
+.sb-dots li.break{width:2.4vh;height:2.4vh;align-self:center}
+.sb-dots li.on{background:var(--sb-on);border-color:var(--sb-on)}
+.sb-dots li.done{background:var(--sb-muted)}
+.sb-meta{margin:0;font:600 2.6vh/1 var(--sb-display);letter-spacing:.06em;text-transform:uppercase;color:var(--sb-muted)}
+.sb-empty{font:600 5vh/1.2 var(--sb-display);color:var(--sb-muted)}
+.sb-sponsors{display:flex;justify-content:center;align-items:center;gap:4vw;min-height:2vh;padding:1vh 3vw 2vh}
+.sb-sponsors img{max-height:9vh}
+.sb-sound{position:fixed;right:2vw;bottom:2vh;padding:1.2vh 2vh;border:1px solid var(--sb-line);border-radius:999px;background:var(--sb-panel);color:var(--sb-muted);font:600 2vh/1 var(--sb-font);cursor:pointer}
+
+/* Laid over a live stream: nothing behind it, one bar in a corner. */
+body.scoreboard.overlay{display:block;height:auto;background:transparent}
+.overlay .sb-brand,.overlay .sb-sponsors,.overlay .sb-meta,.overlay .sb-name,.overlay .sb-label,.overlay .sb-empty{display:none}
+.overlay .sb-board{position:fixed;left:3vw;top:4vh;flex-direction:row;gap:0;padding:0;border-radius:1vh;overflow:hidden;background:rgba(11,14,19,.92);box-shadow:0 .4vh 2vh rgba(0,0,0,.5)}
+.overlay .sb-score{display:flex;gap:0;width:auto}
+.overlay .sb-team{flex-direction:row}
+.overlay .sb-logo{width:auto;height:auto;padding:0 1.6vh;border:0;border-radius:0;background:none}
+.overlay .sb-code{font-size:4.4vh}
+.overlay .sb-digits{min-width:7vh;padding:1vh 1.2vh;border:0;border-radius:0;background:var(--sb-panel);font-size:5.4vh}
+.overlay .sb-home{order:1}.overlay #sb-home-score{order:2}.overlay #sb-away-score{order:3;border-left:.3vh solid var(--sb-bg)}.overlay .sb-away{order:4}
+.overlay .sb-clock{min-width:0;padding:1vh 2vh;border:0;border-radius:0;background:none}
+.overlay .sb-time{font-size:4.4vh}
+.overlay .sb-dots{align-items:center;gap:.8vh;padding-right:1.6vh}
+.overlay .sb-dots li{width:1.4vh;height:1.4vh;border-width:.25vh}
+.overlay .sb-dots li.break{width:.9vh;height:.9vh}
+
+/* The scorer's page: a phone held in one hand. */
+body.scorer{overflow:auto}
+.sc-main{display:flex;flex-direction:column;gap:16px;max-width:520px;width:100%;margin:0 auto;padding:16px}
+.sc-meta{margin:0;color:var(--muted);font-size:13px}
+.sc-side{padding:12px 16px 16px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-panel)}
+.sc-name{margin:0 0 10px;font:600 22px/1.1 var(--display)}
+.sc-row{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px}
+.sc-row form{display:contents}
+.sc-score{min-width:2ch;font:700 64px/1 var(--display);font-variant-numeric:tabular-nums;text-align:center}
+.sc-btn{height:72px;border:1px solid var(--line-strong);border-radius:12px;background:var(--panel);color:var(--ink);font:700 40px/1 var(--display);cursor:pointer;touch-action:manipulation}
+.sc-btn:disabled{color:var(--line-strong);cursor:default}
+.sc-btn.sc-up{background:var(--primary);border-color:var(--primary);color:#fff}
+.sc-btn.sc-go{width:100%;background:var(--ok);border-color:var(--ok);color:#fff;font-size:24px}
+.sc-clock{min-width:0;padding:10px 16px 12px;border:1px solid var(--line);border-radius:var(--r-panel);background:var(--panel)}
+.sc-clock .sb-label{font-size:13px;color:var(--muted)}
+.sc-clock .sb-time{font-size:56px;color:var(--ink)}
+.sc-clock.before .sb-time,.sc-clock.break .sb-time,.sc-clock.ready .sb-time{color:var(--primary)}
+.sc-start{margin:0}

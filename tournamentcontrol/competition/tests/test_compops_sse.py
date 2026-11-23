@@ -21,7 +21,9 @@ from test_plus.test import BaseTestCase
 
 from touchtechnology.admin.tests.tenancy import schema_context
 from tournamentcontrol.competition.compops import events, streams
+from tournamentcontrol.competition.compops.scoreboard import SCOPE
 from tournamentcontrol.competition.compops.sites import CompOpsSite
+from tournamentcontrol.competition.models import Match
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.tests.test_compops_results import HELD
 
@@ -924,3 +926,86 @@ class BoothEventsTests(SseFixture, TestCase):
             self.assertIn('<section id="onair"', pushed[0])
         finally:
             await reader.close()
+
+
+@freeze_time("2026-10-08 10:50 +10:00")
+class ScoreboardEventsTests(SseFixture, TestCase):
+    """A board is sent its match, and again when its score changes."""
+
+    def setUp(self):
+        super().setUp()
+        venue = factories.VenueFactory.create(season=self.season)
+        self.field1 = factories.GroundFactory.create(
+            venue=venue, title="Field 1", slug="field-1", slug_locked=True
+        )
+        self.field2 = factories.GroundFactory.create(
+            venue=venue, title="Field 2", slug="field-2", slug_locked=True
+        )
+        when = timezone.make_aware(datetime.datetime(2026, 10, 8, 10, 40), TZ)
+        self.current = factories.MatchFactory.create(
+            stage=self.stage,
+            datetime=when,
+            date=when.date(),
+            time=when.time(),
+            play_at=self.field1,
+        )
+        self.scorer = factories.UserFactory.create()
+        assign_perm("competition.score_season", self.scorer, self.season)
+        self.kw = {"competition": "pacific-cup", "season": "pc26", "ground": "field-1"}
+        self.url = reverse("compops:scoreboard-events", kwargs=self.kw)
+
+    async def connect(self, signals=None):
+        query = {"datastar": json.dumps(signals)} if signals else {}
+        return await self.async_client.get(
+            self.url, query, headers={"Datastar-Request": "true"}
+        )
+
+    async def tap(self, ground):
+        await self.publish(
+            self.season.pk,
+            "scoreboard-changed",
+            scope=SCOPE,
+            ground=ground.pk,
+            match=self.current.pk,
+        )
+
+    async def test_anyone_is_sent_the_board_and_then_each_change_of_score(self):
+        response = await self.connect()
+        self.assert_http_200_ok(response)
+        reader = Reader(response)
+        try:
+            snapshot = "".join(await reader.until('id="sb-away-score"'))
+            self.assertIn('<div class="sb-digits" id="sb-home-score">0</div>', snapshot)
+            await Match.objects.filter(pk=self.current.pk).aupdate(
+                home_team_progress_score=2
+            )
+            # A tap at another ground of the season is not this board's news.
+            await self.tap(self.field2)
+            await self.tap(self.field1)
+            pushed = "".join(await reader.until('id="sb-away-score"'))
+            self.assertEqual(
+                pushed.count('<div class="sb-digits" id="sb-home-score">2</div>'), 1
+            )
+        finally:
+            await reader.close()
+
+    async def test_scorers_copy_is_for_those_who_may_score(self):
+        response = await self.connect({"board": "scorer"})
+        self.assert_http_302_found(response)
+        await self.async_client.aforce_login(self.user)
+        response = await self.connect({"board": "scorer"})
+        self.assert_http_403_forbidden(response)
+        await self.async_client.aforce_login(self.scorer)
+        reader = Reader(await self.connect({"board": "scorer"}))
+        try:
+            snapshot = "".join(await reader.until('id="sc-away-score"'))
+            self.assertIn('<main id="scorer"', snapshot)
+        finally:
+            await reader.close()
+
+    async def test_unknown_ground_is_not_found(self):
+        response = await self.async_client.get(
+            reverse("compops:scoreboard-events", kwargs={**self.kw, "ground": "nope"}),
+            headers={"Datastar-Request": "true"},
+        )
+        self.assert_http_404_not_found(response)

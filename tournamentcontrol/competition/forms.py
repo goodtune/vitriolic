@@ -819,6 +819,7 @@ class VenueForm(SuperUserSlugMixin, ModelForm):
             "abbreviation",
             "timezone",
             "latlng",
+            "scoreboard_auto_start",
             "slug",
             "slug_locked",
         )
@@ -868,6 +869,16 @@ class DivisionForm(UpstreamTitleMixin, SuperUserSlugMixin, ModelForm):
         if self.instance.season.mode != DAILY:
             self.fields.pop("games_per_day", None)
 
+    # The timing of a match is optional to send. Left out or left empty, it
+    # stays as the division has it, which for a new division is the default.
+    def clean_periods(self):
+        value = self.cleaned_data.get("periods")
+        return self.instance.periods if value is None else value
+
+    def clean_break_minutes(self):
+        value = self.cleaned_data.get("break_minutes")
+        return self.instance.break_minutes if value is None else value
+
     class Meta:
         model = Division
         fields = (
@@ -882,6 +893,9 @@ class DivisionForm(UpstreamTitleMixin, SuperUserSlugMixin, ModelForm):
             "forfeit_for_score",
             "forfeit_against_score",
             "include_forfeits_in_played",
+            "periods",
+            "period_minutes",
+            "break_minutes",
             "slug",
             "slug_locked",
         )

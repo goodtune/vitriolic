@@ -63,6 +63,74 @@ Someone who is not staff gets a shorter home page: the seasons whose booths they
 A season is placed by the date where it is played, from its `timezone`.
 Any day of any season can be opened, so a past day can be corrected or shown in training, and a coming one explored before it starts.
 
+## Scoreboards
+
+Every ground of a season has a scoreboard: the score of the match being played, and a clock that counts its periods down.
+
+| Page | Route | For |
+| --- | --- | --- |
+| The board | `compops:scoreboard` | a large screen at the ground |
+| The overlay | `compops:scoreboard-overlay` | a layer over the live stream: one bar, with nothing behind it |
+| The scorer | `compops:scorer` | a phone, with a button to add one and to take one off for each team |
+
+`compops:scoreboard-index` lists a season's grounds with a link to each page.
+
+### The score
+
+The scoreboard keeps a progress score on the match (`home_team_progress_score` and `away_team_progress_score`).
+It is not the result.
+The result is still `home_team_score` and `away_team_score`, entered on the ops page, and only the result moves a ladder.
+Until a progress score is kept, the board shows the result if the match has one.
+
+Each press of a scorer's button is published on a channel of its own, `season:<id>:scoreboard`.
+The boards of that ground are sent the new score at once.
+The ops desk's activity does not list the presses.
+
+### The clock
+
+Nothing is stored or pushed for the clock while it runs.
+It counts from one moment, through the periods and breaks of the match's division:
+
+- A division gives `periods` (2 unless changed), `period_minutes` and `break_minutes`.
+  With no period length, the board shows the score and no clock.
+- A venue has "Start scoreboard clocks on time" (`scoreboard_auto_start`), which is on unless changed.
+  With it on, the clock runs from the match's scheduled time.
+  With it off, the clock waits until the scorer presses "Start the clock".
+
+The server works out where the clock is each time it renders the board, and the page's script counts on from the same numbers.
+The server sends its own time too, so a screen whose clock is wrong still counts correctly.
+
+Before a match and between periods, the clock counts down to the next start in another colour.
+The dots under it are the periods and the breaks between them.
+A horn sounds when a period starts or ends; a browser plays no sound until the page has been touched, so the board has a button to turn the horn on.
+
+### Which match the board shows
+
+The board shows the match being played on its ground.
+Before the first match of the day, and from two minutes after a match's clock ends, it shows the next match with a countdown to its start.
+A match with no clock, or whose clock was never started, keeps the board until the next match's scheduled time.
+The page asks for the board again every 20 seconds, so it moves on by itself.
+
+### Branding
+
+Override the small templates the board includes, in `tournamentcontrol/competition/compops/scoreboard/`:
+
+| Template | Where | Given |
+| --- | --- | --- |
+| `_brand.html` | above the score | `season`, `ground` |
+| `_logo.html` | each team's circle | `team` (`None` until it is decided), `code` |
+| `_sponsors.html` | below the clock | `season`, `ground` |
+| `_style.html` | in the page's head | nothing; set the `--sb-` variables of `scoreboard.css` in a `<style>` |
+
+Leave `scoreboard.html` as it is.
+The live updates find the score, the clock and the dots by the ids in its `board` partial, and the script counts the clock from the data attributes of `#sb-clock`.
+
+No model has a logo yet, so `_logo.html` shows a few letters for the team: its club's abbreviation, else the start of its name.
+
+### Not yet
+
+The clock cannot be paused or put right, there is no extra time, and the progress score is not offered as the result when a match ends.
+
 ## Template partials on Django 5.2
 
 Skip this section on Django 6.0 and later.
@@ -173,6 +241,8 @@ To turn a check off, put its id in `SILENCED_SYSTEM_CHECKS`.
 | Enter scorers | `is_staff`, `competition.add_simplescorematchstatistic` and `change_simplescorematchstatistic` |
 | Start, test or stop a broadcast; whole-slot actions | `is_staff` and `competition.stream_season` on the season |
 | Watch the booth: the lamp, the strip, the runsheet and the panes | login and `competition.commentate_season` (or `competition.stream_season`) on the season; staff status is not needed |
+| See a ground's scoreboard or its overlay | nothing; anyone with the address may |
+| Keep a scoreboard: change the score, start the clock | login and `competition.score_season` on the season; staff status is not needed |
 | Go on air, end the broadcast or arm the next one from the booth | login and `competition.stream_season` on the season; staff status is not needed |
 
 Every dashboard action is part of the dashboard, so it needs `is_staff` as well as its own permission.
@@ -194,6 +264,8 @@ from guardian.shortcuts import assign_perm
 comms = Group.objects.get(name="Comms team")
 assign_perm("competition.commentate_season", comms, season)
 ```
+
+Grant a scorer `competition.score_season` in the same way; it lets them keep the scoreboard of every ground of the season, and nothing else.
 
 Grant the commentator pair who run the broadcast `stream_season` in the same way:
 

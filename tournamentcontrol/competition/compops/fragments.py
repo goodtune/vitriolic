@@ -38,6 +38,8 @@ PAGES = {
         ),
         "booth",
     ),
+    "board": "scoreboard",
+    "scorer": "scorer",
 }
 
 

@@ -737,6 +737,7 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
         permissions = [
             ("stream_season", "Can start and stop live streams for the season"),
             ("commentate_season", "Can watch the commentary booths of the season"),
+            ("score_season", "Can keep the scoreboards of the season"),
         ]
 
     def _get_admin_namespace(self):
@@ -990,6 +991,15 @@ class Venue(Place):
     ordered_within = "season"
 
     season = ForeignKey(Season, related_name="venues", on_delete=PROTECT)
+    scoreboard_auto_start = BooleanField(
+        default=True,
+        verbose_name=_("Start scoreboard clocks on time"),
+        help_text=_(
+            "The clock of each scoreboard at this venue starts at the "
+            "match's scheduled time. Turn it off to have the scorer start "
+            "each clock by hand."
+        ),
+    )
 
     def get_tzinfo(self):
         """The venue's time zone, else the season's, else the current one."""
@@ -1159,6 +1169,31 @@ class Division(
     forfeit_for_score = models.SmallIntegerField(null=True)
     forfeit_against_score = models.SmallIntegerField(null=True)
     include_forfeits_in_played = BooleanField(default=True)
+
+    # The timing of a match of the division, for its scoreboard clock. With
+    # no period length the scoreboard shows the score and no clock.
+    periods = models.PositiveSmallIntegerField(
+        default=2,
+        blank=True,
+        validators=[validators.MinValueValidator(1)],
+        verbose_name=_("Periods"),
+        help_text=_("How many periods a match is played in: 2 for halves."),
+    )
+    period_minutes = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        validators=[validators.MinValueValidator(1)],
+        verbose_name=_("Period length"),
+        help_text=_(
+            "Minutes in each period. Leave it empty for a scoreboard with no clock."
+        ),
+    )
+    break_minutes = models.PositiveSmallIntegerField(
+        default=0,
+        blank=True,
+        verbose_name=_("Break length"),
+        help_text=_("Minutes between one period and the next."),
+    )
 
     games_per_day = models.SmallIntegerField(
         null=True,
@@ -2832,6 +2867,14 @@ class Match(
     )
     live_stream_status_at = DateTimeField(blank=True, null=True)
     live_stream_thumbnail = models.URLField(blank=True, null=True)
+    # The score while the match is being played, kept by the scoreboard. It
+    # is not the result: ``home_team_score`` and ``away_team_score`` are, and
+    # only they move a ladder.
+    home_team_progress_score = models.PositiveSmallIntegerField(blank=True, null=True)
+    away_team_progress_score = models.PositiveSmallIntegerField(blank=True, null=True)
+    # When the scorer started the scoreboard clock by hand, at a venue whose
+    # clocks do not start on time.
+    clock_started_at = DateTimeField(blank=True, null=True)
     live_stream_thumbnail_image = models.BinaryField(
         blank=True,
         null=True,

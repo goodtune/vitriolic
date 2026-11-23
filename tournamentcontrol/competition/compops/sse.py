@@ -19,7 +19,11 @@ from django.http import Http404, HttpResponseForbidden
 from tournamentcontrol.competition.compops import events
 from tournamentcontrol.competition.compops.days import parse_day
 from tournamentcontrol.competition.compops.default_settings import EVENTS_KEEPALIVE
-from tournamentcontrol.competition.compops.permissions import can_commentate
+from tournamentcontrol.competition.compops.permissions import (
+    can_commentate,
+    can_score,
+)
+from tournamentcontrol.competition.compops.scoreboard import SCOPE
 from tournamentcontrol.competition.models import Season
 
 logger = logging.getLogger(__name__)
@@ -52,7 +56,7 @@ def render(func, *args):
         close_old_connections()
 
 
-async def subscribe(season_id):
+async def subscribe(season_id, scope=None):
     """
     Return the subscription to ``season_id`` in the request's tenant.
 
@@ -62,7 +66,7 @@ async def subscribe(season_id):
     channel is named on the request's thread, before the response starts.
     """
     return await sync_to_async(events.subscribe)(
-        season_id, idle=float(EVENTS_KEEPALIVE)
+        season_id, idle=float(EVENTS_KEEPALIVE), scope=scope
     )
 
 
@@ -155,6 +159,38 @@ def booth_events(site):
             )
 
         feed = await subscribe(season.pk)
+        return DatastarResponse(
+            stream(season.pk, feed, snapshot, on_event), headers=SSE_HEADERS
+        )
+
+    return view
+
+
+def scoreboard_events(site):
+    async def view(request, competition, season, ground):
+        season = await get_season(competition, season)
+        ground = await site.scoreboard_ground(season, ground)
+        # A board is for anyone to see. The scorer's page says that it is
+        # one, and is sent its own copy, with the buttons.
+        signals = read_signals(request) or {}
+        scorer = signals.get("board") == "scorer"
+        if scorer:
+            user = await request.auser()
+            if not user.is_authenticated:
+                return redirect_to_login(request.get_full_path())
+            if not await sync_to_async(can_score)(user, season):
+                return HttpResponseForbidden()
+
+        def snapshot():
+            return site.scoreboard_fragments(request, season, ground, scorer)
+
+        def on_event(event):
+            # Every ground of the season shares the channel.
+            if event.get("ground") != ground.pk:
+                return []
+            return snapshot()
+
+        feed = await subscribe(season.pk, scope=SCOPE)
         return DatastarResponse(
             stream(season.pk, feed, snapshot, on_event), headers=SSE_HEADERS
         )
