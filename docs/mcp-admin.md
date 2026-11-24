@@ -153,6 +153,26 @@ Every tool that changes data returns `saved: true` with the record as saved; a t
 
 Only the arguments given to an `update_*` tool are changed: the form is bound to the record's current values with the changes laid over them, so the validation and side effects of a form submission from the admin site apply (for example changing a division's points formula recalculates its ladders, and changing a venue's time zone recomputes kick-off instants).
 
+#### Scoreboards
+
+The tools take the scoreboard fields of the admin forms (see [Scoreboards](compops.md#scoreboards)), validated by the same forms:
+
+| Tools | Scoreboard arguments |
+| --- | --- |
+| `create_division`, `create_divisions`, `update_division` | `periods`, `period_minutes`, `break_minutes`, `half_time_minutes`, `period_name`, `scoreboard_template` |
+| `create_stage`, `create_stages`, `update_stage` | the same six |
+| `create_match`, `update_match` | `periods`, `period_minutes`, `break_minutes`, `half_time_minutes`, `period_name` |
+| `create_competition`, `update_competition`, `create_season`, `update_season` | `scoreboard_template` |
+| `create_venue`, `update_venue` | `scoreboard_auto_start` |
+
+A scoreboard template is tried out before it is saved (`scoreboard.check_template`), so one that does not compile or has no `{% board %}` is refused.
+On a stage or a match each timing value left empty is its parent's.
+To empty one again, `update_stage` and `update_match` take `clear_periods`, `clear_period_minutes`, `clear_break_minutes` and `clear_half_time_minutes`, and `period_name=""` or `scoreboard_template=""` empties the text.
+A division always has a number of periods and a break length, so `update_division` takes only `clear_period_minutes` (a board with no clock) and `clear_half_time_minutes` (half time as long as the other breaks).
+
+The records these tools return carry the same fields.
+`get_season` adds them to the season, its divisions, stages and venues, and `get_match` gives a match's own timing and `scoreboard_timing`, the timing its board runs after the match, stage and division are taken in turn.
+
 #### Bulk creation
 
 Records of the same kind are best added in one call:

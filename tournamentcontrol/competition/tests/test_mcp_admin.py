@@ -815,6 +815,359 @@ class BulkCreateTests(AdminFixtureMixin, TestCase):
         )
 
 
+SCOREBOARD_TEMPLATE = (
+    "<html><body>{% board %}{{ home.score }}-{{ away.score }}{% endboard %}"
+    "</body></html>"
+)
+NO_BOARD = (
+    "Validation failed: scoreboard_template: Put {% board %} and {% endboard %} "
+    "around the part that changes while a match is played: the live updates "
+    "replace what is between them."
+)
+LADDER = {
+    "points_formula": "3*win + 2*draw + 1*loss",
+    "forfeit_for_score": 5,
+    "forfeit_against_score": 0,
+}
+NO_TIMING = {
+    "periods": None,
+    "period_minutes": None,
+    "break_minutes": None,
+    "half_time_minutes": None,
+    "period_name": None,
+}
+#: A match of a division whose timing is left as it is created: a board
+#: with no clock.
+UNTIMED_MATCH = {
+    **NO_TIMING,
+    "scoreboard_timing": {**NO_TIMING, "periods": 2, "break_minutes": 0},
+}
+
+
+@freeze_time(NOW)
+class ScoreboardTests(AdminFixtureMixin, TestCase):
+    """The scoreboard fields of the admin forms, set and read through MCP (#681)."""
+
+    def test_competition_template(self):
+        admin = self.admin()
+        competition = admin.create_competition(
+            title="Nationals 2027", scoreboard_template=SCOREBOARD_TEMPLATE
+        )["competition"]
+        self.assertEqual(competition["scoreboard_template"], SCOREBOARD_TEMPLATE)
+        res = admin.update_competition(competition["id"], scoreboard_template="")
+        self.assertEqual(res["competition"]["scoreboard_template"], None)
+        self.assertToolError(
+            NO_BOARD,
+            admin.update_competition,
+            competition["id"],
+            scoreboard_template="<html></html>",
+        )
+
+    def test_season_template(self):
+        admin = self.admin()
+        season = admin.create_season(
+            self.competition.pk, title="2027", scoreboard_template=SCOREBOARD_TEMPLATE
+        )["season"]
+        self.assertEqual(season["scoreboard_template"], SCOREBOARD_TEMPLATE)
+        res = admin.update_season(season["id"], scoreboard_template="")
+        self.assertEqual(res["season"]["scoreboard_template"], None)
+        self.assertToolError(
+            NO_BOARD,
+            admin.create_season,
+            self.competition.pk,
+            title="2028",
+            scoreboard_template="{{ home.score }}",
+        )
+
+    def test_venue_auto_start(self):
+        admin = self.admin()
+        venue = admin.create_venue(
+            self.season.pk,
+            title="Loughborough",
+            latitude=52.77,
+            longitude=-1.2,
+            zoom=14,
+            scoreboard_auto_start=False,
+        )["venue"]
+        self.assertEqual(venue["scoreboard_auto_start"], False)
+        res = admin.update_venue(venue["id"], scoreboard_auto_start=True)
+        self.assertEqual(res["venue"]["scoreboard_auto_start"], True)
+        self.assertEqual(
+            [
+                (v["title"], v["scoreboard_auto_start"])
+                for v in admin.list_venues(self.season.pk)["venues"]
+            ],
+            [("Nottingham", True), ("Loughborough", True)],
+        )
+
+    def test_division_timing(self):
+        admin = self.admin()
+        division = admin.create_division(
+            self.season.pk,
+            title="Netball",
+            **LADDER,
+            periods=4,
+            period_minutes=15,
+            break_minutes=4,
+            half_time_minutes=12,
+            period_name="Quarter",
+            scoreboard_template=SCOREBOARD_TEMPLATE,
+        )["division"]
+        self.assertEqual(
+            {name: division[name] for name in (*NO_TIMING, "scoreboard_template")},
+            {
+                "periods": 4,
+                "period_minutes": 15,
+                "break_minutes": 4,
+                "half_time_minutes": 12,
+                "period_name": "Quarter",
+                "scoreboard_template": SCOREBOARD_TEMPLATE,
+            },
+        )
+        res = admin.update_division(
+            division["id"],
+            clear_period_minutes=True,
+            clear_half_time_minutes=True,
+            period_name="",
+            scoreboard_template="",
+        )
+        self.assertEqual(
+            {
+                name: res["division"][name]
+                for name in (*NO_TIMING, "scoreboard_template")
+            },
+            {
+                # A division always has a number of periods and a break.
+                "periods": 4,
+                "period_minutes": None,
+                "break_minutes": 4,
+                "half_time_minutes": None,
+                "period_name": None,
+                "scoreboard_template": None,
+            },
+        )
+        self.assertToolError(
+            "Give period_minutes or clear_period_minutes, not both.",
+            admin.update_division,
+            division["id"],
+            period_minutes=10,
+            clear_period_minutes=True,
+        )
+        self.assertToolError(
+            NO_BOARD,
+            admin.update_division,
+            division["id"],
+            scoreboard_template="{{ home.score }}",
+        )
+
+    def test_create_divisions_timing(self):
+        res = self.admin().create_divisions(
+            [
+                {
+                    "season_id": self.season.pk,
+                    "title": "Sevens",
+                    **LADDER,
+                    "period_minutes": 7,
+                    "break_minutes": 2,
+                },
+                {
+                    "season_id": self.season.pk,
+                    "title": "Polo",
+                    **LADDER,
+                    "periods": 6,
+                    "period_minutes": 7,
+                    "period_name": "Chukka",
+                    "scoreboard_template": SCOREBOARD_TEMPLATE,
+                },
+            ],
+            verbose=True,
+        )
+        self.assertEqual(
+            [
+                (
+                    d["periods"],
+                    d["period_minutes"],
+                    d["break_minutes"],
+                    d["period_name"],
+                    d["scoreboard_template"],
+                )
+                for d in res["divisions"]
+            ],
+            [(2, 7, 2, None, None), (6, 7, 0, "Chukka", SCOREBOARD_TEMPLATE)],
+        )
+
+    def test_stage_timing(self):
+        admin = self.admin()
+        stage = admin.create_stage(
+            self.mens.pk,
+            title="Grand Final",
+            periods=2,
+            period_minutes=10,
+            break_minutes=3,
+            half_time_minutes=5,
+            period_name="Half",
+            scoreboard_template=SCOREBOARD_TEMPLATE,
+        )["stage"]
+        self.assertEqual(
+            {name: stage[name] for name in (*NO_TIMING, "scoreboard_template")},
+            {
+                "periods": 2,
+                "period_minutes": 10,
+                "break_minutes": 3,
+                "half_time_minutes": 5,
+                "period_name": "Half",
+                "scoreboard_template": SCOREBOARD_TEMPLATE,
+            },
+        )
+        # Emptied, each falls back to the division's.
+        res = admin.update_stage(
+            stage["id"],
+            clear_periods=True,
+            clear_period_minutes=True,
+            clear_break_minutes=True,
+            clear_half_time_minutes=True,
+            period_name="",
+            scoreboard_template="",
+        )
+        self.assertEqual(
+            {name: res["stage"][name] for name in (*NO_TIMING, "scoreboard_template")},
+            {**NO_TIMING, "scoreboard_template": None},
+        )
+        self.assertToolError(
+            "Give periods or clear_periods, not both.",
+            admin.update_stage,
+            stage["id"],
+            periods=2,
+            clear_periods=True,
+        )
+        self.assertToolError(
+            "Validation failed: periods: Ensure this value is greater than or "
+            "equal to 1.",
+            admin.update_stage,
+            stage["id"],
+            periods=0,
+        )
+
+    def test_create_stages_timing(self):
+        res = self.admin().create_stages(
+            [
+                {"division_id": self.womens.pk, "title": "Finals"},
+                {
+                    "division_id": self.womens.pk,
+                    "title": "Grand Final",
+                    "period_minutes": 10,
+                    "scoreboard_template": SCOREBOARD_TEMPLATE,
+                },
+            ],
+            verbose=True,
+        )
+        self.assertEqual(
+            [
+                (s["title"], s["period_minutes"], s["scoreboard_template"])
+                for s in res["stages"]
+            ],
+            [("Finals", None, None), ("Grand Final", 10, SCOREBOARD_TEMPLATE)],
+        )
+
+    def test_match_timing(self):
+        admin = self.admin()
+        stage = self.old_match.stage
+        stage.division.period_minutes = 20
+        stage.division.save()
+        match = admin.create_match(
+            stage.pk,
+            home_team_id=self.old_match.away_team_id,
+            away_team_id=self.old_match.home_team_id,
+            period_minutes=10,
+            half_time_minutes=5,
+            period_name="Half",
+        )["match"]
+        self.assertEqual(
+            {name: match[name] for name in NO_TIMING},
+            {
+                **NO_TIMING,
+                "period_minutes": 10,
+                "half_time_minutes": 5,
+                "period_name": "Half",
+            },
+        )
+        # What the scoreboard runs: the match's own, else the stage's, else
+        # the division's.
+        self.assertEqual(
+            match["scoreboard_timing"],
+            {
+                "periods": 2,
+                "period_minutes": 10,
+                "break_minutes": 0,
+                "half_time_minutes": 5,
+                "period_name": "Half",
+            },
+        )
+        res = admin.update_match(
+            match["id"],
+            periods=4,
+            clear_period_minutes=True,
+            clear_half_time_minutes=True,
+            period_name="",
+        )
+        self.assertEqual(
+            {name: res["match"][name] for name in NO_TIMING},
+            {**NO_TIMING, "periods": 4},
+        )
+        self.assertEqual(
+            admin.get_match(match["id"])["scoreboard_timing"],
+            {
+                "periods": 4,
+                "period_minutes": 20,
+                "break_minutes": 0,
+                "half_time_minutes": None,
+                "period_name": None,
+            },
+        )
+        self.assertToolError(
+            "Give break_minutes or clear_break_minutes, not both.",
+            admin.update_match,
+            match["id"],
+            break_minutes=2,
+            clear_break_minutes=True,
+        )
+
+    def test_get_season(self):
+        self.season.scoreboard_template = SCOREBOARD_TEMPLATE
+        self.season.save()
+        self.mens.period_minutes = 20
+        self.mens.save()
+        self.mens_finals.period_minutes = 25
+        self.mens_finals.period_name = "Half"
+        self.mens_finals.save()
+        self.venue.scoreboard_auto_start = False
+        self.venue.save()
+        res = self.admin().get_season(self.season.pk)
+        self.assertEqual(res["scoreboard_template"], SCOREBOARD_TEMPLATE)
+        mens = res["divisions"][0]
+        self.assertEqual(
+            {name: mens[name] for name in (*NO_TIMING, "scoreboard_template")},
+            {
+                **NO_TIMING,
+                "periods": 2,
+                "period_minutes": 20,
+                "break_minutes": 0,
+                "scoreboard_template": None,
+            },
+        )
+        self.assertEqual(
+            [
+                (s["title"], s["period_minutes"], s["period_name"])
+                for s in mens["stages"]
+            ],
+            [("Pool Stage", None, None), ("Finals", 25, "Half")],
+        )
+        self.assertEqual(
+            [(v["title"], v["scoreboard_auto_start"]) for v in res["venues"]],
+            [("Nottingham", False)],
+        )
+
+
 @freeze_time(NOW)
 class SchedulingTests(AdminFixtureMixin, TestCase):
     def test_reschedule(self):
@@ -1086,6 +1439,7 @@ class ByeTests(AdminFixtureMixin, TestCase):
                     "bye_processed": False,
                     "include_in_ladder": True,
                     "youtube_broadcast_id": None,
+                    **UNTIMED_MATCH,
                     "referees": [],
                 },
             },
@@ -1231,6 +1585,7 @@ class ByeTests(AdminFixtureMixin, TestCase):
                     "bye_processed": False,
                     "include_in_ladder": True,
                     "youtube_broadcast_id": None,
+                    **UNTIMED_MATCH,
                     "referees": [],
                 },
             },
@@ -1395,6 +1750,7 @@ class ByeTests(AdminFixtureMixin, TestCase):
                     "bye_processed": False,
                     "include_in_ladder": True,
                     "youtube_broadcast_id": None,
+                    **UNTIMED_MATCH,
                     "referees": [],
                 },
             },
@@ -1552,6 +1908,7 @@ class ByeTests(AdminFixtureMixin, TestCase):
                     "bye_processed": False,
                     "include_in_ladder": True,
                     "youtube_broadcast_id": None,
+                    **UNTIMED_MATCH,
                     "referees": [],
                 },
             },
