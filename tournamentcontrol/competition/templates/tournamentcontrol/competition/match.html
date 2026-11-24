@@ -1,5 +1,5 @@
 {% extends "tournamentcontrol/competition/base.html" %}
-{% load i18n %}
+{% load i18n static %}
 {% load common competition %}
 
 {% block page_title %}{% trans match.title %} - {{ match.datetime|date:"jS F, Y @ G:i" }} [{% trans competition.title %} - {% trans season.title %} - {% trans division.title %}]{% endblock %}
@@ -11,6 +11,20 @@
 		<h1>{% trans competition.title %} - {% trans season.title %}</h1>
 		{% if match.label or not match.is_final %}
 			<h2>{% trans division.title %} - {% if match.label %}{% trans match.label %}{% else %}{% blocktrans with num=match.round %}Round {{ num }}{% endblocktrans %}{% endif %}</h2>
+		{% endif %}
+	{% endblock %}
+
+	{% block live %}
+		{% comment %}
+			While the match is played: its live score and events. A template that
+			overrides this page places them with this block, or includes
+			match_live.html inside an element like this one.
+		{% endcomment %}
+		{% if in_progress %}
+			<div class="match-live-stream"{% if live_url %} data-effect="@get('{{ live_url }}', {retryMaxCount: 1000})"{% endif %}>
+				{% include "tournamentcontrol/competition/match_live.html" %}
+			</div>
+			{% if live_url %}<script type="module" src="{% static 'tournamentcontrol/competition/compops/datastar-1.0.4.js' %}"></script>{% endif %}
 		{% endif %}
 	{% endblock %}
 

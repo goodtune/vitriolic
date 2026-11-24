@@ -474,6 +474,39 @@ table.draw tr.first td {
 	}
 }
 
+/* -------------------------------------------- a match being played: live */
+
+.match-live {
+	margin: 1rem 0;
+	padding: 0.75rem 1rem;
+	border: 1px solid var(--vi-line-strong);
+	border-radius: var(--vi-radius);
+	background: var(--vi-surface);
+}
+
+.match-live .live-flag {
+	display: inline-block;
+	margin: 0 0 0.5rem;
+	padding: 0.1rem 0.5rem;
+	border-radius: var(--vi-radius);
+	background: #c62828;
+	color: #fff;
+	font-weight: 700;
+	text-transform: uppercase;
+}
+
+.match-live .live-score {
+	margin: 0;
+	font-size: 1.5rem;
+	font-variant-numeric: tabular-nums;
+}
+
+.match-live .live-score .points { font-weight: 700; }
+.match-live .live-score .dash { margin: 0 0.4rem; }
+.match-live .live-note { margin: 0.25rem 0 0.5rem; color: var(--vi-muted); }
+.match-live .live-events { margin: 0; padding-left: 1.25rem; }
+.match-live .live-event .clock { color: var(--vi-muted); font-variant-numeric: tabular-nums; }
+
 @media print {
 	body { background: #fff; color: #000; }
 	#tabs, #footer form, a.calendar { display: none; }

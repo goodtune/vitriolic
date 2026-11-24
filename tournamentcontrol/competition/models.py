@@ -3437,6 +3437,10 @@ class Match(
             self._add_progress(event.side, -event.points)
         return correction
 
+    def live_events(self):
+        """The live events in the order they happened, for a chronology."""
+        return self.events.live().select_related("player")
+
     def scoreboard_points(self):
         """
         The points of each person named as the scorer of a live score event,

@@ -1024,6 +1024,22 @@ class CompetitionSite(Application):
         templates = self.template_path(
             "match.html", competition.slug, season.slug, division.slug
         )
+        # While the match is played the page shows its live score, kept up to
+        # date by Tournament Ops' event stream where it is mounted (it needs
+        # ASGI); elsewhere the page shows the live score as it was rendered.
+        extra_context["in_progress"] = match.in_progress
+        if extra_context["in_progress"]:
+            try:
+                extra_context["live_url"] = reverse(
+                    "compops:match-live",
+                    kwargs={
+                        "competition": competition.slug,
+                        "season": season.slug,
+                        "match_pk": match.pk,
+                    },
+                )
+            except NoReverseMatch:
+                extra_context["live_url"] = None
         return self.generic_detail(
             request,
             division.matches,

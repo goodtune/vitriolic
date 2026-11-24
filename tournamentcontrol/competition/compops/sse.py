@@ -195,6 +195,34 @@ def booth_events(site):
     return view
 
 
+def match_events(site):
+    """
+    The public match page's stream: its live block, again whenever the match
+    is scored or its clock started. Anyone may open it, as anyone may see a
+    scoreboard or the match page, and it sends no more than the page shows.
+    """
+
+    async def view(request, competition, season, match_pk):
+        season = await get_season(competition, season)
+        match, venue = await site.live_match(season, match_pk)
+
+        def snapshot():
+            return site.match_live_fragments(request, match.pk)
+
+        def on_event(event):
+            # A scorer names the match; a venue's timekeeper names the venue.
+            if event.get("match") != match.pk and event.get("venue") != venue:
+                return []
+            return snapshot()
+
+        feed = await subscribe(season.pk, scope=SCOPE)
+        return DatastarResponse(
+            stream(season.pk, feed, snapshot, on_event), headers=SSE_HEADERS
+        )
+
+    return view
+
+
 def scoreboard_events(site):
     async def view(request, competition, season, ground):
         season = await get_season(competition, season)

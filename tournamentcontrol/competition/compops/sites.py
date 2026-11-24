@@ -21,6 +21,7 @@ from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.db import transaction
 from django.http import Http404, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect
+from django.template.loader import render_to_string
 from django.urls import include, path, re_path, reverse
 from django.utils import timezone
 
@@ -66,6 +67,7 @@ from tournamentcontrol.competition.utils import FauxQueryset
 logger = logging.getLogger(__name__)
 
 DATASTAR_MIDDLEWARE = "touchtechnology.common.middleware.DatastarMiddleware"
+LIVE_TEMPLATE = "tournamentcontrol/competition/match_live.html"
 TEMPLATE_PARTIALS = "template_partials"
 
 
@@ -307,6 +309,11 @@ class CompOpsSite(Application):
             re_path(r"^(?P<datestr>\d{8})/", include(self.day_urls())),
             path("booth/", include(self.booth_urls())),
             path("scoreboard/", include(self.scoreboard_urls())),
+            path(
+                "match/<int:match_pk>/live/",
+                sse.match_events(self),
+                name="match-live",
+            ),
         ]
 
     def scoreboard_urls(self):
@@ -1561,6 +1568,41 @@ class CompOpsSite(Application):
             [(match, scoreboard.clock_for(match, ground))], request.user
         )
         return self._scorer_changed(request, season, ground, match)
+
+    # --- the public match page ---------------------------------------
+
+    async def live_match(self, season, pk):
+        """
+        The match of a public match page (not a bye, and both teams known),
+        with the venue it is played at: the timekeeper of a venue starts
+        every clock there with one event that names the venue alone.
+        """
+        try:
+            match = await Match.objects.aget(
+                pk=pk,
+                stage__division__season=season,
+                is_bye=False,
+                home_team__isnull=False,
+                away_team__isnull=False,
+            )
+        except Match.DoesNotExist:
+            raise Http404("No such match.")
+        # A match is played at a ground of a venue, or at the venue itself.
+        venue = await (
+            Ground.objects.filter(pk=match.play_at_id)
+            .values_list("venue_id", flat=True)
+            .afirst()
+        )
+        return match, venue or match.play_at_id
+
+    def match_live_fragments(self, request, match_pk):
+        """
+        The public match page's live block, as it is now: the same template
+        the page includes, given only the match and whether it is in play.
+        """
+        match = Match.objects.select_related("home_team", "away_team").get(pk=match_pk)
+        context = {"match": match, "in_progress": match.in_progress}
+        return [render_to_string(LIVE_TEMPLATE, context, request=request)]
 
     # --- timekeeper -------------------------------------------------
 
