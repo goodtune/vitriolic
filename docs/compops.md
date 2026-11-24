@@ -87,6 +87,76 @@ Each press of a scorer's button is published on a channel of its own, `season:<i
 The boards of that ground are sent the new score at once.
 The ops desk's activity does not list the presses.
 
+### The event log
+
+Each press is also recorded as a `MatchEvent`: what happened in the match, when, and who recorded it.
+
+| Kind | Recorded when |
+| --- | --- |
+| `start` | a press really started the clock, from the scorer's page or the venue's timekeeper |
+| `score` | the scorer pressed "+" for a team; it has one point |
+| `dismissal` | someone added one in the admin; the scorer's page does not record them yet |
+| `correction` | the scorer pressed "−", or someone corrected an event in the admin |
+
+An event also keeps where the scoreboard clock was: the period and the seconds left of it.
+A match with no clock, or an event out of a period, has neither.
+
+Nothing in the log is edited or deleted to put a mistake right.
+A correction is a new event that reverses an earlier one, and an event is reversed once at most.
+The live events are those that are neither corrections nor reversed.
+"−" reverses the team's latest live score.
+A team whose score was kept before the log, with no live score to reverse, only has one taken off.
+
+The events are the record, and the progress scores are their running total, kept for the boards to read.
+Each press changes both in one transaction, under a lock on the match's row, so two scorers pressing at once are written one after the other and neither press is lost.
+`Match.recount_progress_scores()` sets the progress scores to what the live score events add up to.
+Nothing in the log saves the match, so the log never moves a ladder.
+
+A match is in progress (`Match.in_progress`, `Match.objects.in_progress()`) when it is not a bye, has no result and has started: it has a start event, a live score or a clock started by hand.
+A venue whose clocks start on time records no start event, so a match there is in progress from its first score.
+
+### Who scored
+
+After "+" the scorer's page asks who scored, from the scoring team's linked people who are players.
+The score is recorded first, so the question never holds up a press, and the scorer can skip it or keep pressing.
+While a score is the team's latest, the scorer can change its player or say that nobody is named.
+An older score is put right in the admin.
+
+A team with no players linked is never asked about.
+A button under the teams turns the question off, and on again, for that scorer and that match.
+The browser keeps the choice in `localStorage` (see `compops/scorer.js`); the server keeps nothing.
+
+### The result and the scorers
+
+A match's live score is offered when its result is entered, and saved only when the operator saves it:
+
+- Where a match has no result and has a progress score, the result form (the admin's results page and the ops results panel) starts from the progress scores, marked "From the scoreboard".
+- Where a match has no player statistics, the points entry (the ops scorers modal and the admin's statistics page) starts from the live scores that name a player, marked the same way.
+
+A match with a result, or with statistics, is never changed by the live score.
+
+### The public match page
+
+While a match is in progress, the public match page (`match.html`) shows its live score, marked as live and not as the result, and the chronology of its live events: the time on the clock, the team and, where it is known, the player.
+It is drawn by `match_live.html` in the page's `live` block, so a project that overrides `match.html` can place it.
+
+Where Tournament Ops is mounted, the page loads Datastar and opens the match's event stream (`compops:match-live`).
+The stream sends the live block again whenever a scorer's press names the match, or the timekeeper starts the clocks of its venue.
+More readers add no polling: each holds the one stream.
+Anyone may open the stream, as anyone may see a scoreboard.
+It serves only a match with a public page (both teams known, not a bye), and sends nothing the page does not show: never who kept the score.
+
+Tournament Ops needs ASGI and is optional.
+Where it is not mounted, the page shows the live score as it was rendered, with no stream.
+
+### The admin
+
+A match's page in the admin lists its events, in both shells.
+An event can be added, with the players of the two teams to choose from, and a score is counted in the progress score as it is added.
+"Correct" records a correction that reverses the event, and takes a score off the progress score.
+An event's player can be changed in the admin, from its team's players.
+No one can delete an event, not even a superuser: the log is the record.
+
 ### The clock
 
 Nothing is stored or pushed for the clock while it runs.
@@ -204,7 +274,8 @@ Each board says which template drew it; when an update brings a board drawn by a
 
 ### Not yet
 
-The clock cannot be paused or put right, there is no extra time, and the progress score is not offered as the result when a match ends.
+The clock cannot be paused or put right, and there is no extra time.
+The scorer's page records no dismissals or substitutions.
 
 ## Template partials on Django 5.2
 
@@ -318,6 +389,10 @@ To turn a check off, put its id in `SILENCED_SYSTEM_CHECKS`.
 | Watch the booth: the lamp, the strip, the runsheet and the panes | login and `competition.commentate_season` (or `competition.stream_season`) on the season; staff status is not needed |
 | See a ground's scoreboard or its overlay | nothing; anyone with the address may |
 | Keep a scoreboard: change the score, start the clock, start a venue's clocks together | login and `competition.score_season` on the season; staff status is not needed |
+| Say who scored the team's latest score, from the scorer's page | login and `competition.score_season` on the season; staff status is not needed |
+| See a match's live score and events on the public match page, and its stream | nothing; anyone may |
+| Add an event to a match, or correct one, in the admin | `is_staff` and `competition.add_matchevent` |
+| Change an event's player in the admin | `is_staff` and `competition.change_matchevent` |
 | Go on air, end the broadcast or arm the next one from the booth | login and `competition.stream_season` on the season; staff status is not needed |
 
 Every dashboard action is part of the dashboard, so it needs `is_staff` as well as its own permission.
