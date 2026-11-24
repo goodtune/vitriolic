@@ -19,8 +19,6 @@ from django.conf import settings
 from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import ImproperlyConfigured
 from django.db import transaction
-from django.db.models import F
-from django.db.models.functions import Coalesce, Greatest
 from django.http import Http404, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import include, path, re_path, reverse
@@ -57,6 +55,7 @@ from tournamentcontrol.competition.forms import MatchResultForm, MatchStatisticF
 from tournamentcontrol.competition.models import (
     Ground,
     Match,
+    MatchEvent,
     Season,
     SimpleScoreMatchStatistic,
     Team,
@@ -1476,13 +1475,17 @@ class CompOpsSite(Application):
         if side not in ("home", "away") or step not in ("up", "down"):
             raise Http404("No such score button.")
         match = get_object_or_404(queries.ground_matches(ground), pk=match_pk)
-        field = f"{side}_team_progress_score"
-        change = 1 if step == "up" else -1
-        # In the database, so two scorers tapping at once both count; and a
-        # score never goes below nothing.
-        Match._base_manager.filter(pk=match.pk).update(
-            **{field: Greatest(Coalesce(F(field), 0) + change, 0)}
-        )
+        clock = scoreboard.clock_for(match, ground)
+        moment = clock.at(timezone.now()) if clock else None
+        # Each records an event and changes the score under the match's lock,
+        # so two scorers tapping at once both count; a score never goes below
+        # nothing.
+        if step == "up":
+            match.record_event(
+                MatchEvent.Kind.SCORE, side, recorded_by=request.user, moment=moment
+            )
+        else:
+            match.take_back_score(side, recorded_by=request.user, moment=moment)
         return self._scorer_changed(request, season, ground, match)
 
     @require_POST_m
@@ -1491,8 +1494,8 @@ class CompOpsSite(Application):
     def scorer_start(self, request, season, ground, match_pk, **kwargs):
         match = get_object_or_404(queries.ground_matches(ground), pk=match_pk)
         # The first press starts the clock; a second changes nothing.
-        Match._base_manager.filter(pk=match.pk, clock_started_at=None).update(
-            clock_started_at=timezone.now()
+        scoreboard.start_clocks(
+            [(match, scoreboard.clock_for(match, ground))], request.user
         )
         return self._scorer_changed(request, season, ground, match)
 
@@ -1529,10 +1532,7 @@ class CompOpsSite(Application):
             raise Http404("No such round.")
         # One moment for every field. A clock a scorer has already started
         # keeps its own start.
-        started = Match._base_manager.filter(
-            pk__in=[match.pk for match in waiting], clock_started_at=None
-        ).update(clock_started_at=now)
-        if started:
+        if scoreboard.start_clocks(waiting, request.user, now):
             events.publish(
                 season.pk,
                 "scoreboard-changed",

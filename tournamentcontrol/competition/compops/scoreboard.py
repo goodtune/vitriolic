@@ -17,6 +17,7 @@ import datetime
 import hashlib
 import json
 
+from django.db import transaction
 from django.template import Context, Engine, TemplateDoesNotExist, TemplateSyntaxError
 from django.templatetags.static import static
 from django.utils import timezone
@@ -25,6 +26,7 @@ from django.utils.translation import gettext as _
 
 from tournamentcontrol.competition.compops import queries
 from tournamentcontrol.competition.compops.board_tag import RENDERED
+from tournamentcontrol.competition.models import Match, MatchEvent
 
 #: The channel of a season's bus that its scoreboards listen to. A tap of a
 #: scorer's button is news to a board, and noise in the ops desk's activity.
@@ -281,12 +283,47 @@ class Round:
 
     @property
     def waiting(self):
-        """The matches whose clocks wait to be started."""
+        """The matches whose clocks wait to be started, each with its clock."""
         return [
-            match
+            (match, clock)
             for match, clock in self.matches
             if clock is not None and clock.start is None
         ]
+
+
+def start_clocks(matches, user, now=None):
+    """
+    Start the clocks of ``matches`` (pairs of a match and its clock, which may
+    be ``None``) that have not been started, all at ``now``, and record a
+    start event for each. A clock started already keeps its start and records
+    nothing. Return the keys of the matches it started.
+    """
+    now = now or timezone.now()
+    clocks = {match.pk: clock for match, clock in matches}
+    with transaction.atomic():
+        # Locked in the order of their keys, as every writer locks them.
+        started = list(
+            Match._base_manager.select_for_update()
+            .filter(pk__in=clocks, clock_started_at=None)
+            .order_by("pk")
+            .values_list("pk", flat=True)
+        )
+        Match._base_manager.filter(pk__in=started).update(clock_started_at=now)
+        events = []
+        for pk in started:
+            clock = clocks[pk]
+            moment = dataclasses.replace(clock, start=now).at(now) if clock else None
+            events.append(
+                MatchEvent(
+                    match_id=pk,
+                    kind=MatchEvent.Kind.START,
+                    recorded_by=user,
+                    recorded_at=now,
+                    **MatchEvent.clock_fields(moment),
+                )
+            )
+        MatchEvent.objects.bulk_create(events)
+    return started
 
 
 def venue_rounds(venue, now):
