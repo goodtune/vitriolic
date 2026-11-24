@@ -3437,6 +3437,16 @@ class Match(
             self._add_progress(event.side, -event.points)
         return correction
 
+    def scoreboard_points(self):
+        """
+        The points of each person named as the scorer of a live score event,
+        by the person's key: what the players' statistics are offered while
+        the match has none. Empty once any statistic has been entered.
+        """
+        if self.statistics.exists():
+            return {}
+        return self.events.points_by_player()
+
     def latest_score(self, side):
         """``side``'s latest live score event, or ``None``."""
         scores = self.events.live().filter(kind=MatchEvent.Kind.SCORE, side=side)

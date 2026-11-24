@@ -41,6 +41,7 @@
 											<td class="team home">
 												<label for="{{ form.home_team_score.id_for_label }}">{{ home }}</label>
 												<small class="phone-only">{{ match.stage.division.short_title|default:match.stage.division.title }}{% if match.play_at %}, {{ match.play_at.title }}{% endif %}</small>
+												{% if form.from_scoreboard %}<span class="tag" title="{% trans "The live score: check it, then save." %}">{% trans "From the scoreboard" %}</span>{% endif %}
 											</td>
 											<td class="score">{% if form.home_team_score %}{{ form.home_team_score|widget:"score-input" }}{% endif %}</td>
 											<td class="score-dash" aria-hidden="true">&ndash;</td>

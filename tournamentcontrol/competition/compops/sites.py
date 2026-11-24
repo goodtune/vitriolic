@@ -805,17 +805,20 @@ class CompOpsSite(Application):
                 stats.append(statistic)
             return stats
 
+        live_points = None if data is not None else match.scoreboard_points()
         home = MatchStatisticFormset(
             match.home_team_score,
             data=data,
             prefix="home",
             queryset=roster(match.home_team),
+            live_points=live_points,
         )
         away = MatchStatisticFormset(
             match.away_team_score,
             data=data,
             prefix="away",
             queryset=roster(match.away_team),
+            live_points=live_points,
         )
         for formset, side in ((home, "home"), (away, "away")):
             for form in formset.forms:

@@ -24,6 +24,7 @@
 					<button type="submit" class="wb-button wb-button-primary">{% trans "Save" %}</button>
 				</div>
 			</div>
+			{% if formsets.0.from_scoreboard or formsets.1.from_scoreboard %}<p class="wb-muted"><span class="wb-badge">{% trans "From the scoreboard" %}</span> {% trans "The points of each scorer the scorer named. Check them, then save." %}</p>{% endif %}
 			<div class="wb-cards wb-stats">
 				{% for formset in formsets %}
 					{{ formset.management_form }}

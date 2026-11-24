@@ -1828,6 +1828,32 @@ class MatchResultForm(BootstrapFormControlMixin, ModelForm):
                 self.fields.pop("is_forfeit")
                 self.fields.pop("forfeit_winner")
             self.fields.pop("bye_processed")
+        self.from_scoreboard = self.offer_live_score()
+
+    def offer_live_score(self):
+        """
+        Offer the live score (the progress scores) as the result of a match
+        that has none, marked on each input with ``data-from-scoreboard``. It
+        is only the form's initial value: nothing is saved until the form is.
+        A bound form is not offered it, so a page of results counts the offer,
+        saved as it stands, as a change and saves it.
+        """
+        match = self.instance
+        progress = (match.home_team_progress_score, match.away_team_progress_score)
+        if (
+            self.is_bound
+            or "home_team_score" not in self.fields
+            or progress == (None, None)
+            or match.home_team_score is not None
+            or match.away_team_score is not None
+            or match.is_forfeit
+            or match.is_washout
+        ):
+            return False
+        for name, score in zip(("home_team_score", "away_team_score"), progress):
+            self.initial[name] = score or 0
+            self.fields[name].widget.attrs["data-from-scoreboard"] = True
+        return True
 
     def clean_forfeit_winner(self):
         if not self.cleaned_data.get("is_forfeit"):
@@ -2767,9 +2793,18 @@ BaseMatchStatisticFormset = modelformset_factory(
 
 
 class MatchStatisticFormset(BaseMatchStatisticFormset):
-    def __init__(self, score, *args, **kwargs):
+    def __init__(self, score, *args, live_points=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.score = score
+        self.from_scoreboard = False
+        if live_points and not self.is_bound:
+            # The points of the live score's named scorers (see
+            # ``Match.scoreboard_points``), offered on the unsaved rows. They
+            # are saved with the formset, when the operator saves it.
+            for statistic in self.get_queryset():
+                if statistic.pk is None and statistic.player_id in live_points:
+                    statistic.points = live_points[statistic.player_id]
+                    self.from_scoreboard = True
 
     def _construct_form(self, i, **kwargs):
         if i < self.initial_form_count() and not kwargs.get("instance"):

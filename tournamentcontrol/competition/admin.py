@@ -3099,6 +3099,7 @@ class CompetitionAdminComponent(AdminComponent):
 
         home_queryset = team_faux_queryset(match.home_team)
         away_queryset = team_faux_queryset(match.away_team)
+        live_points = match.scoreboard_points()
 
         if request.method == "POST":
             home = MatchStatisticFormset(
@@ -3123,10 +3124,16 @@ class CompetitionAdminComponent(AdminComponent):
 
         else:
             home = MatchStatisticFormset(
-                prefix="home", score=match.home_team_score, queryset=home_queryset
+                prefix="home",
+                score=match.home_team_score,
+                queryset=home_queryset,
+                live_points=live_points,
             )
             away = MatchStatisticFormset(
-                prefix="away", score=match.away_team_score, queryset=away_queryset
+                prefix="away",
+                score=match.away_team_score,
+                queryset=away_queryset,
+                live_points=live_points,
             )
 
         context = {
