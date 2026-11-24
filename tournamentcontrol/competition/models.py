@@ -273,6 +273,29 @@ class OrderedSitemapNode(SitemapNodeBase):
 
     close_gap.alters_data = True
 
+    def move_to(self, parent):
+        """
+        Move this row to the end of ``parent``'s list (a team to another
+        division), then close the gap it leaves in the list it came from.
+
+        The row takes its new place before the old list closes up, so no two
+        rows share a value at any point, where the model has a
+        ``(parent, order)`` constraint.
+        """
+        field = self._meta.get_field(self.ordered_within)
+        manager = self.__class__._default_manager
+        siblings = manager.filter(**{field.attname: parent.pk})
+        order = (siblings.aggregate(order=Max("order"))["order"] or 0) + 1
+        with transaction.atomic():
+            manager.filter(pk=self.pk).update(
+                **{field.attname: parent.pk, "order": order}
+            )
+            self.close_gap()
+        setattr(self, field.name, parent)
+        self.order = order
+
+    move_to.alters_data = True
+
     def move_up(self):
         """Swap places with the row above; ``True`` if there was one."""
         return self._move(-1)
