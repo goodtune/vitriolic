@@ -22,14 +22,18 @@ from django.db.models import (
     Count,
     DateField,
     DateTimeField,
+    Exists,
     F,
     Max,
+    OneToOneField,
+    OuterRef,
     Q,
     Sum,
     TimeField,
     UniqueConstraint,
 )
 from django.db.models.deletion import CASCADE, PROTECT, SET_NULL
+from django.db.models.functions import Coalesce, Greatest
 from django.http import HttpResponse
 from django.template import Template
 from django.template.loader import get_template
@@ -82,6 +86,7 @@ from tournamentcontrol.competition.managers import (
 from tournamentcontrol.competition.mixins import ModelDiffMixin
 from tournamentcontrol.competition.query import (
     DivisionQuerySet,
+    MatchEventQuerySet,
     PersonQuerySet,
     SeasonQuerySet,
     StageQuerySet,
@@ -3348,6 +3353,109 @@ class Match(
             self.away_team_score,
         )
 
+    # --- the event log ---------------------------------------------------
+    #
+    # The events are the record of what happened; the progress scores are a
+    # running total of them for the scoreboards to read. Each change takes
+    # the match's row lock first, so two scorers pressing at once are written
+    # one after the other, and the total is changed with the event in one
+    # transaction. None of it saves the match, so none of it moves a ladder.
+
+    @cached_property
+    def _list_select_related(self):
+        # What a row of the match events tab draws, in the query of the list.
+        return {"events": ["player", "reverses"]}
+
+    @cached_property
+    def _list_annotate(self):
+        return {"events": {"reversed": MatchEvent.reversed_expression()}}
+
+    @property
+    def in_progress(self):
+        """Whether the match is being played (see ``MatchQuerySet.in_progress``)."""
+        return Match.objects.filter(pk=self.pk).in_progress().exists()
+
+    def _lock(self):
+        Match._base_manager.select_for_update().only("pk").get(pk=self.pk)
+
+    def _add_progress(self, side, points):
+        field = f"{side}_team_progress_score"
+        Match._base_manager.filter(pk=self.pk).update(
+            **{field: Greatest(Coalesce(F(field), 0) + points, 0)}
+        )
+
+    def record_event(
+        self, kind, side="", recorded_by=None, moment=None, player=None, points=None
+    ):
+        """
+        Record ``kind`` of event for ``side``: a score adds its ``points`` (one
+        unless given) to that side's progress score. ``moment`` is where the
+        scoreboard clock was (``Clock.at``), if the match has a clock.
+        """
+        if points is None:
+            points = 1 if kind == MatchEvent.Kind.SCORE else 0
+        with transaction.atomic():
+            self._lock()
+            event = MatchEvent.objects.create(
+                match=self,
+                kind=kind,
+                side=side,
+                points=points,
+                player=player,
+                recorded_by=recorded_by,
+                **MatchEvent.clock_fields(moment),
+            )
+            if points:
+                self._add_progress(side, points)
+        return event
+
+    def reverse_event(self, event, recorded_by=None, moment=None):
+        """
+        Record a correction that reverses ``event``, and take its points off
+        the progress score. ``event`` is left as it was.
+        """
+        with transaction.atomic():
+            self._lock()
+            return self._reverse(event, recorded_by, moment)
+
+    def _reverse(self, event, recorded_by, moment):
+        correction = MatchEvent.objects.create(
+            match=self,
+            kind=MatchEvent.Kind.CORRECTION,
+            side=event.side,
+            reverses=event,
+            recorded_by=recorded_by,
+            **MatchEvent.clock_fields(moment),
+        )
+        if event.points:
+            self._add_progress(event.side, -event.points)
+        return correction
+
+    def take_back_score(self, side, recorded_by=None, moment=None):
+        """
+        Reverse ``side``'s latest live score event, and return the correction.
+        A side with a progress score kept before the log, and so no live score
+        event, has one taken off with no event; ``None`` is returned then.
+        """
+        with transaction.atomic():
+            self._lock()
+            latest = self.events.live().filter(kind=MatchEvent.Kind.SCORE, side=side)
+            event = latest.order_by("-recorded_at", "-pk").first()
+            if event is not None:
+                return self._reverse(event, recorded_by, moment)
+            self._add_progress(side, -1)
+        return None
+
+    def recount_progress_scores(self):
+        """Set the progress scores to what the live score events add up to."""
+        with transaction.atomic():
+            self._lock()
+            totals = self.events.totals()
+            Match._base_manager.filter(pk=self.pk).update(
+                home_team_progress_score=totals["home"],
+                away_team_progress_score=totals["away"],
+            )
+
     def eval(self, lazy=False):
         """
         Attempt to populate the `home_team` and `away_team` fields as
@@ -3921,6 +4029,135 @@ class MatchScoreSheet(AdminUrlMixin, models.Model):
 
     def __str__(self):
         return gettext("Score sheet for %(match)s") % {"match": self.match}
+
+
+class MatchEvent(AdminUrlMixin, models.Model):
+    """
+    Something that happened in a match, as it was recorded: the start, a
+    score, a dismissal. Nothing is edited or deleted to put a mistake right:
+    a correction is a new event that reverses it (``reverses``), and the live
+    events (``MatchEventQuerySet.live``) are those that stand.
+
+    The match's progress scores are a running total of its live score events
+    (see ``Match.record_event``), so the scoreboards need not add them up.
+    """
+
+    class Kind(models.TextChoices):
+        START = "start", _("Start")
+        SCORE = "score", _("Score")
+        DISMISSAL = "dismissal", _("Dismissal")
+        CORRECTION = "correction", _("Correction")
+
+    class Side(models.TextChoices):
+        HOME = "home", _("Home")
+        AWAY = "away", _("Away")
+
+    match = ForeignKey(Match, related_name="events", on_delete=CASCADE)
+    kind = models.CharField(_("Kind"), max_length=10, choices=Kind.choices)
+    side = models.CharField(_("Team"), max_length=4, choices=Side.choices, blank=True)
+    points = models.PositiveSmallIntegerField(_("Points"), default=0)
+    # Not in the admin's hierarchy of a person or a user: a relation the admin
+    # would follow needs related_name="+".
+    player = ForeignKey(
+        Person,
+        blank=True,
+        null=True,
+        related_name="+",
+        label_from_instance="get_full_name",
+        on_delete=SET_NULL,
+        verbose_name=_("Player"),
+    )
+    recorded_by = ForeignKey(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        null=True,
+        editable=False,
+        related_name="+",
+        on_delete=SET_NULL,
+    )
+    recorded_at = DateTimeField(default=timezone.now, editable=False)
+    # Where the scoreboard clock was: the period being played and the seconds
+    # left of it. Empty for a match with no clock, or out of a period.
+    period = models.PositiveSmallIntegerField(blank=True, null=True, editable=False)
+    remaining = models.PositiveIntegerField(blank=True, null=True, editable=False)
+    reverses = OneToOneField(
+        "self",
+        blank=True,
+        null=True,
+        editable=False,
+        related_name="+",
+        on_delete=CASCADE,
+    )
+
+    objects = MatchEventQuerySet.as_manager()
+
+    class Meta:
+        ordering = ("recorded_at", "pk")
+        verbose_name = _("match event")
+        verbose_name_plural = _("match events")
+        constraints = [
+            CheckConstraint(
+                condition=Q(kind="correction", reverses__isnull=False)
+                | (~Q(kind="correction") & Q(reverses__isnull=True)),
+                name="competition_matchevent_correction_reverses",
+            ),
+        ]
+
+    def _get_admin_namespace(self):
+        return "admin:fixja:competition:season:division:stage:match:matchevent"
+
+    def _get_url_args(self):
+        return (
+            self.match.stage.division.season.competition_id,
+            self.match.stage.division.season_id,
+            self.match.stage.division_id,
+            self.match.stage_id,
+            self.match_id,
+            self.pk,
+        )
+
+    def _get_url_names(self):
+        # The log is the record: an event is corrected, never deleted.
+        return ["add", "edit", "reverse"]
+
+    def __str__(self):
+        team = self.team
+        if team is None:
+            return str(self.get_kind_display())
+        return f"{self.get_kind_display()} · {team}"
+
+    @property
+    def team(self):
+        """The side's team, or ``None`` for an event of neither side."""
+        if not self.side:
+            return None
+        return getattr(self.match, f"get_{self.side}_team_plain")()
+
+    @staticmethod
+    def reversed_expression():
+        """Whether an event has been reversed, as an annotation (``reversed``)."""
+        return Exists(MatchEvent.objects.filter(reverses=OuterRef("pk")))
+
+    @property
+    def is_reversed(self):
+        if hasattr(self, "reversed"):
+            return self.reversed
+        return MatchEvent.objects.filter(reverses=self).exists()
+
+    @property
+    def clock(self):
+        """Where the clock was, as a countdown reads: ``12:34``."""
+        if self.remaining is None:
+            return ""
+        minutes, seconds = divmod(self.remaining, 60)
+        return f"{minutes:02d}:{seconds:02d}"
+
+    @staticmethod
+    def clock_fields(moment):
+        """The period and seconds left of ``moment``, when it is in a period."""
+        if moment is None or moment.kind != "period":
+            return {"period": None, "remaining": None}
+        return {"period": moment.period, "remaining": moment.remaining}
 
 
 class MatchStatisticBase(models.Model):

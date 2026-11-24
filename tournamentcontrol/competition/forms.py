@@ -78,6 +78,7 @@ from tournamentcontrol.competition.models import (
     LiveStreamEvent,
     LiveStreamKey,
     Match,
+    MatchEvent,
     Person,
     Place,
     Season,
@@ -1878,6 +1879,68 @@ class MatchResultForm(BootstrapFormControlMixin, ModelForm):
 
 
 MatchResultFormSet = modelformset_factory(Match, extra=0, form=MatchResultForm)
+
+
+class MatchEventForm(BootstrapFormControlMixin, ModelForm):
+    """
+    Add an event to a match's log, or say who scored one already there. A
+    score is counted in the match's progress score as it is added, as the
+    scorer's page counts it (see ``Match.record_event``); a mistake is put
+    right with a correction, not here.
+    """
+
+    def __init__(self, *args, recorded_by=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.recorded_by = recorded_by
+        match = self.instance.match
+        if self.instance.pk is None:
+            self.fields["kind"].choices = [
+                choice
+                for choice in self.fields["kind"].choices
+                if choice[0] != MatchEvent.Kind.CORRECTION
+            ]
+            teams = (match.home_team, match.away_team)
+        else:
+            del self.fields["kind"]
+            del self.fields["side"]
+            teams = (self.instance_team(self.instance.side),)
+        self.fields["player"].queryset = Person.objects.playing_for(*teams)
+
+    def instance_team(self, side):
+        return getattr(self.instance.match, f"{side}_team", None) if side else None
+
+    def clean(self):
+        data = super().clean()
+        side = data.get("side", self.instance.side)
+        kind = data.get("kind", self.instance.kind)
+        player = data.get("player")
+        if kind in (MatchEvent.Kind.SCORE, MatchEvent.Kind.DISMISSAL) and not side:
+            self.add_error("side", _("Say which team this is for."))
+        elif player is not None:
+            team = self.instance_team(side)
+            if (
+                team is None
+                or not Person.objects.playing_for(team).filter(pk=player.pk).exists()
+            ):
+                self.add_error("player", _("This person does not play for that team."))
+        return data
+
+    def save(self, commit=True):
+        if self.instance.pk is not None:
+            self.instance.save(update_fields=["player"])
+            return self.instance
+        data = self.cleaned_data
+        self.instance = self.instance.match.record_event(
+            data["kind"],
+            data["side"],
+            recorded_by=self.recorded_by,
+            player=data["player"],
+        )
+        return self.instance
+
+    class Meta:
+        model = MatchEvent
+        fields = ("kind", "side", "player")
 
 
 class MatchWashoutForm(BootstrapFormControlMixin, ModelForm):
