@@ -71,3 +71,15 @@ body.scorer{overflow:auto}
 .sc-clock .sb-time{font-size:56px;color:var(--ink)}
 .sc-clock.before .sb-time,.sc-clock.break .sb-time,.sc-clock.ready .sb-time{color:var(--primary)}
 .sc-start{margin:0}
+.sc-who{display:flex;align-items:center;gap:10px;margin:10px 0 0;font-size:15px}
+.sc-who-none{color:var(--muted)}
+.sc-link{padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:none;color:var(--primary);font:600 14px/1 var(--sans,inherit);cursor:pointer}
+.sc-pick{margin-top:10px;padding:10px;border:1px solid var(--line-strong);border-radius:12px}
+.sc-pick-q{margin:0 0 8px;font-weight:600}
+.sc-players{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+.sc-players form,.sc-pick-acts form{display:contents}
+.sc-player{min-height:48px;padding:6px 10px;border:1px solid var(--line-strong);border-radius:10px;background:var(--panel);color:var(--ink);font:600 15px/1.2 inherit;text-align:left;cursor:pointer;touch-action:manipulation}
+.sc-player.on{border-color:var(--primary);background:var(--primary);color:#fff}
+.sc-pick-acts{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
+.sc-ask{align-self:center;padding:8px 12px;border:1px solid var(--line);border-radius:999px;background:none;color:var(--muted);font:600 13px/1 inherit;cursor:pointer}
+.sc-ask[aria-pressed=true] .off,.sc-ask[aria-pressed=false] .on{display:none}

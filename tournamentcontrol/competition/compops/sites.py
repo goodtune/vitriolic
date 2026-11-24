@@ -17,7 +17,7 @@ from django import forms
 from django.apps import apps
 from django.conf import settings
 from django.contrib.auth.views import redirect_to_login
-from django.core.exceptions import ImproperlyConfigured
+from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.db import transaction
 from django.http import Http404, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect
@@ -337,6 +337,11 @@ class CompOpsSite(Application):
                 "<slug:ground>/score/<int:match_pk>/start/",
                 self.scorer_start,
                 name="scorer-start",
+            ),
+            path(
+                "<slug:ground>/score/<int:match_pk>/event/<int:event_pk>/player/",
+                self.scorer_player,
+                name="scorer-player",
             ),
             path(
                 "<slug:ground>/score/<int:match_pk>/<str:side>/<str:step>/",
@@ -1358,11 +1363,39 @@ class CompOpsSite(Application):
             "scorer_url": reverse("compops:scorer", kwargs=names),
         }
 
+    def scorer_context(self, request, season, ground):
+        """
+        The board's context, and for the scorer's page each team's players
+        and its latest live score, so the page can ask who scored it.
+        """
+        context = self.scoreboard_context(request, season, ground)
+        match = context["match"]
+        if match is None:
+            return context
+        for side, team in context["sides"]:
+            linked = getattr(match, f"{side}_team")
+            team["players"] = (
+                list(linked.people.filter(is_player=True).select_related("person"))
+                if linked is not None
+                else []
+            )
+            team["latest"] = latest = match.latest_score(side)
+            if latest is not None and latest.player is not None:
+                named = [p for p in team["players"] if p.person_id == latest.player_id]
+                team["who"] = (
+                    named[0].numbered_name
+                    if named
+                    else f"{latest.player.first_name} {latest.player.last_name}"
+                )
+        context["asks"] = any(team["players"] for _side, team in context["sides"])
+        return context
+
     def scoreboard_fragments(self, request, season, ground, scorer=False):
         """The board, or the scorer's copy of it, as it is now."""
-        context = self.scoreboard_context(request, season, ground)
         if scorer:
+            context = self.scorer_context(request, season, ground)
             return [render_fragment(request, "scorer", **context)]
+        context = self.scoreboard_context(request, season, ground)
         if context["template_source"]:
             return [
                 scoreboard.render_custom(
@@ -1442,10 +1475,10 @@ class CompOpsSite(Application):
     @scorer_required
     def scorer(self, request, season, ground, **kwargs):
         """The scorer's page: the board's match, and the buttons that keep it."""
-        context = self.scoreboard_context(request, season, ground)
+        context = self.scorer_context(request, season, ground)
         return self.render(request, self.template_path("scorer.html"), context)
 
-    def _scorer_changed(self, request, season, ground, match):
+    def _scorer_changed(self, request, season, ground, match, signals=None):
         """Tell every board of the ground, and answer the scorer."""
         events.publish(
             season.pk,
@@ -1458,6 +1491,7 @@ class CompOpsSite(Application):
         return patches(
             request,
             lambda: self.scoreboard_fragments(request, season, ground, scorer=True),
+            signals=signals,
             redirect_to=reverse(
                 "compops:scorer",
                 kwargs={
@@ -1480,13 +1514,39 @@ class CompOpsSite(Application):
         # Each records an event and changes the score under the match's lock,
         # so two scorers tapping at once both count; a score never goes below
         # nothing.
+        signals = None
         if step == "up":
-            match.record_event(
+            event = match.record_event(
                 MatchEvent.Kind.SCORE, side, recorded_by=request.user, moment=moment
             )
+            # Ask who scored, unless this scorer has turned the question off
+            # for the match (``scorer.js``) or the team has no players linked.
+            # The score is in already: the question never holds it up.
+            team = getattr(match, f"{side}_team")
+            if (
+                request.POST.get("ask") != "0"
+                and team is not None
+                and team.people.filter(is_player=True).exists()
+            ):
+                signals = {"pick": event.pk}
         else:
             match.take_back_score(side, recorded_by=request.user, moment=moment)
-        return self._scorer_changed(request, season, ground, match)
+        return self._scorer_changed(request, season, ground, match, signals)
+
+    @require_POST_m
+    @scoreboard_view
+    @scorer_required
+    def scorer_player(self, request, season, ground, match_pk, event_pk, **kwargs):
+        """Say who scored the side's latest score, or that nobody is named."""
+        match = get_object_or_404(queries.ground_matches(ground), pk=match_pk)
+        event = get_object_or_404(
+            match.events.filter(kind=MatchEvent.Kind.SCORE), pk=event_pk
+        )
+        try:
+            match.name_player(event, request.POST.get("player"))
+        except ValidationError as exc:
+            return HttpResponseBadRequest(exc.messages[0])
+        return self._scorer_changed(request, season, ground, match, {"pick": 0})
 
     @require_POST_m
     @scoreboard_view

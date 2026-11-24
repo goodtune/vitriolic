@@ -2655,6 +2655,12 @@ class TeamAssociation(AdminUrlMixin, models.Model):
     def __str__(self):
         return self.person.get_full_name
 
+    @property
+    def numbered_name(self):
+        """The shirt number and name, as a scorer reads them: ``9 Sam Smith``."""
+        name = f"{self.person.first_name} {self.person.last_name}"
+        return name if self.number is None else f"{self.number} {name}"
+
     class Meta:
         ordering = (
             "-is_player",
@@ -3431,6 +3437,34 @@ class Match(
             self._add_progress(event.side, -event.points)
         return correction
 
+    def latest_score(self, side):
+        """``side``'s latest live score event, or ``None``."""
+        scores = self.events.live().filter(kind=MatchEvent.Kind.SCORE, side=side)
+        return scores.select_related("player").order_by("-recorded_at", "-pk").first()
+
+    def name_player(self, event, player_pk):
+        """
+        Say who scored ``event``: the person ``player_pk`` of the side's team,
+        or nobody when it is empty. Only the side's latest live score may be
+        named by the scorer, so a slow pick never lands on a later score;
+        anything older is put right in the admin.
+        """
+        with transaction.atomic():
+            self._lock()
+            if self.latest_score(event.side) != event:
+                raise ValidationError(_("This is no longer the team's latest score."))
+            player = None
+            if player_pk:
+                team = getattr(self, f"{event.side}_team")
+                try:
+                    player = Person.objects.playing_for(team).get(pk=player_pk)
+                except (Person.DoesNotExist, ValidationError):
+                    # Not the team's, or not a person's key at all.
+                    raise ValidationError(_("This person does not play for that team."))
+            MatchEvent.objects.filter(pk=event.pk).update(player=player)
+        event.player = player
+        return event
+
     def take_back_score(self, side, recorded_by=None, moment=None):
         """
         Reverse ``side``'s latest live score event, and return the correction.
@@ -3439,8 +3473,7 @@ class Match(
         """
         with transaction.atomic():
             self._lock()
-            latest = self.events.live().filter(kind=MatchEvent.Kind.SCORE, side=side)
-            event = latest.order_by("-recorded_at", "-pk").first()
+            event = self.latest_score(side)
             if event is not None:
                 return self._reverse(event, recorded_by, moment)
             self._add_progress(side, -1)
