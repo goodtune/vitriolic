@@ -1674,35 +1674,21 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
 
 
 class MatchStreamForm(MatchEditForm):
-    class Meta:
-        model = Match
-        fields = (
-            "stage_group",
-            "home_team",
-            "away_team",
-            "home_team_undecided",
-            "away_team_undecided",
-            "label",
-            "round",
-            "date",
-            "include_in_ladder",
-            "live_stream",
-            "live_stream_thumbnail_image",
-            # "external_identifier",
+    """
+    The match of a live streamed season: the fields of ``MatchEditForm``, with
+    whether the match is broadcast in place of its video links.
+    """
+
+    class Meta(MatchEditForm.Meta):
+        fields = tuple(
+            "live_stream" if name == "videos" else name
+            for name in MatchEditForm.Meta.fields
         )
-        labels = {
-            "home_team_undecided": _("Home team"),
-            "away_team_undecided": _("Away team"),
-            "live_stream_thumbnail_image": _("Video Thumbnail"),
-        }
         help_texts = {
             "live_stream_thumbnail_image": _(
                 "Upload a custom thumbnail for this match. "
                 "If not set, the season's default thumbnail will be used."
             ),
-        }
-        field_classes = {
-            "live_stream_thumbnail_image": ThumbnailImageField,
         }
 
 
