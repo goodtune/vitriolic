@@ -1,0 +1,7 @@
+{% load i18n %}<div class="location-widget">
+	<div class="location-widget-map" data-zoom="{{ widget.zoom }}" style="height: {{ widget.height }}px;"></div>
+	<div class="location-widget-inputs">
+		{% for widget in widget.subwidgets %}{% include widget.template_name %}{% endfor %}
+		<button type="button" class="wb-button wb-button-small location-widget-toggle" aria-pressed="false" hidden>{% trans "Edit" %}</button>
+	</div>
+</div>

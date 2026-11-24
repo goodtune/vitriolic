@@ -1,0 +1,5 @@
+{% load i18n admin_workbook %}{% comment %}
+	The page head's way back to the set-up checklists once they are hidden
+	(see ``_checklist.html``). It shows only on a page marked
+	``data-wb-checklists="hidden"``, which needs scripts, as hiding does.
+{% endcomment %}<button type="button" class="wb-button wb-checklist-show" data-wb-checklist-show>{% icon "clipboard-list" %}{% trans "Show set-up checklist" %}</button>

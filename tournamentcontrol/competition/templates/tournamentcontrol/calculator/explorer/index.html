@@ -1,0 +1,60 @@
+{% extends "touchtechnology/admin/explorer/print.html" %}
+{% load i18n static common mathfilters %}
+
+{% block title %}{{ node|default:"Model draw generator" }}{% endblock %}
+{% block heading %}{{ node|default:"Model draw generator" }}{% endblock %}
+{% block subheading %}{% trans "A fair model draw to start from; adjust it to suit." %}{% endblock %}
+
+{% block extracss %}
+	<link rel="stylesheet" href="{% static 'touchtechnology/admin/explorer/css/admin.css' %}">
+	<style>
+		body.sheet { background: var(--bg); }
+		.calc-form { max-width: 760px; }
+		.pools, .formats { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+		.pools ol, .formats pre { margin: 0; padding: 10px 12px 10px 30px; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
+		.formats pre { padding-left: 12px; white-space: pre-wrap; font-family: inherit; }
+	</style>
+{% endblock %}
+
+{% block content %}
+	<form class="calc-form" action="" method="get">
+		{% with field_template="touchtechnology/admin/explorer/templatetags/field.html" %}
+			<div class="fields">{% for f in form %}{% field f %}{% endfor %}</div>
+		{% endwith %}
+		<p class="button-row">
+			<button type="submit" class="button primary">{% trans "Calculate" %}</button>
+			<a class="button" href="{% block switch-url %}{% url 'calculator:division' %}{% endblock %}">{% block switch %}{% trans "Use a real division" %}{% endblock %}</a>
+		</p>
+	</form>
+
+	{% if data %}
+		<h2>{% trans "Pools" %}</h2>
+		<div class="pools">
+			{% for pool in data.pools %}
+				<section>
+					<h3>{% blocktrans with n=forloop.counter %}Pool {{ n }}{% endblocktrans %}</h3>
+					<ol>{% for team in pool %}<li>{{ team }}{% if team.order %} <span class="muted">({{ team.order }})</span>{% endif %}</li>{% endfor %}</ol>
+				</section>
+			{% endfor %}
+		</div>
+
+		{% if form.get_absolute_url %}
+			<p>{% blocktrans with url=form.get_absolute_url %}This is a real division: see <a href="{{ url }}">how it was played</a>.{% endblocktrans %}</p>
+		{% endif %}
+
+		<h2>{% trans "Draw formats" %}</h2>
+		<div class="formats">
+			{% for format in data.draw_formats %}
+				<section>
+					<h3>{{ format.label }}</h3>
+					{% if forloop.last %}
+						<pre>{% for round in format.format %}{{ round|stringformat:"s" }}
+{% endfor %}</pre>
+					{% else %}
+						<pre>{{ format.format }}</pre>
+					{% endif %}
+				</section>
+			{% endfor %}
+		</div>
+	{% endif %}
+{% endblock %}

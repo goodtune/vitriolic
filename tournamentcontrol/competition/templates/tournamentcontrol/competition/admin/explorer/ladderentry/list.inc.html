@@ -1,0 +1,36 @@
+{% extends "touchtechnology/admin/explorer/list.inc.html" %}
+{% load i18n %}
+
+{% block table-headings %}
+	<th>{% trans "Team" %}</th>
+	<th class="num"><abbr title="{% trans "Played" %}">P</abbr></th>
+	<th class="num"><abbr title="{% trans "Won" %}">W</abbr></th>
+	<th class="num"><abbr title="{% trans "Lost" %}">L</abbr></th>
+	<th class="num"><abbr title="{% trans "Drawn" %}">D</abbr></th>
+	<th class="num wide-only"><abbr title="{% trans "Byes" %}">B</abbr></th>
+	<th class="num wide-only"><abbr title="{% trans "Forfeits for" %}">FW</abbr></th>
+	<th class="num wide-only"><abbr title="{% trans "Forfeits against" %}">FL</abbr></th>
+	<th class="num">+</th>
+	<th class="num">&minus;</th>
+	<th class="num wide-only"><abbr title="{% trans "Bonus points" %}">BP</abbr></th>
+	<th class="num"><abbr title="{% trans "Points" %}">Pts</abbr></th>
+{% endblock %}
+
+{% block table-columns %}
+	<td>{{ obj.team }}</td>
+	<td class="num">{{ obj.played }}</td>
+	<td class="num">{{ obj.win }}</td>
+	<td class="num">{{ obj.loss }}</td>
+	<td class="num">{{ obj.draw }}</td>
+	<td class="num wide-only">{{ obj.bye }}</td>
+	<td class="num wide-only">{{ obj.forfeit_for }}</td>
+	<td class="num wide-only">{{ obj.forfeit_against }}</td>
+	<td class="num">{{ obj.score_for }}</td>
+	<td class="num">{{ obj.score_against }}</td>
+	<td class="num wide-only">{{ obj.bonus_points }}</td>
+	<td class="num strong">{{ obj.points|floatformat:"-2" }}</td>
+{% endblock %}
+
+{% block actions %}{% endblock %}
+{% block row-buttons %}{% endblock %}
+{% block table-row-empty %}{% endblock %}

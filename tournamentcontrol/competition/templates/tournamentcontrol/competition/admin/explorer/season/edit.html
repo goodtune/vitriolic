@@ -1,0 +1,87 @@
+{% extends "touchtechnology/admin/explorer/edit.html" %}
+{% load i18n admin admin_explorer %}
+
+{% block object-actions %}
+	{% if object.pk %}
+		<div class="menu">
+			<button type="button" class="button quiet" data-popover aria-expanded="false" aria-controls="season-tools">{% icon "report" %}<span>{% trans "Reports and tools" %}</span>{% icon "chevron-down" %}</button>
+			<div class="menu-panel" id="season-tools">
+				<a href="{% url 'admin:fixja:competition:season:report' object.competition_id object.pk %}">{% icon "report" %}{% trans "Season report" %}</a>
+				<a href="{% url 'admin:fixja:competition:season:summary' object.competition_id object.pk %}">{% icon "team" %}{% trans "Registrations" %}</a>
+				<a href="{% url 'admin:fixja:competition:season:progression-list' object.competition_id object.pk %}">{% icon "stage" %}{% trans "Progression" %}</a>
+				<a href="{% url 'admin:fixja:competition:season:match-grid' object.competition_id object.pk "html" %}">{% icon "stagegroup" %}{% trans "Matrix of the season" %}</a>
+				<hr>
+				<a href="{% url 'admin:fixja:competition:season:reschedule' object.competition_id object.pk %}">{% icon "season" %}{% trans "Reschedule" %}</a>
+				<a href="{% url 'admin:fixja:competition:season:json-builder' object.competition_id object.pk %}">{% icon "json" %}{% trans "Build divisions from JSON" %}</a>
+				{% if object.live_stream %}<a href="{% url 'admin:fixja:competition:season:authorize' object.competition_id object.pk %}">{% icon "video" %}{% trans "Authorise YouTube" %}</a>{% endif %}
+				{% if object.upstream_enabled and object.upstream_backend %}<a href="{% url 'admin:fixja:competition:season:upstream-sync' object.competition_id object.pk %}">{% icon "refresh" %}{% blocktrans with name=object.upstream_backend.name %}Synchronise from {{ name }}{% endblocktrans %}</a>{% endif %}
+			</div>
+		</div>
+	{% endif %}
+	{{ block.super }}
+{% endblock %}
+
+{% block tab-links %}
+	{{ block.super }}
+	{% if object.pk %}
+		<a class="tab" role="tab" id="schedule-tab-link" href="#schedule-tab" aria-controls="schedule-tab" aria-selected="false" tabindex="-1">{% icon "results" %}<span>{% trans "Schedule" %}</span><span class="count" aria-hidden="true">{{ dates|length }}</span></a>
+	{% endif %}
+{% endblock %}
+
+{% block tab-panes %}
+	{{ block.super }}
+	{% if object.pk %}
+		<section class="pane" data-tab-panel role="tabpanel" id="schedule-tab" aria-labelledby="schedule-tab-link">
+			<div class="list-head">
+				<h2>{% trans "Match days" %}</h2>
+				<div class="list-actions">
+					<a class="button compact" href="{% url 'admin:fixja:competition:season:reschedule' object.competition_id object.pk %}">{% icon "season" %}<span>{% trans "Reschedule" %}</span></a>
+					<a class="button compact" href="{% url 'admin:fixja:competition:season:match-grid' object.competition_id object.pk "html" %}">{% icon "stagegroup" %}<span>{% trans "Matrix of the season" %}</span></a>
+				</div>
+			</div>
+			{% now "Y-m-d" as today %}
+			<div class="table-wrap">
+				<table class="listing days-table">
+					<thead>
+						<tr>
+							<th>{% trans "Day" %}</th>
+							<th class="wide-only">{% trans "State" %}</th>
+							<th class="actions-cell"><span class="visually-hidden">{% trans "Actions" %}</span></th>
+						</tr>
+					</thead>
+					<tbody>
+						{% for date in dates %}
+							{% with ymd=date|date:"Ymd" iso=date|date:"Y-m-d" %}
+								<tr>
+									<td class="title-cell"><a href="{% url 'admin:fixja:match-results' object.competition_id object.pk ymd %}">{% icon "season" %}<span>{{ date|date:"D j M Y" }}</span></a></td>
+									<td class="wide-only">{% if iso < today %}<span class="tag">{% trans "Played" %}</span>{% elif iso == today %}<span class="tag attention">{% trans "Today" %}</span>{% else %}<span class="tag good">{% trans "To come" %}</span>{% endif %}</td>
+									<td class="actions-cell">
+										<div class="row-actions">
+											<a class="button compact" href="{% url 'admin:fixja:match-schedule' object.competition_id object.pk ymd %}">{% icon "allocate" %}<span>{% trans "Allocate" %}</span></a>
+											<a class="button compact" href="{% url 'admin:fixja:match-results' object.competition_id object.pk ymd %}">{% icon "results" %}<span>{% trans "Results" %}</span></a>
+											<div class="menu">
+												<button type="button" class="button quiet icon-only compact" data-popover aria-expanded="false" aria-controls="day-menu-{{ ymd }}">{% icon "more" %}<span class="visually-hidden">{% blocktrans with day=date|date:"j F" %}More actions for {{ day }}{% endblocktrans %}</span></button>
+												<div class="menu-panel" id="day-menu-{{ ymd }}">
+													<a href="{% url 'admin:fixja:match-runsheet' object.competition_id object.pk ymd %}">{% icon "clock" %}{% trans "Run sheet" %}</a>
+													<a href="{% url 'admin:fixja:match-grid' object.competition_id object.pk ymd "html" %}">{% icon "stagegroup" %}{% trans "Matrix" %}</a>
+													<a href="{% url 'admin:fixja:match-grid' object.competition_id object.pk ymd "pdf" %}">{% icon "download" %}{% trans "Matrix as PDF" %}</a>
+													<a href="{% url 'admin:fixja:scorecards' object.competition_id object.pk ymd "pdf" %}">{% icon "print" %}{% trans "Scorecards" %}</a>
+													<hr>
+													<a href="{% url 'admin:fixja:match-washout' object.competition_id object.pk ymd %}">{% icon "umbrella" %}{% trans "Washout" %}</a>
+													<a href="{% url 'admin:fixja:match-live-stream' object.competition_id object.pk ymd %}">{% icon "video" %}{% trans "Live stream" %}</a>
+													<a href="{% url 'admin:fixja:match-visual-schedule' object.competition_id object.pk ymd %}" target="_blank">{% icon "external" %}{% trans "Visual scheduler" %}</a>
+												</div>
+											</div>
+										</div>
+									</td>
+								</tr>
+							{% endwith %}
+						{% empty %}
+							<tr><td colspan="3" class="empty-state">{% trans "No match has a date yet. Build a stage's draw to make the match days." %}</td></tr>
+						{% endfor %}
+					</tbody>
+				</table>
+			</div>
+		</section>
+	{% endif %}
+{% endblock %}

@@ -1,19 +1,53 @@
 from django.apps import apps
-from django.conf import settings
 from django.db.models import (
+    BooleanField,
     Case,
     Count,
-    ExpressionWrapper,
+    Exists,
     F,
     FloatField,
     Func,
+    OuterRef,
     Prefetch,
+    Q,
+    Subquery,
+    Sum,
+    Value,
     When,
 )
 from django.db.models.query import QuerySet
 from django.utils import timezone
 
-from tournamentcontrol.competition.utils import team_title_case_clause
+from tournamentcontrol.competition.utils import (
+    team_needs_progressing,
+    team_title_case_clause,
+    undecided_team_awaits_own_ladder,
+    undecided_team_awaits_upstream,
+)
+
+
+class SeasonQuerySet(QuerySet):
+    def navigation(self):
+        """
+        Only what a list of seasons needs to link to, order and filter each
+        one: where it lives (``competition`` and ``slug``), what to call it
+        (``title`` and ``short_title``), whether to offer it (``enabled``),
+        when it runs (``start_date``), where it sits (``order``) and whether
+        it is over (``complete``). Every public page lists every season of
+        every competition, so nothing else is read, including any field added
+        to the model later. A template that asks for anything else costs a
+        query for each season.
+        """
+        return self.only(
+            "competition",
+            "title",
+            "short_title",
+            "slug",
+            "enabled",
+            "start_date",
+            "order",
+            "complete",
+        )
 
 
 class DivisionQuerySet(QuerySet):
@@ -44,18 +78,39 @@ class StageQuerySet(QuerySet):
         LadderSummary = apps.get_model("competition", "LadderSummary")
         StageGroup = apps.get_model("competition", "StageGroup")
         ladder_summary_qs = LadderSummary.objects.select_related("team__club")
-        return (
-            self.annotate(pool_count=Count("pools"))
-            .prefetch_related(
-                Prefetch("ladder_summary", queryset=ladder_summary_qs),
-                Prefetch(
-                    "pools",
-                    queryset=StageGroup.objects.prefetch_related(
-                        Prefetch("ladder_summary", queryset=ladder_summary_qs),
-                    ),
+        return self.annotate(pool_count=Count("pools")).prefetch_related(
+            Prefetch("ladder_summary", queryset=ladder_summary_qs),
+            Prefetch(
+                "pools",
+                queryset=StageGroup.objects.prefetch_related(
+                    Prefetch("ladder_summary", queryset=ladder_summary_qs),
                 ),
-            )
+            ),
         )
+
+
+class UndecidedTeamQuerySet(QuerySet):
+    def of_our_own(self):
+        """
+        The undecided teams a person can act on here: all but the upstream
+        sync's placeholder (``undecided_team_awaits_upstream`` in ``utils``),
+        which only the provider can name. The progression page, the home
+        page, the match and pool forms and the draw all read
+        ``stage.undecided_teams.of_our_own()``, so the placeholder is left out
+        in one place.
+        """
+        return self.exclude(undecided_team_awaits_upstream())
+
+    def fillable(self):
+        """
+        The places a person can fill now: those of our own, less any whose
+        formula names a place on the ladder of its own stage while that ladder
+        is open (``undecided_team_awaits_own_ladder`` in ``utils``). The
+        progression page leaves a match out while a side of it waits on that
+        ladder (``team_awaits_own_ladder``); the places formset, and the home
+        page's count of places, apply the same rule.
+        """
+        return self.of_our_own().exclude(undecided_team_awaits_own_ladder())
 
 
 class MatchQuerySet(QuerySet):
@@ -79,6 +134,47 @@ class MatchQuerySet(QuerySet):
             away_team_title=team_title_case_clause("away_team"),
         )
 
+    def with_result_state(self):
+        """
+        Annotate the state of each match's result, in the database:
+
+        ``has_result``
+            a bye has been processed, or both scores are in, or the match was
+            forfeited or washed out;
+
+        ``needs_progressing``
+            a team is still to be decided by progression;
+
+        ``result_editable``
+            the result may be entered by hand: never for a match mirrored from
+            an upstream provider, always for a bye, otherwise once both teams
+            are known.
+        """
+        has_result = Case(
+            When(is_bye=True, then=F("bye_processed")),
+            When(
+                Q(home_team_score__isnull=False, away_team_score__isnull=False)
+                | Q(is_forfeit=True)
+                | Q(is_washout=True),
+                then=Value(True),
+            ),
+            default=Value(False),
+            output_field=BooleanField(),
+        )
+        needs_progressing = Exists(
+            self.model.objects.filter(team_needs_progressing, pk=OuterRef("pk"))
+        )
+        result_editable = Case(
+            When(upstream_id__isnull=False, then=Value(False)),
+            When(is_bye=True, then=Value(True)),
+            When(needs_progressing=True, then=Value(False)),
+            default=Value(True),
+            output_field=BooleanField(),
+        )
+        return self.annotate(
+            has_result=has_result, needs_progressing=needs_progressing
+        ).annotate(result_editable=result_editable)
+
 
 class LadderEntryQuerySet(QuerySet):
     def _all(self):
@@ -99,3 +195,71 @@ class LadderEntryQuerySet(QuerySet):
 class StatisticQuerySet(QuerySet):
     def played(self):
         return self.exclude(played=0)
+
+    def for_division(self, division):
+        return self.filter(match__stage__division=division)
+
+    def totals(self, *group_fields):
+        """
+        Sum ``played``, ``points`` and ``mvp`` for each distinct combination
+        of ``group_fields``, as dictionaries.
+        """
+        return self.values(*group_fields).annotate(
+            played=Sum("played"), points=Sum("points"), mvp=Sum("mvp")
+        )
+
+
+class PersonQuerySet(QuerySet):
+    def deletable(self):
+        """
+        The people who can be deleted: those with no statistics recorded, who
+        are not in a team of a season that has started.
+        """
+        return self.exclude(statistics__isnull=False).exclude(
+            teamassociation__team__division__season__start_date__lt=timezone.now()
+        )
+
+
+class TeamAssociationQuerySet(QuerySet):
+    def removable(self):
+        """
+        The people who can be taken out of their team: those with no
+        statistics recorded in one of the team's matches.
+        """
+        SimpleScoreMatchStatistic = apps.get_model(
+            "competition", "SimpleScoreMatchStatistic"
+        )
+        statistics = SimpleScoreMatchStatistic.objects.filter(
+            Q(match__home_team=OuterRef("team")) | Q(match__away_team=OuterRef("team")),
+            player=OuterRef("person"),
+        )
+        return self.filter(~Exists(statistics))
+
+    def with_statistics(self, team):
+        """
+        Total each person's played, points and MVP counts for ``team``.
+
+        ``TeamAssociation.statistics()`` makes a query of its own for every
+        person, so a team page with a roster of twenty made twenty more. This
+        does the same sums, over the same matches, as one subquery for each
+        in the query which fetches the roster; ``statistics()`` returns them
+        without asking the database again.
+        """
+        SimpleScoreMatchStatistic = apps.get_model(
+            "competition", "SimpleScoreMatchStatistic"
+        )
+        stats = SimpleScoreMatchStatistic.objects.filter(
+            Q(match__home_team=team) | Q(match__away_team=team),
+            player=OuterRef("person"),
+        ).order_by()
+
+        def total(field):
+            return Subquery(
+                stats.values("player").annotate(total=Sum(field)).values("total")
+            )
+
+        return self.annotate(
+            stat_played=total("played"),
+            stat_points=total("points"),
+            stat_mvp=total("mvp"),
+        )

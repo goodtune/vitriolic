@@ -3,7 +3,7 @@ from django.utils.encoding import smart_str
 from django.utils.translation import gettext_lazy as _
 
 
-class BootstrapFormControlMixin(object):
+class BootstrapFormControlMixin:
     """
     Twitter bootstrap is the most widely used user-interface framework. Many
     designers will have experience with it, and there are numerous off-shelf
@@ -13,8 +13,11 @@ class BootstrapFormControlMixin(object):
     set the bootstrap "form-control" class to the widget of the field.
     """
 
+    #: The class given to each widget; ``None`` gives it none.
+    control_class = "form-control"
+
     def __init__(self, *args, **kwargs):
-        super(BootstrapFormControlMixin, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         for field_name in getattr(self, "fields", ()):
             field = self.fields[field_name]
 
@@ -25,8 +28,10 @@ class BootstrapFormControlMixin(object):
 
             # Which widget types don't we want to have the class attribute set
             # to be 'form-control'?
-            if not isinstance(field.widget, (widgets.RadioSelect,)):
-                field.widget.attrs["class"] = "form-control"
+            if self.control_class and not isinstance(
+                field.widget, (widgets.RadioSelect,)
+            ):
+                field.widget.attrs["class"] = self.control_class
 
 
 class UserMixin(BootstrapFormControlMixin):
@@ -36,7 +41,7 @@ class UserMixin(BootstrapFormControlMixin):
 
     def __init__(self, user=None, *args, **kwargs):
         self.user = user
-        super(UserMixin, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
 
 class SuperUserSlugMixin(UserMixin):
@@ -49,22 +54,20 @@ class SuperUserSlugMixin(UserMixin):
     """
 
     def __init__(self, *args, **kwargs):
-        super(SuperUserSlugMixin, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         if self.user is None or not self.user.is_superuser:
             self.fields.pop("slug", None)
             self.fields.pop("slug_locked", None)
         else:
             self.fields["slug"].required = False
             self.fields["slug"].help_text = _(
-                "If left blank, this will "
-                "be automatically set based "
-                "on the title."
+                "If left blank, this will be automatically set based on the title."
             )
 
 
-class LabelFromInstanceMixin(object):
+class LabelFromInstanceMixin:
     def __init__(self, label_from_instance="name", *args, **kwargs):
-        super(LabelFromInstanceMixin, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self._label_from_instance = label_from_instance
 
     def label_from_instance(self, obj):
@@ -82,9 +85,9 @@ class LabelFromInstanceMixin(object):
         return smart_str(value)
 
 
-class PermissionFormSetMixin(object):
+class PermissionFormSetMixin:
     def __init__(self, instance, queryset, *args, **kwargs):
-        super(PermissionFormSetMixin, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.instance = instance
         self.queryset = queryset
 
@@ -92,7 +95,7 @@ class PermissionFormSetMixin(object):
         return self.queryset.count()
 
     def _construct_form(self, i, **kwargs):
-        return super(PermissionFormSetMixin, self)._construct_form(
+        return super()._construct_form(
             i, instance=self.instance, permission=self.queryset[i]
         )
 

@@ -1,0 +1,30 @@
+{% extends "touchtechnology/admin/explorer/list.inc.html" %}
+{% load i18n admin admin_explorer %}
+
+{% block table-headings %}
+	<th>{% trans "Event" %}</th>
+	<th class="wide-only">{% trans "Start" %}</th>
+	<th class="wide-only">{% trans "Finish" %}</th>
+	<th>{% trans "Streaming" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	<td class="title-cell">
+		{% if change_perm in object_perms %}
+			<a href="{{ obj.urls.edit }}">{% icon "video" %}<span>{{ obj.title }}</span></a>
+		{% else %}
+			<span>{{ obj.title }}</span>
+		{% endif %}
+	</td>
+	<td class="wide-only">{{ obj.start }}</td>
+	<td class="wide-only">{{ obj.stop }}</td>
+	<td>{% if obj.external_identifier %}<span class="tag good">{% icon "video" %}YouTube</span>{% endif %} {% if obj.stream_key %}{{ obj.stream_key.label }}{% endif %}</td>
+{% endblock %}
+
+{% block row-buttons-extra %}
+	{% if obj.live_stream %}
+		<button type="button" class="button compact" data-copy="{{ obj.video_url }}" data-copied="{% trans "Copied" %}">{% icon "copy" %}<span class="copy-label">{% trans "Copy video link" %}</span></button>
+	{% endif %}
+{% endblock %}
+
+{% block empty-row-colspan %}5{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "touchtechnology/admin/workbook/base.html" %}
+{% load i18n admin_workbook %}
+
+{% block page_title %}{% trans "Settings" %}{% endblock %}
+
+{% block content %}
+	<header class="wb-head">
+		<div class="wb-head-text">
+			<h1>{% trans "Site settings" %}</h1>
+			<p class="wb-lede">{% trans "How the site is reached and named." %}</p>
+		</div>
+	</header>
+
+	<ul class="wb-tasks">
+		<li>
+			<a class="wb-task" href="{% url 'admin:settings:site' %}">
+				<span class="wb-task-icon">{% icon "globe" %}</span>
+				<span class="wb-task-title">{% trans "Domain Name" %}</span>
+				<span class="wb-task-note">{% trans "The address of the site and its display name." %}</span>
+			</a>
+		</li>
+	</ul>
+{% endblock %}

@@ -1,0 +1,30 @@
+{% extends "touchtechnology/admin/workbook/list.inc.html" %}
+{% load i18n common admin_workbook %}
+
+{% block table-headings %}
+	<th scope="col">{% trans "Application" %}</th>
+	<th scope="col" class="wb-num">{% trans "Pages" %}</th>
+	<th scope="col">{% trans "Import Path" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	<td class="wb-title-cell">
+		{% url 'admin:content:real_placeholder:edit' obj.pk as edit_url %}
+		{% if change_perm in object_perms %}<a href="{{ edit_url }}">{{ obj }}</a>{% else %}<span>{{ obj }}</span>{% endif %}
+	</td>
+	<td class="wb-num" data-label="{% trans "Pages" %}">{{ obj.node_count }}</td>
+	<td data-label="{% trans "Import Path" %}"><span class="wb-code">{{ obj.path }}</span></td>
+{% endblock %}
+
+{% block row-buttons-items %}
+	{% url 'admin:content:real_placeholder:edit' obj.pk as edit_url %}
+	{% if change_perm in object_perms %}<li><a href="{{ edit_url }}">{% icon "pencil" %}{% trans "Edit" %}</a></li>{% endif %}
+{% endblock %}
+
+{# The list's one Delete: the base would add another from the record's own urls. #}
+{% block row-buttons-delete %}
+	{% url 'admin:content:real_placeholder:delete' obj.pk as delete_url %}
+	{% if delete_perm in object_perms %}<li class="wb-menu-last">{% include "touchtechnology/admin/workbook/_delete.html" with action=delete_url %}</li>{% endif %}
+{% endblock %}
+
+{% block empty-row-colspan %}4{% endblock %}

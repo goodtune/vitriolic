@@ -13,8 +13,7 @@ class LiveStreamTemplateTest(TestCase):
     """Test that live stream templates render correctly."""
 
     @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
+    def setUpTestData(cls):
         # Create common test objects that can be reused across tests
         cls.stage = factories.StageFactory.create()
         cls.competition = cls.stage.division.season.competition
@@ -50,6 +49,7 @@ class LiveStreamTemplateTest(TestCase):
         )
 
     def setUp(self):
+        super().setUp()
         self.factory = RequestFactory()
 
     def _get_template_context(self, match=None):
@@ -136,6 +136,37 @@ class LiveStreamTemplateTest(TestCase):
             f"{self.competition.title} {self.season.title}"
         )
         self.assertEqual(title, expected_title)
+
+    def test_live_stream_title_label_only(self):
+        """``label_only`` leaves the teams out of the title of a labelled match."""
+        context = self._get_template_context(self.match_with_label)
+        context["label_only"] = True
+
+        title = render_to_string(
+            "tournamentcontrol/competition/match/live_stream/title.txt", context
+        ).strip()
+
+        self.assertEqual(
+            title,
+            f"{self.division.title} | Semi Final | "
+            f"{self.competition.title} {self.season.title}",
+        )
+
+    def test_live_stream_title_label_only_without_label(self):
+        """A match without a label keeps its teams: it has no other name."""
+        context = self._get_template_context(self.match_without_label)
+        context["label_only"] = True
+
+        title = render_to_string(
+            "tournamentcontrol/competition/match/live_stream/title.txt", context
+        ).strip()
+
+        self.assertEqual(
+            title,
+            f"{self.division.title} | "
+            f"{self.match_without_label.get_home_team_plain()} vs {self.match_without_label.get_away_team_plain()} | "
+            f"{self.competition.title} {self.season.title}",
+        )
 
     def test_custom_template_hierarchy_override(self):
         """Test that custom templates in the hierarchy work correctly."""

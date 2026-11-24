@@ -1,0 +1,4 @@
+# Captured upstream provider pages used by the tests: one dated archive per
+# provider, replaced as a whole when re-captured. Needs `git lfs install`
+# locally and `lfs: true` on actions/checkout in CI.
+tournamentcontrol/competition/tests/fixtures/*.zip filter=lfs diff=lfs merge=lfs -text

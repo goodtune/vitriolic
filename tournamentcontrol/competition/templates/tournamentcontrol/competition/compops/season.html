@@ -1,0 +1,29 @@
+{% extends "tournamentcontrol/competition/compops/base.html" %}
+{% block title %}{{ season }} · Ops{% endblock %}
+{% block body %}
+<header class="topbar">
+	<a class="brand" href="{% url 'compops:index' %}">TOURNAMENT OPS</a>
+	<span class="season">{{ season }}</span>
+	<span class="spacer"></span>
+	<span class="who">{{ user.get_username }}</span>
+</header>
+<main class="index">
+	<h1>{{ season.title }}</h1>
+	<p class="sub">{{ season.competition.title }}{% if days %}{% with first=days|first last=days|last %} · {% if first.date == last.date %}{{ first.date|date:"j F Y" }}{% else %}{{ first.date|date:"j F" }} – {{ last.date|date:"j F Y" }}{% endif %}{% endwith %}{% endif %} · {{ season.timezone }}</p>
+	{% if can_booth %}<p class="actions"><a class="btn" href="{% url 'compops:booth-index' competition=season.competition.slug season=season.slug %}">Commentary booths</a></p>{% endif %}
+	<p class="actions"><a class="btn" href="{% url 'compops:scoreboard-index' competition=season.competition.slug season=season.slug %}">Scoreboards</a></p>
+	{% if days %}
+		<h2>Days</h2>
+		<ul class="list">
+			{% for day in days %}
+				<li><a class="item" href="{% url 'compops:day' competition=season.competition.slug season=season.slug datestr=day.date|date:'Ymd' %}"><span class="title">{{ day.date|date:"l j F Y" }}</span>{% if day.date == today %}<span class="tag">Today</span>{% endif %}<span class="when">{{ day.matches }} match{{ day.matches|pluralize:"es" }}</span><span class="state {{ day.status }}">{% if day.status == "complete" %}All results in{% elif day.status == "upcoming" %}Upcoming{% elif day.status == "today" %}{{ day.outstanding }} result{{ day.outstanding|pluralize }} to enter{% else %}{{ day.outstanding }} result{{ day.outstanding|pluralize }} missing{% endif %}</span></a></li>
+			{% endfor %}
+		</ul>
+	{% else %}
+		<p class="empty">No matches are scheduled for this event.</p>
+	{% endif %}
+	{% if undated %}
+		<p class="empty">{{ undated }} match{{ undated|pluralize:"es" }} {{ undated|pluralize:"has,have" }} no date yet.</p>
+	{% endif %}
+</main>
+{% endblock %}

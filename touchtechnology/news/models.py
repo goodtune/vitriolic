@@ -9,6 +9,7 @@ from imagekit.models import ImageSpecField
 
 from touchtechnology.admin.mixins import AdminUrlMixin
 from touchtechnology.common.db.models import BooleanField, HTMLField
+from touchtechnology.common.utils import month_slug
 from touchtechnology.news.app_settings import (
     DETAIL_IMAGE_KWARGS,
     DETAIL_IMAGE_PROCESSORS,
@@ -26,7 +27,7 @@ class AdminUrlModel(AdminUrlMixin, models.Model):
         abstract = True
 
     def _get_admin_namespace(self):
-        return "admin:news:%s" % self._meta.model_name
+        return f"admin:news:{self._meta.model_name}"
 
     def _get_url_args(self):
         return (self.pk,)
@@ -47,7 +48,7 @@ class Article(AdminUrlModel):
 
     published = DateTimeField(
         verbose_name=_("Published"),
-        help_text=_("Set a date & time in the future to schedule " "an announcement."),
+        help_text=_("Set a date & time in the future to schedule an announcement."),
     )
 
     byline = models.CharField(max_length=75, blank=True, verbose_name=_("Byline"))
@@ -86,7 +87,7 @@ class Article(AdminUrlModel):
             "news:article",
             kwargs={
                 "year": self.published.year,
-                "month": self.published.strftime("%b").lower(),
+                "month": month_slug(self.published),
                 "day": self.published.day,
                 "slug": self.slug,
             },
@@ -114,7 +115,7 @@ class Translation(AdminUrlModel):
             return getattr(self.article, name)
 
     def _get_admin_namespace(self):
-        return "admin:news:article:%s" % self._meta.model_name
+        return f"admin:news:article:{self._meta.model_name}"
 
     def _get_url_args(self):
         return (self.article.pk, self.locale)
@@ -125,7 +126,7 @@ class Translation(AdminUrlModel):
             "news:translation",
             kwargs={
                 "year": published.year,
-                "month": published.strftime("%b").lower(),
+                "month": month_slug(published),
                 "day": published.day,
                 "slug": self.article.slug,
                 "locale": self.locale,
@@ -142,6 +143,9 @@ class Translation(AdminUrlModel):
                 name="news_translation_unique_article_locale",
             ),
         ]
+        # The translations are listed an article at a time, where the locale
+        # alone settles the order.
+        ordering = ("locale",)
 
 
 class Category(AdminUrlModel):
@@ -152,7 +156,7 @@ class Category(AdminUrlModel):
         max_length=50,
         blank=True,
         verbose_name=_("Short Title"),
-        help_text=_("Used in navigation, a shorter alternative " "to the main title."),
+        help_text=_("Used in navigation, a shorter alternative to the main title."),
     )
     slug = models.SlugField(max_length=75, verbose_name=_("Slug"))
     slug_locked = BooleanField(default=False, verbose_name=_("Locked Slug"))
@@ -173,6 +177,7 @@ class Category(AdminUrlModel):
     objects = CategoryQuerySet.as_manager()
 
     class Meta:
+        ordering = ("title",)
         verbose_name_plural = "categories"
 
     def clean(self):

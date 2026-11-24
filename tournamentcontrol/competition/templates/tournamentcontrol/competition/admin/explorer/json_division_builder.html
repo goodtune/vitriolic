@@ -1,0 +1,74 @@
+{% extends "touchtechnology/admin/explorer/form_page.html" %}
+{% load i18n common admin admin_explorer %}
+
+{% block page_title %}{% trans "Build divisions from JSON" %}{% endblock %}
+{% block page_kind %}{{ season }}{% endblock %}
+{% block page_icon %}<span class="title-icon">{% icon "json" %}</span>{% endblock %}
+
+{% block form-body %}
+	<p>{% blocktrans %}Each box takes one complete <code>DivisionStructure</code> JSON object; it is checked, then used to make the division's teams, stages, pools and matches.{% endblocktrans %}</p>
+	<p class="notice">{% trans "All the divisions are made together: if any one of them cannot be built, none is." %}</p>
+	{{ formset.management_form }}
+	{% if formset.non_form_errors %}
+		<div class="form-errors" role="alert">{% icon "alert" %}<ul>{% for error in formset.non_form_errors %}<li>{{ error }}</li>{% endfor %}</ul></div>
+	{% endif %}
+	<div id="json-formset" class="json-forms">
+		{% for form in formset %}
+			<fieldset class="form-section json-form">
+				<legend><h2>{% blocktrans with n=forloop.counter %}Division {{ n }}{% endblocktrans %}</h2></legend>
+				{% for f in form %}{% field f %}{% endfor %}
+			</fieldset>
+		{% endfor %}
+	</div>
+	<template id="{{ formset.prefix }}-empty-form">
+		<fieldset class="form-section json-form">
+			<legend><h2>{% trans "Another division" %}</h2></legend>
+			{% for f in formset.empty_form %}{% field f %}{% endfor %}
+			<p><button type="button" class="button compact destructive-quiet" data-remove-form>{% icon "trash" %}<span>{% trans "Remove" %}</span></button></p>
+		</fieldset>
+	</template>
+	<p class="add-row-line"><button type="button" class="button compact" data-add-form="{{ formset.prefix }}">{% icon "plus" %}<span>{% trans "Another division" %}</span></button></p>
+{% endblock %}
+
+{% block extrajs %}
+	{{ block.super }}
+	<script>
+		(function () {
+			var button = document.querySelector('[data-add-form]');
+			if (!button) { return; }
+			var prefix = button.getAttribute('data-add-form');
+			var total = document.querySelector('input[name="' + prefix + '-TOTAL_FORMS"]');
+			var max = parseInt((document.querySelector('input[name="' + prefix + '-MAX_NUM_FORMS"]') || {}).value, 10) || 10;
+			var template = document.getElementById(prefix + '-empty-form');
+			var list = document.getElementById('json-formset');
+			button.addEventListener('click', function () {
+				var count = parseInt(total.value, 10);
+				if (count >= max) { return; }
+				var holder = document.createElement('div');
+				holder.innerHTML = template.innerHTML.replace(/__prefix__/g, count);
+				var form = holder.firstElementChild;
+				list.appendChild(form);
+				total.value = count + 1;
+				button.disabled = count + 1 >= max;
+				var first = form.querySelector('textarea, input');
+				if (first) { first.focus(); }
+			});
+			list.addEventListener('click', function (event) {
+				var remove = event.target.closest('[data-remove-form]');
+				if (!remove) { return; }
+				remove.closest('.json-form').remove();
+				total.value = list.querySelectorAll('.json-form').length;
+				button.disabled = false;
+				// Number the forms again, so the names run from 0 without a gap.
+				Array.prototype.forEach.call(list.querySelectorAll('.json-form'), function (form, index) {
+					Array.prototype.forEach.call(form.querySelectorAll('[name], [id], label[for]'), function (el) {
+						['name', 'id', 'for'].forEach(function (attr) {
+							var value = el.getAttribute(attr);
+							if (value) { el.setAttribute(attr, value.replace(new RegExp(prefix + '-\\d+-'), prefix + '-' + index + '-')); }
+						});
+					});
+				});
+			});
+		})();
+	</script>
+{% endblock %}

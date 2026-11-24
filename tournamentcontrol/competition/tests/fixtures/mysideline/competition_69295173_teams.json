@@ -1,0 +1,55 @@
+{
+ "data": {
+  "competitionLadder": {
+   "teams": [
+    {
+     "_id": 71094007,
+     "name": "Ninjas",
+     "pool": null
+    },
+    {
+     "_id": 69659581,
+     "name": "Broncos",
+     "pool": null
+    },
+    {
+     "_id": 71093587,
+     "name": "CCGS Vikings",
+     "pool": null
+    },
+    {
+     "_id": 69548820,
+     "name": "The Fast and Fearless",
+     "pool": null
+    },
+    {
+     "_id": 69492417,
+     "name": "Steppers",
+     "pool": null
+    }
+   ]
+  },
+  "teams": [
+   {
+    "_id": 69659581,
+    "name": "Broncos"
+   },
+   {
+    "_id": 71093587,
+    "name": "CCGS Vikings"
+   },
+   {
+    "_id": 71094007,
+    "name": "Ninjas"
+   },
+   {
+    "_id": 69492417,
+    "name": "Steppers"
+   },
+   {
+    "_id": 69548820,
+    "name": "The Fast and Fearless"
+   }
+  ]
+ }
+}

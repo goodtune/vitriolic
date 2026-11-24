@@ -1,0 +1,29 @@
+{% load i18n humanize %}
+<div class="wb-thumbnail-widget thumbnail-image-widget">
+	{% if widget.value %}
+		<div class="wb-thumbnail-current">
+			{% if preview_data_url %}
+				<img class="wb-thumbnail-preview" src="{{ preview_data_url }}" alt="{% trans 'Current thumbnail' %}">
+			{% endif %}
+			<div class="wb-thumbnail-info">
+				<p class="wb-thumbnail-title">{% trans "Current thumbnail" %}</p>
+				<p class="wb-help">{{ mime_type|default:"Image" }} · {{ file_size_bytes|filesizeformat }}</p>
+				{% if preview_failed %}
+					<p class="wb-help">{% trans "Preview unavailable (unsupported format)" %}</p>
+				{% endif %}
+				{% if widget.clear_checkbox_name %}
+					<label class="wb-thumbnail-clear">
+						<input class="wb-check" type="checkbox" name="{{ widget.clear_checkbox_name }}" id="{{ widget.clear_checkbox_id }}">
+						{% trans "Remove current thumbnail" %}
+					</label>
+				{% endif %}
+			</div>
+		</div>
+		<label class="wb-thumbnail-label" for="{{ widget.attrs.id }}">{% trans "Replace with new image:" %}</label>
+		<input type="{{ widget.type }}" name="{{ widget.name }}"{% include "django/forms/widgets/attrs.html" %}>
+	{% else %}
+		<p class="wb-empty">{% trans "No thumbnail currently set" %}</p>
+		<label class="wb-thumbnail-label" for="{{ widget.attrs.id }}">{% trans "Upload thumbnail image:" %}</label>
+		<input type="{{ widget.type }}" name="{{ widget.name }}"{% include "django/forms/widgets/attrs.html" %}>
+	{% endif %}
+</div>

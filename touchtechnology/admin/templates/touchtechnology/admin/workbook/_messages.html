@@ -1,0 +1,10 @@
+{% load admin_workbook %}{% if messages %}
+<div class="wb-messages" role="status">
+	{% for message in messages %}
+		<p class="wb-message wb-message-{{ message.tags|default:"info"|cut:" safe" }}">
+			{% if message.level_tag == "success" %}{% icon "circle-check" %}{% elif message.level_tag == "error" %}{% icon "circle-alert" %}{% elif message.level_tag == "warning" %}{% icon "triangle-alert" %}{% else %}{% icon "info" %}{% endif %}
+			<span>{{ message }}</span>
+		</p>
+	{% endfor %}
+</div>
+{% endif %}

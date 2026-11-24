@@ -18,13 +18,14 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          lfs: true
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.4.0
 
       - name: Sync dependencies
         run: |
           uv sync
-          uv tool install black
-          uv tool install isort
+          uv tool install ruff
           uv tool install tox --with tox-docker,tox-uv

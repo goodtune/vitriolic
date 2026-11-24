@@ -4,7 +4,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("competition", "0054_migrate_thumbnail_urls_to_binary"),
     ]
@@ -12,25 +11,22 @@ class Migration(migrations.Migration):
     operations = [
         # Remove foreign key constraints by altering the fields to remove the FK relationships
         # This allows test database cleanup to work while keeping the tables for now
-
         # Remove FK from RankTeam.club
         migrations.AlterField(
-            model_name='rankteam',
-            name='club',
+            model_name="rankteam",
+            name="club",
             field=models.IntegerField(null=True, blank=True),
         ),
-
         # Remove FK from RankTeam.division
         migrations.AlterField(
-            model_name='rankteam',
-            name='division',
+            model_name="rankteam",
+            name="division",
             field=models.IntegerField(null=True, blank=True),
         ),
-
         # Remove FK from RankPoints.team
         migrations.AlterField(
-            model_name='rankpoints',
-            name='team',
+            model_name="rankpoints",
+            name="team",
             field=models.IntegerField(null=True, blank=True),
         ),
     ]

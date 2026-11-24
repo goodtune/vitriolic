@@ -1,5 +1,6 @@
 from urllib.parse import urljoin
 
+from django.db.models import Count
 from django.shortcuts import get_object_or_404
 from django.urls import include, path
 from django.utils.translation import gettext_lazy as _
@@ -19,7 +20,7 @@ class NewsAdminComponent(AdminComponent):
     unprotected = False
 
     def __init__(self, app, name="news", app_name="news"):
-        super(NewsAdminComponent, self).__init__(app, name, app_name)
+        super().__init__(app, name, app_name)
 
     def get_urls(self):
         translation_patterns = (
@@ -65,6 +66,17 @@ class NewsAdminComponent(AdminComponent):
         ]
         return urlpatterns
 
+    def tasks(self, request):
+        return (
+            {
+                "label": _("Write a news article"),
+                "url": self.reverse("article:add"),
+                "note": _("Publish it now or later"),
+                "icon": "newspaper",
+                "priority": 20,
+            },
+        )
+
     def dropdowns(self):
         dl = (
             (_("Articles"), self.reverse("article:list"), "newspaper-o"),
@@ -96,7 +108,7 @@ class NewsAdminComponent(AdminComponent):
             pk=pk,
             form_class=ArticleForm,
             form_kwargs={"user": request.user},
-            # permission_required=True,
+            permission_required=True,
             post_save_redirect=self.redirect(urljoin(request.path, "..")),
             extra_context=kwargs,
         )
@@ -111,6 +123,7 @@ class NewsAdminComponent(AdminComponent):
 
     # Translations
 
+    @staff_login_required_m
     def edit_translation(self, request, pk, locale=None, **extra_context):
         article = get_object_or_404(Article, pk=pk)
 
@@ -128,10 +141,18 @@ class NewsAdminComponent(AdminComponent):
             extra_context=extra_context,
         )
 
+    @staff_login_required_m
     def delete_translation(self, request, pk, locale, **kwargs):
         instance = get_object_or_404(Translation, article__pk=pk, locale=locale)
-        return self.generic_permissions(request, Translation, instance=instance)
+        return self.generic_delete(
+            request,
+            Translation,
+            pk=instance.pk,
+            permission_required=True,
+            post_delete_redirect=self.redirect(instance.article.urls["edit"]),
+        )
 
+    @staff_login_required_m
     def perms_translation(self, request, pk, locale, **extra_context):
         instance = get_object_or_404(Translation, article__pk=pk, locale=locale)
         return self.generic_permissions(
@@ -148,7 +169,9 @@ class NewsAdminComponent(AdminComponent):
     def list_categories(self, request, **kwargs):
         return self.generic_list(
             request,
-            Category,
+            # Each row shows how many articles it has. A query that groups
+            # does not take Meta.ordering, so order it again.
+            Category.objects.annotate(article_count=Count("article")).order_by("title"),
             paginate_by=25,
             permission_required=True,
             extra_context=kwargs,

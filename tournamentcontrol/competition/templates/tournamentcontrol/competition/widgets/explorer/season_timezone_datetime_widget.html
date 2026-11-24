@@ -1,0 +1,6 @@
+{% with date=widget.subwidgets.0 hour=widget.subwidgets.1 minute=widget.subwidgets.2 %}
+<div class="datetime-parts" data-no-picker>
+	<span class="datetime-date">{% include date.template_name with widget=date only %}</span>
+	<span class="datetime-time">{% include hour.template_name with widget=hour only %}<span class="datetime-separator" aria-hidden="true">:</span>{% include minute.template_name with widget=minute only %}</span>
+</div>
+{% endwith %}

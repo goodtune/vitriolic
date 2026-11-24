@@ -6,7 +6,6 @@ import touchtechnology.common.db.models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("competition", "0018_resync_field_and_model_defs"),
     ]

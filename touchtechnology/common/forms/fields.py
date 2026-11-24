@@ -1,5 +1,8 @@
+import base64
 import json
 import re
+import struct
+import zlib
 from datetime import datetime
 
 from django import forms
@@ -15,10 +18,11 @@ from timezone_field import TimeZoneFormField
 from touchtechnology.common.forms.iter import TemplateChoiceIterator
 from touchtechnology.common.forms.mixins import LabelFromInstanceMixin
 from touchtechnology.common.forms.widgets import (
-    GoogleMapsWidget,
     HTMLWidget,
+    LocationWidget,
     SelectDateTimeHiddenWidget,
     SelectDateTimeWidget,
+    SignatureWidget,
 )
 
 
@@ -59,14 +63,84 @@ class HTMLField(forms.CharField):
         return super().clean(value)
 
 
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+
+
+def is_png(data):
+    """
+    Whether ``data`` is a whole PNG file: its signature, then chunks that each
+    pass their checksum, from ``IHDR`` to ``IEND``, and nothing after. It is
+    read here and not with Pillow, which this app does not depend on.
+    """
+    if not data.startswith(PNG_SIGNATURE):
+        return False
+    position = len(PNG_SIGNATURE)
+    first = True
+    while position + 12 <= len(data):
+        (length,) = struct.unpack(">I", data[position : position + 4])
+        kind = data[position + 4 : position + 8]
+        end = position + 12 + length
+        if end > len(data):
+            return False
+        (checksum,) = struct.unpack(">I", data[end - 4 : end])
+        if zlib.crc32(data[position + 4 : end - 4]) != checksum:
+            return False
+        if first != (kind == b"IHDR"):
+            return False
+        if kind == b"IEND":
+            return end == len(data)
+        first = False
+        position = end
+    return False
+
+
+class SignatureField(forms.CharField):
+    """
+    A person's signature, drawn in the browser and kept as a PNG data URL:
+    text that an ``<img src>`` shows as it is.
+
+    The field takes only what the widget sends, a whole PNG file no larger
+    than ``max_size`` bytes, so the value is safe to store and to show again.
+    """
+
+    widget = SignatureWidget
+    prefix = "data:image/png;base64,"
+    default_error_messages = {
+        "required": _("Please sign in the box."),
+        "invalid": _("This is not a signature."),
+        "too_large": _("This signature is too large to keep. Clear it and sign again."),
+    }
+
+    def __init__(self, *, max_size=512 * 1024, **kwargs):
+        self.max_size = max_size
+        super().__init__(**kwargs)
+
+    def validate(self, value):
+        super().validate(value)
+        if value in self.empty_values:
+            return
+        if not value.startswith(self.prefix):
+            raise forms.ValidationError(self.error_messages["invalid"], code="invalid")
+        try:
+            image = base64.b64decode(value[len(self.prefix) :], validate=True)
+        except ValueError:
+            raise forms.ValidationError(self.error_messages["invalid"], code="invalid")
+        if len(image) > self.max_size:
+            raise forms.ValidationError(
+                self.error_messages["too_large"], code="too_large"
+            )
+        if not is_png(image):
+            raise forms.ValidationError(self.error_messages["invalid"], code="invalid")
+
+
 class GoogleMapsField(forms.MultiValueField):
-    def __init__(self, max_length, width=300, height=200, zoom=8, *args, **kwargs):
+    def __init__(self, max_length, height=200, zoom=8, *args, **kwargs):
         fields = (
             forms.CharField(max_length=25, required=False),
             forms.CharField(max_length=25, required=False),
             forms.IntegerField(required=False),
         )
-        kwargs["widget"] = GoogleMapsWidget(height, width, zoom)
+        kwargs["widget"] = LocationWidget(height, zoom)
         super().__init__(fields, *args, **kwargs)
 
     def compress(self, data_list):

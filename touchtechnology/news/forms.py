@@ -16,8 +16,8 @@ class ArticleForm(SuperUserSlugMixin, ModelForm):
     """Form for creating and editing Article instances."""
 
     def __init__(self, *args, **kwargs):
-        super(ArticleForm, self).__init__(*args, **kwargs)
-        if not self.fields["categories"].queryset.count():
+        super().__init__(*args, **kwargs)
+        if not self.fields["categories"].queryset.exists():
             self.fields.pop("categories", None)
         self.fields["image"].required = getattr(
             settings, "TOUCHTECHNOLOGY_NEWS_IMAGE_REQUIRED", True

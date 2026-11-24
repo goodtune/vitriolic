@@ -1,0 +1,16 @@
+{% extends "touchtechnology/admin/explorer/print.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Most valuable player" %}{% endblock %}
+{% block heading %}{% trans "Most valuable player" %}{% endblock %}
+
+{% block extracss %}
+	<meta name="author" content="{% block meta_author %}{{ site.name }}{% endblock %}">
+	<meta name="subject" content="{% block meta_subject %}{% endblock %}">
+	<meta name="keywords" content="{% block meta_keywords %}{% endblock %}">
+	<meta name="date" content="{% block meta_date %}{% now "c" %}{% endblock %}">
+{% endblock %}
+
+{% block content %}
+	<p>{% trans "This competition has no sheet of its own for voting yet; give it a template at" %} <code>tournamentcontrol/competition/admin/mvp.html</code>.</p>
+{% endblock %}

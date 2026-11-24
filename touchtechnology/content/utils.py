@@ -6,13 +6,19 @@ from importlib import import_module
 
 from django.conf import settings
 from django.core.cache import cache
-from django.db.models.signals import post_save
+from django.db import DEFAULT_DB_ALIAS
+from django.db.models.signals import post_delete, post_save
 from django.db.utils import DatabaseError
 from django.utils.module_loading import import_string
 
 from touchtechnology.common.models import SitemapNode
+from touchtechnology.common.utils import get_schema_name
 from touchtechnology.content.app_settings import TENANT_MEDIA_PUBLIC
 from touchtechnology.content.models import Placeholder
+
+# SitemapNodeMiddleware caches the URL tree it builds from the sitemap.
+DEHYDRATED_URLPATTERNS_KEY = "urlpatterns"
+DEHYDRATED_URLPATTERNS_TIMEOUT = 600
 
 logger = logging.getLogger(__name__)
 
@@ -21,8 +27,8 @@ def install_placeholder(app):
     """Create placeholder records for a given application."""
     application = import_module(app)
     for cls_name in getattr(application, "INSTALL", ()):
-        path = "%s.sites.%s" % (app, cls_name)
-        logger.debug('Installing application "{0}"'.format(path))
+        path = f"{app}.sites.{cls_name}"
+        logger.debug('Installing application "%s"', path)
         site = import_string(path)()
         namespace = site.app_name
         try:
@@ -40,7 +46,7 @@ def install_placeholder(app):
                 )
             else:
                 logger.debug(
-                    'Application "%s" (pk=%d) already ' "exists, skipping.",
+                    'Application "%s" (pk=%d) already exists, skipping.',
                     placeholder.path,
                     placeholder.pk,
                 )
@@ -68,18 +74,36 @@ def get_media_storage(request):
     return settings.MEDIA_ROOT
 
 
-def invalidate_sitemapnode_urlpatterns(sender, instance, **kwargs):
+def urlpatterns_cache_version(using=DEFAULT_DB_ALIAS):
     """
-    When a SitemapNode is changed, we need to invalidate the cache so that
-    subsequent requests have a newly generated urlconf derived.
+    Return the cache version of the URL tree of the current tenant.
+
+    Each tenant of a ``django-tenant-schemas`` site has its own sitemap, so
+    its tree is cached under the name of the schema the connection points at:
+    the tenant of the request, or of ``tenant_context`` outside one. That is
+    also the schema a node is saved to, so a save throws away the tree of the
+    tenant it changed. A single-tenant site uses the cache's default version.
+    """
+    return get_schema_name(using)
+
+
+def invalidate_sitemapnode_urlpatterns(
+    sender, instance, using=DEFAULT_DB_ALIAS, **kwargs
+):
+    """
+    When a SitemapNode is changed or deleted, we need to invalidate the cache
+    so that subsequent requests have a newly generated urlconf derived.
 
     We could add extra conditional checking - for example, if the slug or the
     keyword arguments to a Placeholder node have changed. This will be _far_
     less frequent than it would seem worthwhile to worry about.
+
+    ``using`` has a default because ``SitemapNode._move`` sends ``post_save``
+    itself, without it.
     """
     logger.debug("SitemapNodeMiddleware cache requires invalidation.")
-    middleware = import_module("touchtechnology.content.middleware")
-    cache.delete(middleware.DEHYDRATED_URLPATTERNS_KEY)
+    cache.delete(DEHYDRATED_URLPATTERNS_KEY, version=urlpatterns_cache_version(using))
 
 
 post_save.connect(invalidate_sitemapnode_urlpatterns, SitemapNode)
+post_delete.connect(invalidate_sitemapnode_urlpatterns, SitemapNode)

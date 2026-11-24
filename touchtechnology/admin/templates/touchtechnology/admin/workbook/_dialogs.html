@@ -1,0 +1,12 @@
+{% load i18n admin_workbook %}
+{# One confirmation dialog for the page: a delete or an undo asks here first. #}
+<dialog class="wb-dialog" id="wb-confirm" aria-labelledby="wb-confirm-title">
+	<form method="dialog" class="wb-dialog-body">
+		<h2 class="wb-dialog-title" id="wb-confirm-title">{% trans "Are you sure?" %}</h2>
+		<p class="wb-dialog-text" data-wb-confirm-text></p>
+		<div class="wb-dialog-actions">
+			<button type="submit" value="cancel" class="wb-button wb-button-quiet">{% trans "Keep it" %}</button>
+			<button type="submit" value="confirm" class="wb-button wb-button-danger" data-wb-confirm-go>{% trans "Delete" %}</button>
+		</div>
+	</form>
+</dialog>

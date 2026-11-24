@@ -1,0 +1,11 @@
+{% extends "tournamentcontrol/competition/admin/workbook/base.html" %}
+{% load i18n %}
+
+{% block page_title %}{% trans "Please wait..." %}{% endblock %}
+
+{% block content %}
+	<div class="wb-error-page">
+		<h1>{% trans "Please wait..." %}</h1>
+		<p class="wb-pane-loading">{% block waitfor %}{% endblock %}</p>
+	</div>
+{% endblock %}

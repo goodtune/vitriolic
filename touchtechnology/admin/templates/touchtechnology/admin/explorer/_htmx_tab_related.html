@@ -1,0 +1,11 @@
+{% load common admin_lists %}
+{% comment %}
+One pane of an object's page, fetched when its tab is first shown (with
+TOUCHTECHNOLOGY_HTMX_ADMIN_TABS). The list draws its own heading and add
+link, as the panes rendered with the page do; its pages replace this pane.
+{% endcomment %}
+<div>
+	{% with table=templates|default:None manager=tab_manager %}
+		{% admin_list tab_manager template=tab_manager|admin_list_template:table paginate_by=tab_paginate_by %}
+	{% endwith %}
+</div>

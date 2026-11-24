@@ -8,7 +8,6 @@ from contextlib import contextmanager
 from decimal import Decimal
 from importlib import metadata
 from itertools import islice, zip_longest
-from urllib.parse import parse_qsl
 
 try:
     import sentry_sdk
@@ -16,7 +15,8 @@ except ImportError:
     sentry_sdk = None
 
 from django.conf import settings
-from django.db.models import Model, Q
+from django.contrib.staticfiles import finders
+from django.db.models import Exists, Model, OuterRef, Q
 from django.db.models.query import QuerySet
 from django.forms.boundfield import BoundField
 from django.forms.widgets import (
@@ -31,11 +31,11 @@ from django.forms.widgets import (
 from django.template.base import Node
 from django.template.library import Library
 from django.template.loader import render_to_string
+from django.templatetags.static import static
 from django.urls import Resolver404, resolve, reverse
 from django.utils import timezone
 from django.utils.encoding import smart_str
 from django.utils.html import escape
-from django.utils.http import urlencode
 from django.utils.safestring import mark_safe
 from django.utils.text import slugify
 from guardian.core import ObjectPermissionChecker
@@ -45,9 +45,9 @@ from touchtechnology.common.default_settings import CURRENCY_SYMBOL, SITEMAP_ROO
 from touchtechnology.common.exceptions import NotModelManager
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.utils import (
-    create_exclude_filter,
     get_all_perms_for_model_cached,
     model_and_manager,
+    month_slug,
     tree_for_node,
 )
 from tournamentcontrol.competition.utils import FauxQueryset
@@ -156,6 +156,19 @@ def twittify(s):
             s,
         )
     )
+
+
+@register.filter(name="month_slug", expects_localtime=True)
+def month_slug_filter(value):
+    """
+    The month of a date or datetime as a date URL spells it, such as "jun".
+
+    Use this rather than ``date:"b"`` when building a URL: that follows the
+    active language, so a visitor reading in Czech would be given "čec".
+    """
+    if not value:
+        return ""
+    return month_slug(value)
 
 
 @register.filter
@@ -289,14 +302,22 @@ def _do_navigation(
 
     logger.debug("nodes: %r", nodes)
 
-    # make sure we hide any nodes that are in a hidden part of the tree
+    # make sure we hide any nodes that are in a hidden part of the tree: those
+    # which lie within the subtree of a hidden (or disabled) node of ``nodes``.
+    # The database is asked whether each node lies within a hidden one, rather
+    # than being asked for the hidden nodes first, because every page renders
+    # several of these tags and each extra query is paid on every request.
     nodes_hidden_from_navigation = nodes.filter(
         Q(hidden_from_navigation=True) | Q(enabled=False)
     )
 
-    hidden_from_navigation = create_exclude_filter(nodes_hidden_from_navigation)
+    within_hidden_node = nodes_hidden_from_navigation.filter(
+        tree_id=OuterRef("tree_id"),
+        lft__lte=OuterRef("lft"),
+        rght__gte=OuterRef("lft"),
+    ).order_by()
 
-    nodes = nodes.exclude(hidden_from_navigation)
+    nodes = nodes.exclude(Exists(within_hidden_node))
 
     logger.debug("nodes[cleaned]: %r", nodes)
 
@@ -368,8 +389,8 @@ def _do_navigation(
     return render_to_string(template_name, context)
 
 
-@register.simple_tag
-def field(bf, label=None):
+@register.simple_tag(takes_context=True)
+def field(context, bf, label=None):
     if not isinstance(bf, BoundField):
         raise TypeError(f"{{% field %}} tag can only be used with BoundFields ({bf})")
 
@@ -403,7 +424,11 @@ def field(bf, label=None):
     else:
         caption = ""
 
-    context = {
+    template_name = context.get(
+        "field_template", "touchtechnology/common/templatetags/field.html"
+    )
+
+    field_context = {
         "f": bf,
         "caption": caption,
         "widget_class_name": widget_class_name,
@@ -411,7 +436,7 @@ def field(bf, label=None):
         "no_label": not bool(label),
     }
 
-    return render_to_string("touchtechnology/common/templatetags/field.html", context)
+    return render_to_string(template_name, field_context)
 
 
 @register.inclusion_tag("touchtechnology/common/templatetags/analytics.html")
@@ -429,11 +454,10 @@ def analytics(code=None):
     "touchtechnology/common/templatetags/pagination.html", takes_context=True
 )
 def pagination(context):
-    query_string = context.get("QUERY_STRING", "")
-    query = parse_qsl(query_string, True)
-    query = [q for q in query if q[0] != "page"]
-    query_string = urlencode(query, True)
-    context.update({"QUERY_STRING": query_string})
+    """
+    The links to the other pages of a list. The template builds each with
+    ``{% querystring %}``, which keeps the request's other parameters.
+    """
     return context
 
 
@@ -530,17 +554,31 @@ def version(package, url=None):
 
 
 @register.filter("permchecker")
-def create_permission_checker(model_or_manager, user):
+def create_permission_checker(objects, user):
     """
-    Create an :class:`ObjectPermissionChecker` for optimal permission checking
-    of related objects.
+    Create an :class:`ObjectPermissionChecker` with ``user``'s permissions on
+    ``objects`` prefetched.
+
+    ``objects`` are the rows the template is about to show. Iterating them here
+    fills a queryset's result cache, which the template's own loop then reuses,
+    and guardian takes the primary keys from the rows rather than asking the
+    database for them again. Rows that are not model instances (the Files list
+    shows files and folders of the storage) have no permissions to prefetch.
 
     http://django-guardian.readthedocs.io/en/stable/userguide/performance.html
+
+    A superuser's checker is not prefetched: guardian answers ``has_perm`` for
+    an active superuser without its cache, and filling it would cost two
+    queries per list (the primary keys and the model's permission codenames).
     """
-    model, manager = model_and_manager(model_or_manager)
     checker = ObjectPermissionChecker(user)
+    if user.is_superuser:
+        return checker
+    objects = [obj for obj in objects if isinstance(obj, Model)]
+    if not objects:
+        return checker
     try:
-        checker.prefetch_perms(manager)
+        checker.prefetch_perms(objects)
     except UnboundLocalError:
         logger.exception(
             "https://github.com/django-guardian/django-guardian/issues/519"
@@ -552,12 +590,20 @@ def create_permission_checker(model_or_manager, user):
 def check_permission(obj, checker):
     """
     For a given model instance and a :class:`ObjectPermissionChecker` return
-    which permissions the associated user has.
+    which permissions the associated user has: on the instance, or on every
+    instance of its model (a global permission), as the views accept with
+    ``get_40x_or_None(..., accept_global_perms=True)``.
+
+    The checker knows object permissions only, so the global ones are asked of
+    the user through Django's own backend, which caches them on the user for
+    the rest of the request.
     """
+    user = checker.user
     return [
         model_perm
         for model_perm in get_all_perms_for_model_cached(obj._meta.model)
         if checker.has_perm(model_perm, obj)
+        or (user is not None and user.has_perm(model_perm))
     ]
 
 
@@ -620,3 +666,16 @@ def hostname():
     hostname = socket.gethostname()
     host, domain = hostname.split(".", 1)
     return dict(hostname=hostname, host=host, domain=domain)
+
+
+@register.simple_tag
+def htmx_script():
+    """
+    The URL of the htmx library that ``django-htmx`` ships. Releases up to
+    1.27 bundle it as ``htmx.min.js``; from 1.28 each file carries the major
+    version of htmx it bundles, so the unversioned name is a 404.
+    """
+    for name in ("django_htmx/htmx.min.js", "django_htmx/htmx-2.min.js"):
+        if finders.find(name):
+            return static(name)
+    return static("django_htmx/htmx.min.js")

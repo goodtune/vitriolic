@@ -4,7 +4,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("competition", "0051_plpgsql_vitriolic_stage_group_position"),
     ]

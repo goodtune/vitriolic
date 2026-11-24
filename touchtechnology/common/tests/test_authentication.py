@@ -1,9 +1,8 @@
-# encoding=utf8
-
-
 import re
+from unittest import mock
 from urllib.parse import urlparse
 
+from django.contrib.auth import get_user_model
 from django.core import mail
 from test_plus import TestCase
 
@@ -61,9 +60,11 @@ url_re = re.compile(
 
 
 class PasswordResetTests(TestCase):
-    def setUp(self):
-        self.staff = factories.UserFactory.create(is_staff=True, is_superuser=True)
-        self.regular = factories.UserFactory.create()
+    user_factory = factories.UserFactory
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.regular = cls.make_user("regular")
 
     def test_login(self):
         self.assertGoodView("accounts:login")
@@ -72,7 +73,49 @@ class PasswordResetTests(TestCase):
         # In Django 5.0 the logout view was changed to not allow GET requests.
         with self.login(self.regular), self.assertNumQueriesLessThan(50):
             self.post("accounts:logout")
-        self.response_200()
+        self.assert_http_200_ok()
+
+    def test_profile_logout_is_a_post_form(self):
+        """
+        LogoutView refuses GET since Django 5.0, so the profile's Logout link
+        carries the CSRF token for logout.js to post it.
+        """
+        with self.login(self.regular):
+            self.get_check_200("accounts:profile")
+        token = self.get_context("csrf_token")
+        self.assertResponseContains(
+            '<a class="btn btn-default" role="button" '
+            f'href="{self.reverse("accounts:logout")}" data-logout="{token}">'
+            '<i class="fa fa-sign-out"></i> Logout</a>'
+        )
+        self.assertResponseContains(
+            '<script src="/static/touchtechnology/common/js/logout.js"></script>'
+        )
+
+    def test_profile_greets_user_by_first_name(self):
+        user = self.make_user()
+        with self.login(user):
+            self.get_check_200("accounts:profile")
+        self.assertResponseContains(
+            f"<p>Welcome back {user.first_name} &ndash; this is your personal page.</p>"
+        )
+
+    def test_profile_greets_user_by_short_name(self):
+        """
+        The greeting uses the user model's informal name, ``get_short_name()``.
+        A custom user model can return something other than ``first_name``.
+        """
+        user = self.make_user()
+        with (
+            mock.patch.object(
+                get_user_model(), "get_short_name", autospec=True, return_value="Coach"
+            ),
+            self.login(user),
+        ):
+            self.get_check_200("accounts:profile")
+        self.assertResponseContains(
+            "<p>Welcome back Coach &ndash; this is your personal page.</p>"
+        )
 
     def test_password_change(self):
         with self.login(self.regular):
@@ -93,14 +136,13 @@ class PasswordResetTests(TestCase):
 
     def test_password_reset_POST(self):
         data = {
-            "email": self.staff.email,
+            "email": self.regular.email,
         }
         self.post("accounts:password_reset", data=data)
 
         # check that the form submission was successful and
         # redirection to the "done" page has occured.
-        redirect_to = self.reverse("accounts:password_reset_done")
-        self.assertRedirects(self.last_response, redirect_to)
+        self.assert_http_302_found(url=self.reverse("accounts:password_reset_done"))
 
         # check that an email has been delivered
         self.assertEqual(len(mail.outbox), 1)

@@ -5,13 +5,15 @@ from importlib.util import module_from_spec
 from urllib.parse import urlunparse
 
 from django.conf import settings
+from django.conf.urls.i18n import is_language_prefix_patterns_used
+from django.contrib.auth.views import redirect_to_login
 from django.contrib.sitemaps.views import sitemap
 from django.core.cache import cache
 from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
 from django.http import HttpResponseForbidden
 from django.shortcuts import redirect, render
-from django.template import RequestContext, TemplateDoesNotExist
-from django.urls import clear_url_caches, include, path, reverse_lazy
+from django.template import TemplateDoesNotExist
+from django.urls import clear_url_caches, include, path
 from django.utils.deprecation import MiddlewareMixin
 from guardian.conf import settings as guardian_settings
 from mptt.utils import tree_item_iterator
@@ -23,38 +25,37 @@ from touchtechnology.common.default_settings import (
 from touchtechnology.common.models import SitemapNode
 from touchtechnology.common.sitemaps import NodeSitemap
 from touchtechnology.common.sites import AccountsSite
-from touchtechnology.common.views import login
 from touchtechnology.content.models import Redirect
+from touchtechnology.content.utils import (
+    DEHYDRATED_URLPATTERNS_KEY,
+    DEHYDRATED_URLPATTERNS_TIMEOUT,
+    urlpatterns_cache_version,
+)
 from touchtechnology.content.views import dispatch
-
-DEHYDRATED_URLPATTERNS_KEY = "urlpatterns"
-DEHYDRATED_URLPATTERNS_TIMEOUT = 600
 
 logger = logging.getLogger(__name__)
 protect = AccountsSite(name="protect")
 
 
 class SitemapNodeMiddleware(MiddlewareMixin):
-    def process_request(self, request):
-        # When working with multiple tenants, we want to shard the cache for
-        # each of them. Use of the version is a nice way to do this as it will
-        # prevent collisions while making the API consistent.
-        v_kw = {}
-        if hasattr(request, "tenant"):
-            v_kw.setdefault("version", request.tenant.schema_name)
-
-        # TODO write a cache backend that will do this automatically, and
-        #      contribute it back to django-tenant-schemas
-
-        dehydrated = cache.get(DEHYDRATED_URLPATTERNS_KEY, [], **v_kw)
+    @staticmethod
+    def dehydrated_urlpatterns():
+        """
+        Return the URL tree of the sitemap, as the cache keeps it. Build it
+        from the sitemap nodes and cache it if the cache does not have it.
+        """
+        # Each tenant's tree is cached under its own version, the one that
+        # saving or deleting a node in that tenant throws away.
+        version = urlpatterns_cache_version()
+        dehydrated = cache.get(DEHYDRATED_URLPATTERNS_KEY, [], version=version)
 
         if not dehydrated:
             logging.getLogger("newrelic.cache").debug("RECALCULATE URLCONF")
 
             # We need a secret set of account urls so we can bounce the user
             # here if the page is protected. As we haven't yet embedded our
-            # url conf (we're in the middle of building it!) this will need
-            # to be found using a reverse_lazy below.
+            # url conf (we're in the middle of building it!) the sign in url is
+            # found by name in process_view, once the request has it.
             try:
                 root = SitemapNode._tree_manager.root_nodes().first()
             except ObjectDoesNotExist:
@@ -154,8 +155,13 @@ class SitemapNodeMiddleware(MiddlewareMixin):
                 DEHYDRATED_URLPATTERNS_KEY,
                 dehydrated,
                 timeout=DEHYDRATED_URLPATTERNS_TIMEOUT,
-                **v_kw,
+                version=version,
             )
+
+        return dehydrated
+
+    def process_request(self, request):
+        dehydrated = self.dehydrated_urlpatterns()
 
         # Always start with the project wide ROOT_URLCONF and add our sitemap.xml view
         urlpatterns = [
@@ -203,13 +209,10 @@ class SitemapNodeMiddleware(MiddlewareMixin):
             required = node.restrict_to_groups.all()
 
             if required:
-                next = node.get_absolute_url()
-                to = reverse_lazy("accounts:login")
-
                 # An anonymous user will never be a member of a group, so make
                 # them go off and be authenticated.
-                if request.user.is_anonymous():
-                    return login(request, to=to, next=next)
+                if request.user.is_anonymous:
+                    return redirect_to_login(node.get_absolute_url(), "accounts:login")
 
                 # A user who is not a member of a suitable group should get a
                 # 403 page.
@@ -217,14 +220,12 @@ class SitemapNodeMiddleware(MiddlewareMixin):
                 if set(required).difference(groups):
                     if guardian_settings.RENDER_403:
                         try:
-                            response = render(
+                            return render(
                                 request,
                                 guardian_settings.TEMPLATE_403,
                                 {},
-                                RequestContext(request),
+                                status=403,
                             )
-                            response.status_code = 403
-                            return response
                         except TemplateDoesNotExist as e:
                             if settings.DEBUG:
                                 raise e
@@ -243,16 +244,24 @@ class SitemapNodeMiddleware(MiddlewareMixin):
             redirect_to = urlunparse(("https", host, path, "", "", ""))
             return redirect(redirect_to)
 
-
     def process_response(self, request, response):
         # Each request creates a unique dynamic module for request.urlconf.
-        # Django's URL system has multiple @functools.cache caches keyed by
-        # the urlconf module or its resolvers (e.g. _get_cached_resolver,
-        # get_ns_resolver). Since our dynamic module is unique per request,
-        # every request adds entries that are never evicted — causing
-        # unbounded memory growth. Use clear_url_caches() to clear all
-        # URL-related caches after each request.
+        # Django has several @functools.cache caches keyed by the urlconf
+        # module or its resolvers, and they never evict an entry. Since our
+        # module is unique per request, each one would keep every request's
+        # module and its whole tree of URL patterns, without limit.
+        #
+        # clear_url_caches() clears the resolver caches (_get_cached_resolver,
+        # get_ns_resolver and get_callable). It does not clear the cache that
+        # LocaleMiddleware fills when it asks whether the urlconf uses
+        # i18n_patterns, and Django has no function that does, so clear it
+        # too. A LocaleMiddleware above this one asks again after this runs,
+        # so it keeps the module of the latest request until the next one.
+        #
+        # Django turns an exception in the view into a response before it
+        # comes back through here, so this runs for those requests as well.
         clear_url_caches()
+        is_language_prefix_patterns_used.cache_clear()
         return response
 
 

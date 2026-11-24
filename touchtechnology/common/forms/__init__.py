@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 class RedefineModelForm(ModelForm):
     def __init__(self, *args, **kwargs):
-        super(RedefineModelForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         for field, _kw in self.Meta.redefine:
             kw = {}
             for key, val in _kw.items():

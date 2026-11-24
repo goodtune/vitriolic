@@ -1,19 +1,19 @@
 """E2E tests for Visual Scheduler color functionality."""
 
-import pytest
 from datetime import date, time
-from pathlib import Path
+
+import pytest
 from playwright.sync_api import Page, expect
 
 from tournamentcontrol.competition.tests.factories import (
-    SeasonFactory,
-    VenueFactory,
-    GroundFactory,
-    SeasonMatchTimeFactory,
     DivisionFactory,
+    GroundFactory,
+    MatchFactory,
+    SeasonFactory,
+    SeasonMatchTimeFactory,
     StageFactory,
     TeamFactory,
-    MatchFactory,
+    VenueFactory,
 )
 
 
@@ -27,7 +27,7 @@ class TestVisualSchedulerColors:
         venue = VenueFactory.create(season=season)
         ground = GroundFactory.create(venue=venue)
 
-        timeslot = SeasonMatchTimeFactory.create(
+        SeasonMatchTimeFactory.create(
             season=season,
             start=time(10, 0),
             interval=60,
@@ -83,7 +83,7 @@ class TestVisualSchedulerColors:
             time=time(11, 0),
             play_at=ground,
         )
-        
+
         # Note: An unscheduled match (match3) would be created here for testing
         # unscheduled match colors, but was removed due to complexity in E2E test setup.
         # The color functionality for unscheduled matches is still present in the
@@ -104,15 +104,15 @@ class TestVisualSchedulerColors:
     ):
         """
         Test that division headers display custom colors in the sidebar.
-        
+
         Prerequisites:
         - Divisions created with custom color values
         - Visual scheduler page accessible
-        
+
         Expected behavior:
         - Division headers in sidebar show their custom background colors
         - Colors are applied via inline styles
-        
+
         Current limitations:
         - None
         """
@@ -122,7 +122,7 @@ class TestVisualSchedulerColors:
 
         visual_scheduler_url = f"{live_server.url}/admin/fixja/competition/{season.competition.pk}/seasons/{season.pk}/20240615/visual-schedule/"
         page.goto(visual_scheduler_url)
-        
+
         # Wait for page to load
         expect(page.locator(".visual-schedule-container")).to_be_visible(timeout=10000)
 
@@ -139,7 +139,9 @@ class TestVisualSchedulerColors:
             "el => window.getComputedStyle(el).backgroundColor"
         )
         # Should be rgb(255, 0, 0) for #ff0000
-        assert red_bg_color == "rgb(255, 0, 0)", f"Expected red background, got {red_bg_color}"
+        assert red_bg_color == "rgb(255, 0, 0)", (
+            f"Expected red background, got {red_bg_color}"
+        )
 
         # Check Blue Division header has blue background
         blue_division_header = page.locator(".division-header").filter(
@@ -150,22 +152,24 @@ class TestVisualSchedulerColors:
             "el => window.getComputedStyle(el).backgroundColor"
         )
         # Should be rgb(0, 0, 255) for #0000ff
-        assert blue_bg_color == "rgb(0, 0, 255)", f"Expected blue background, got {blue_bg_color}"
+        assert blue_bg_color == "rgb(0, 0, 255)", (
+            f"Expected blue background, got {blue_bg_color}"
+        )
 
     def test_match_card_division_border_colors(
         self, authenticated_page: Page, live_server, color_dataset, screenshot_dir
     ):
         """
         Test that match cards display division colors on their left border.
-        
+
         Prerequisites:
         - Matches scheduled on the grid
         - Divisions have custom color values
-        
+
         Expected behavior:
         - Scheduled match cards show division color on 4px left border
         - Unscheduled match cards also show division color on left border
-        
+
         Current limitations:
         - None
         """
@@ -175,7 +179,7 @@ class TestVisualSchedulerColors:
 
         visual_scheduler_url = f"{live_server.url}/admin/fixja/competition/{season.competition.pk}/seasons/{season.pk}/20240615/visual-schedule/"
         page.goto(visual_scheduler_url)
-        
+
         # Wait for page to load
         expect(page.locator(".visual-schedule-container")).to_be_visible(timeout=10000)
 
@@ -184,9 +188,11 @@ class TestVisualSchedulerColors:
         page.screenshot(path=str(screenshot_path), full_page=True)
 
         # Check scheduled match from Red Division has red left border
-        scheduled_red_match = page.locator(".match-item.scheduled").filter(
-            has_text="Team A vs Team B"
-        ).first
+        scheduled_red_match = (
+            page.locator(".match-item.scheduled")
+            .filter(has_text="Team A vs Team B")
+            .first
+        )
         expect(scheduled_red_match).to_be_visible()
         red_border = scheduled_red_match.evaluate(
             "el => window.getComputedStyle(el).borderLeftColor"
@@ -201,22 +207,24 @@ class TestVisualSchedulerColors:
         blue_border = scheduled_blue_match.evaluate(
             "el => window.getComputedStyle(el).borderLeftColor"
         )
-        assert blue_border == "rgb(0, 0, 255)", f"Expected blue border, got {blue_border}"
+        assert blue_border == "rgb(0, 0, 255)", (
+            f"Expected blue border, got {blue_border}"
+        )
 
     def test_match_card_stage_background_colors(
         self, authenticated_page: Page, live_server, color_dataset, screenshot_dir
     ):
         """
         Test that scheduled match cards display stage background colors.
-        
+
         Prerequisites:
         - Matches scheduled on the grid
         - Stages have custom color values
-        
+
         Expected behavior:
         - Scheduled match cards show stage color as background
         - Different stages show different background colors
-        
+
         Current limitations:
         - None
         """
@@ -226,7 +234,7 @@ class TestVisualSchedulerColors:
 
         visual_scheduler_url = f"{live_server.url}/admin/fixja/competition/{season.competition.pk}/seasons/{season.pk}/20240615/visual-schedule/"
         page.goto(visual_scheduler_url)
-        
+
         # Wait for page to load
         expect(page.locator(".visual-schedule-container")).to_be_visible(timeout=10000)
 
@@ -235,15 +243,19 @@ class TestVisualSchedulerColors:
         page.screenshot(path=str(screenshot_path), full_page=True)
 
         # Check match from Light Yellow stage has light yellow background
-        yellow_match = page.locator(".match-item.scheduled").filter(
-            has_text="Team A vs Team B"
-        ).first
+        yellow_match = (
+            page.locator(".match-item.scheduled")
+            .filter(has_text="Team A vs Team B")
+            .first
+        )
         expect(yellow_match).to_be_visible()
         yellow_bg = yellow_match.evaluate(
             "el => window.getComputedStyle(el).backgroundColor"
         )
         # Should be rgb(255, 255, 153) for #ffff99
-        assert yellow_bg == "rgb(255, 255, 153)", f"Expected light yellow background, got {yellow_bg}"
+        assert yellow_bg == "rgb(255, 255, 153)", (
+            f"Expected light yellow background, got {yellow_bg}"
+        )
 
         # Check match from Light Green stage has light green background
         green_match = page.locator(".match-item.scheduled").filter(
@@ -254,7 +266,9 @@ class TestVisualSchedulerColors:
             "el => window.getComputedStyle(el).backgroundColor"
         )
         # Should be rgb(153, 255, 153) for #99ff99
-        assert green_bg == "rgb(153, 255, 153)", f"Expected light green background, got {green_bg}"
+        assert green_bg == "rgb(153, 255, 153)", (
+            f"Expected light green background, got {green_bg}"
+        )
 
     # Note: test_unscheduled_match_colors removed due to test data setup complexity.
     # The unscheduled match colors are tested indirectly through the CSS selectors

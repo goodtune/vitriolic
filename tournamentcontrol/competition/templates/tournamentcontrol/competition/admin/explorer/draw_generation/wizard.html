@@ -1,0 +1,27 @@
+{% extends "touchtechnology/admin/explorer/edit.html" %}
+{% load i18n common admin admin_explorer %}
+
+{% block page_title %}{% trans "Build the draw" %}{% endblock %}
+{% block page_kind %}{% blocktrans with step=wizard.steps.step1 count=wizard.steps.count %}Step {{ step }} of {{ count }}{% endblocktrans %}{% if object %} &ndash; {{ object }}{% endif %}{% endblock %}
+{% block page_icon %}<span class="title-icon">{% icon "play" %}</span>{% endblock %}
+{% block object-actions %}{% endblock %}
+{% block cancel-url %}{% if division %}{{ division.urls.edit }}#stages-tab{% endif %}{% endblock %}
+{% block page_nav %}{% endblock %}
+
+{% block form-fieldset %}
+	{{ wizard.management_form }}
+	{{ wizard.form.management_form }}
+	{% if wizard.form.non_form_errors %}
+		<div class="form-errors" role="alert">{% icon "alert" %}<ul>{% for error in wizard.form.non_form_errors %}<li>{{ error }}</li>{% endfor %}</ul></div>
+	{% endif %}
+	{% for form in wizard.form %}
+		<fieldset class="form-section">
+			<legend><h2>{{ form.instance.descriptor|default:form.instance }}</h2></legend>
+			<div class="fields">
+				{% for f in form %}
+					{% field f %}
+				{% endfor %}
+			</div>
+		</fieldset>
+	{% endfor %}
+{% endblock %}

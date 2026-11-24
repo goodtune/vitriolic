@@ -22,7 +22,7 @@ class BooleanChoiceField(forms.TypedChoiceField):
             "required": True,
         }
         defaults.update(kwargs)
-        super(BooleanChoiceField, self).__init__(*args, **defaults)
+        super().__init__(*args, **defaults)
 
     def prepare_value(self, value):
         if value is not None:

@@ -94,21 +94,16 @@ class DivisionColorTests(TestCase):
         """Test that division color field gets a random color on creation."""
         division = factories.DivisionFactory.create(season=self.season)
         # Color should be set and valid hex format
-        self.assertIsNotNone(division.color)
         self.assertRegex(division.color, r"^#[0-9a-f]{6}$")
 
     def test_division_color_field_accepts_hex_value(self):
         """Test that division color field accepts a hex color value."""
-        division = factories.DivisionFactory.create(
-            season=self.season, color="#ff5733"
-        )
+        division = factories.DivisionFactory.create(season=self.season, color="#ff5733")
         self.assertEqual(division.color, "#ff5733")
 
     def test_get_color_returns_stored_color(self):
         """Test that get_color returns the stored color."""
-        division = factories.DivisionFactory.create(
-            season=self.season, color="#123456"
-        )
+        division = factories.DivisionFactory.create(season=self.season, color="#123456")
         self.assertEqual(division.get_color(), "#123456")
 
     def test_division_form_includes_color_field(self):
@@ -126,17 +121,15 @@ class DivisionColorTests(TestCase):
 
     def test_division_color_persists(self):
         """Test that division color field correctly persists changes."""
-        division = factories.DivisionFactory.create(season=self.season)
-        original_color = division.color
-        
+        division = factories.DivisionFactory.create(season=self.season, color="#123456")
+
         # Update the color
         division.color = "#abcdef"
         division.save()
         division.refresh_from_db()
-        
+
         # Verify color was saved
         self.assertEqual(division.color, "#abcdef")
-        self.assertNotEqual(division.color, original_color)
 
 
 class StageColorTests(TestCase):
@@ -177,12 +170,11 @@ class StageColorTests(TestCase):
     def test_stage_color_persists(self):
         """Test that stage color field correctly persists changes."""
         stage = factories.StageFactory.create(division=self.division)
-        
+
         # Update the color
         stage.color = "#123abc"
         stage.save()
         stage.refresh_from_db()
-        
+
         # Verify color was saved
         self.assertEqual(stage.color, "#123abc")
-

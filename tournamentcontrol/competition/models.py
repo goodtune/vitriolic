@@ -1,7 +1,5 @@
-# -*- coding: utf-8 -*-
-
-
 import collections
+import html
 import logging
 import random
 import uuid
@@ -9,7 +7,6 @@ import warnings
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
-import requests
 from cloudinary.models import CloudinaryField
 from dateutil.relativedelta import relativedelta
 from dateutil.rrule import MINUTELY, WEEKLY, rrule, rruleset
@@ -20,29 +17,34 @@ from django.contrib.postgres import fields as PG
 from django.core import validators
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
-from django.http import Http404, HttpResponse
 from django.db.models import (
+    CheckConstraint,
     Count,
     DateField,
     DateTimeField,
+    F,
+    Max,
     Q,
     Sum,
     TimeField,
     UniqueConstraint,
 )
 from django.db.models.deletion import CASCADE, PROTECT, SET_NULL
+from django.http import HttpResponse
 from django.template import Template
 from django.template.loader import get_template
 from django.utils import timezone
+from django.utils.formats import date_format, time_format
 from django.utils.functional import cached_property, lazy
 from django.utils.safestring import mark_safe
-from django.utils.translation import gettext_lazy as _
+from django.utils.text import format_lazy, slugify
+from django.utils.translation import gettext, gettext_lazy as _, pgettext
 from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaInMemoryUpload, MediaUpload
+from googleapiclient.http import MediaUpload
 from timezone_field.fields import TimeZoneField
 
 from touchtechnology.admin.mixins import AdminUrlMixin as BaseAdminUrlMixin
@@ -80,15 +82,30 @@ from tournamentcontrol.competition.managers import (
 from tournamentcontrol.competition.mixins import ModelDiffMixin
 from tournamentcontrol.competition.query import (
     DivisionQuerySet,
+    PersonQuerySet,
+    SeasonQuerySet,
     StageQuerySet,
     StatisticQuerySet,
+    TeamAssociationQuerySet,
+    UndecidedTeamQuerySet,
 )
 from tournamentcontrol.competition.signals import match_forfeit
+from tournamentcontrol.competition.upstream import (
+    UpstreamURLError,
+    get_backend_for_identifier,
+    get_backend_for_url,
+)
+from tournamentcontrol.competition.upstream.backends.mysideline import (
+    MySidelineBackend,
+)
+from tournamentcontrol.competition.upstream.backends.revolutionise import (
+    RevolutioniseBackend,
+)
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
     combine_and_localize,
-    create_thumbnail_preview,
     create_thumbnail_response,
+    fit_youtube_thumbnail,
     stage_group_position,
     stage_group_position_re,
     team_and_division,
@@ -107,6 +124,22 @@ stage_group_position_tpl = lazy_get_template(
 win_lose_team_tpl = lazy_get_template(
     "tournamentcontrol/competition/_win_lose_team.txt"
 )
+
+
+def thumbnail_media_upload(*images):
+    """
+    A ``MediaMemoryUpload`` of the first of ``images`` that YouTube will take,
+    fitted to its limits (see ``fit_youtube_thumbnail``); ``None`` when there
+    is none. An image that is not set, or cannot be made to fit, is passed
+    over for the next.
+    """
+    for image in images:
+        if not image:
+            continue
+        fitted = fit_youtube_thumbnail(image)
+        if fitted is not None:
+            return MediaMemoryUpload(fitted, resumable=True)
+    return None
 
 
 def generate_random_color():
@@ -136,7 +169,7 @@ class LadderPointsField(models.TextField):
 
         if form_class is None:
             form_class = LadderPointsFormField
-        return super(LadderPointsField, self).formfield(form_class=form_class, **kwargs)
+        return super().formfield(form_class=form_class, **kwargs)
 
 
 class TwitterField(models.CharField):
@@ -144,15 +177,20 @@ class TwitterField(models.CharField):
         if form_class is None:
             form_class = forms.RegexField
             kwargs.setdefault("regex", r"^@[\w_]+$")
-        return super(TwitterField, self).formfield(form_class=form_class, **kwargs)
+        return super().formfield(form_class=form_class, **kwargs)
 
 
 class OrderedSitemapNode(SitemapNodeBase):
     copy = HTMLField(blank=True)
     order = models.PositiveIntegerField(default=1)
 
+    #: The foreign key whose rows are kept in ``order`` together (a division's
+    #: stages, a stage's pools), or ``None`` where every row of the model is
+    #: in the one list.
+    ordered_within = None
+
     def __repr__(self):
-        return "<{}: {}>".format(self.__class__.__name__, self.title)
+        return f"<{self.__class__.__name__}: {self.title}>"
 
     def __str__(self):
         return self.title
@@ -161,13 +199,167 @@ class OrderedSitemapNode(SitemapNodeBase):
         abstract = True
         ordering = ("order",)
 
+    @property
+    def siblings(self):
+        """
+        The rows this one is listed with, itself included, in the order they
+        are listed: by ``order``, and by key where two share a value.
+        """
+        queryset = self.__class__._default_manager.order_by("order", "pk")
+        if self.ordered_within is not None:
+            field = self._meta.get_field(self.ordered_within)
+            queryset = queryset.filter(**{field.attname: getattr(self, field.attname)})
+        return queryset
+
+    def _move(self, step):
+        """
+        Swap places with the sibling ``step`` rows along, whatever the two
+        ``order`` values are: they need not be dense, since a deleted pool or
+        division leaves a gap. Rows that share a value are first numbered 1, 2, 3, ... so that
+        the swap changes something. The first row has nothing above it and the
+        last nothing below; a move past either end changes nothing.
+        """
+        siblings = list(self.siblings)
+        index = siblings.index(self)
+        if not 0 <= index + step < len(siblings):
+            return False
+        siblings[index] = self
+        target = siblings[index + step]
+        with transaction.atomic():
+            if len({node.order for node in siblings}) < len(siblings):
+                # Two passes keep every value distinct along the way, where
+                # the model has a constraint saying so.
+                offset = siblings[-1].order
+                for n, node in enumerate(siblings, 1):
+                    node.order = offset + n
+                    node.save(update_fields=["order"])
+                for n, node in enumerate(siblings, 1):
+                    node.order = n
+                    node.save(update_fields=["order"])
+            # Swap through a value no row has, for the same reason.
+            mine, theirs = self.order, target.order
+            self.order = 0
+            self.save(update_fields=["order"])
+            target.order = mine
+            target.save(update_fields=["order"])
+            self.order = theirs
+            self.save(update_fields=["order"])
+        return True
+
+    def close_gap(self):
+        """
+        Move every sibling below this row up one, once this row has left the
+        list (deleted, or moved to another), so the list stays numbered
+        1, 2, 3, ...
+
+        One ``UPDATE ... order - 1`` would collide with itself where the model
+        has a ``(parent, order)`` constraint, since PostgreSQL checks it row
+        by row. Two passes keep every value distinct along the way: the rows
+        below are lifted past the largest value in the list, then dropped
+        back one short of where they were.
+        """
+        if self.ordered_within is not None and (
+            getattr(self, self._meta.get_field(self.ordered_within).attname) is None
+        ):
+            # A team not yet placed in a division is in no list.
+            return
+        below = self.siblings.filter(order__gt=self.order)
+        offset = below.aggregate(offset=Max("order"))["offset"]
+        if offset is None:
+            return
+        with transaction.atomic():
+            below.update(order=F("order") + offset)
+            self.siblings.filter(order__gt=offset).update(order=F("order") - offset - 1)
+
+    close_gap.alters_data = True
+
+    def move_to(self, parent):
+        """
+        Move this row to the end of ``parent``'s list (a team to another
+        division), then close the gap it leaves in the list it came from.
+
+        The row takes its new place before the old list closes up, so no two
+        rows share a value at any point, where the model has a
+        ``(parent, order)`` constraint.
+        """
+        field = self._meta.get_field(self.ordered_within)
+        manager = self.__class__._default_manager
+        siblings = manager.filter(**{field.attname: parent.pk})
+        order = (siblings.aggregate(order=Max("order"))["order"] or 0) + 1
+        with transaction.atomic():
+            manager.filter(pk=self.pk).update(
+                **{field.attname: parent.pk, "order": order}
+            )
+            self.close_gap()
+        setattr(self, field.name, parent)
+        self.order = order
+
+    move_to.alters_data = True
+
+    def move_up(self):
+        """Swap places with the row above; ``True`` if there was one."""
+        return self._move(-1)
+
+    move_up.alters_data = True
+
+    def move_down(self):
+        """Swap places with the row below; ``True`` if there was one."""
+        return self._move(1)
+
+    move_down.alters_data = True
+
 
 class Competition(AdminUrlMixin, OrderedSitemapNode):
     enabled = BooleanField(default=True)
     clubs = ManyToManyField("Club", blank=True, related_name="competitions")
 
+    scoreboard_template = models.TextField(
+        blank=True,
+        verbose_name=_("Scoreboard template"),
+        help_text=_(
+            "A whole page to draw the scoreboards of this competition with, in place of "
+            "the usual one. Leave it empty to use the site's."
+        ),
+    )
+
+    # Synchronisation from an upstream competition management provider
+    # (MySideline, revolutioniseSPORT, ...). The organisation's page on the
+    # provider identifies the provider and lives on the Competition; each
+    # Season names the page listing its own draws (see ``Season.upstream_url``).
+    # See ``tournamentcontrol.competition.upstream``.
+    upstream_url = models.URLField(
+        max_length=1024,
+        blank=True,
+        null=True,
+        verbose_name=_("Upstream URL"),
+        help_text=format_lazy(
+            _(
+                "The organisation's page on the competition management provider "
+                "that publishes its draws, for example {mysideline} (MySideline) "
+                "or {revolutionise} (revolutioniseSPORT). Seasons that name an "
+                "upstream URL are then synchronised from the provider, which is "
+                "authoritative for their divisions, teams, fixtures and results."
+            ),
+            mysideline=MySidelineBackend.competition_url_example,
+            revolutionise=RevolutioniseBackend.competition_url_example,
+        ),
+    )
+
     def _get_admin_namespace(self):
         return "admin:fixja:competition"
+
+    @property
+    def upstream_backend(self):
+        """
+        The upstream backend :attr:`upstream_url` belongs to, or ``None``
+        when the competition is not linked to a provider.
+        """
+        if not self.upstream_url:
+            return None
+        try:
+            return get_backend_for_url(self.upstream_url)
+        except UpstreamURLError:
+            return None
 
     class Meta(OrderedSitemapNode.Meta):
         pass
@@ -215,14 +407,34 @@ class Club(AdminUrlMixin, SitemapNodeBase):
     class Meta:
         ordering = ("title",)
 
+    def clean(self):
+        super().clean()
+        # The public site finds a club by its slug alone, so a club cannot
+        # take the slug of another. A club that already shares one is left to
+        # be saved as it stands.
+        other = Club.objects.exclude(pk=self.pk).filter(slug=self.slug).first()
+        if other is None or Club.objects.filter(pk=self.pk, slug=self.slug).exists():
+            return
+        raise ValidationError(
+            {
+                "title": ValidationError(
+                    _(
+                        'The club "%(club)s" already has the address "%(slug)s". '
+                        "Give this club another name, or an address (slug) of "
+                        "its own."
+                    ),
+                    params={"club": other.title, "slug": self.slug},
+                )
+            }
+        )
+
     @cached_property
-    def _mvp_related(self):
+    def _list_related(self):
         """
-        Supercedes _mvp_annotate due to GROUP BY exceptions. Take full control
+        Supercedes _list_annotate due to GROUP BY exceptions. Take full control
         of the query. See the history for the earlier implementation.
         """
-        query = (
-            """
+        query = """
             SELECT
                 "competition_person"."uuid",
                 "competition_person"."first_name",
@@ -268,11 +480,7 @@ class Club(AdminUrlMixin, SitemapNodeBase):
             ORDER BY
                 "competition_person"."last_name" ASC,
                 "competition_person"."first_name" ASC
-        """
-            % {  # noqa: E501
-                "user": get_user_model()._meta.db_table
-            }
-        )
+        """ % {"user": get_user_model()._meta.db_table}  # noqa: E501
         params = {
             "club": self.pk,
         }
@@ -285,7 +493,7 @@ class Club(AdminUrlMixin, SitemapNodeBase):
         return res
 
     @cached_property
-    def _mvp_select_related(self):
+    def _list_select_related(self):
         res = {
             "teams": [
                 "division__season__competition",
@@ -294,7 +502,7 @@ class Club(AdminUrlMixin, SitemapNodeBase):
         return res
 
     @cached_property
-    def _mvp_only(self):
+    def _list_only(self):
         res = {
             "teams": [
                 "club",
@@ -362,6 +570,8 @@ class Person(AdminUrlMixin, models.Model):
         settings.AUTH_USER_MODEL, blank=True, null=True, on_delete=SET_NULL
     )
 
+    objects = PersonQuerySet.as_manager()
+
     def _get_admin_namespace(self):
         return "admin:fixja:club:person"
 
@@ -369,7 +579,7 @@ class Person(AdminUrlMixin, models.Model):
         return (self.club_id, self.pk)
 
     @cached_property
-    def _mvp_select_related(self):
+    def _list_select_related(self):
         res = {
             "statistics": [
                 "match__stage__division__season__competition",
@@ -388,7 +598,7 @@ class Person(AdminUrlMixin, models.Model):
 
     @property
     def get_full_name(self):
-        return "{}, {}".format(self.last_name, self.first_name)
+        return f"{self.last_name}, {self.first_name}"
 
     @cached_property
     def age(self):
@@ -404,14 +614,7 @@ class Person(AdminUrlMixin, models.Model):
 
     @cached_property
     def can_delete(self):
-        if self.statistics.exists():
-            return False
-
-        now = timezone.now()
-        if self.teamassociation_set.filter(team__division__season__start_date__lt=now):
-            return False
-
-        return True
+        return Person.objects.deletable().filter(pk=self.pk).exists()
 
     @cached_property
     def stats(self):
@@ -422,6 +625,17 @@ class Person(AdminUrlMixin, models.Model):
 
 
 class Season(AdminUrlMixin, OrderedSitemapNode):
+    ordered_within = "competition"
+
+    scoreboard_template = models.TextField(
+        blank=True,
+        verbose_name=_("Scoreboard template"),
+        help_text=_(
+            "A whole page to draw the scoreboards of this season with, in place of "
+            "the usual one. Leave it empty to use the competition's."
+        ),
+    )
+
     competition = ForeignKey(Competition, related_name="seasons", on_delete=PROTECT)
     hashtag = models.CharField(
         max_length=30,
@@ -517,6 +731,27 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
     )
     timezone = TimeZoneField(max_length=50, blank=True, null=True, use_pytz=False)
 
+    # Upstream synchronisation. The organisation's page lives on the
+    # Competition; a season names the page on the same provider that lists
+    # the draws it mirrors. See ``tournamentcontrol.competition.upstream``.
+    upstream_url = models.URLField(
+        max_length=1024,
+        blank=True,
+        null=True,
+        verbose_name=_("Upstream URL"),
+        help_text=format_lazy(
+            _(
+                "The page on the provider that lists this season's draws: the "
+                "association page filtered to a year on MySideline (for example "
+                "{mysideline}) or a competition's draws page on revolutioniseSPORT "
+                "({revolutionise}). Required for synchronisation when the "
+                "competition has an upstream URL."
+            ),
+            mysideline=MySidelineBackend.season_url_example,
+            revolutionise=RevolutioniseBackend.season_url_example,
+        ),
+    )
+
     forfeit_notifications = ManyToManyField(
         settings.AUTH_USER_MODEL,
         blank=True,
@@ -526,6 +761,8 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
             "opposition team plus these people."
         ),
     )
+
+    objects = SeasonQuerySet.as_manager()
 
     class Meta(OrderedSitemapNode.Meta):
         constraints = [
@@ -538,6 +775,11 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
                 name="competition_season_unique_slug_competition",
             ),
         ]
+        permissions = [
+            ("stream_season", "Can start and stop live streams for the season"),
+            ("commentate_season", "Can watch the commentary booths of the season"),
+            ("score_season", "Can keep the scoreboards of the season"),
+        ]
 
     def _get_admin_namespace(self):
         return "admin:fixja:competition:season"
@@ -546,7 +788,7 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
         return (self.competition_id, self.pk)
 
     @cached_property
-    def _mvp_related(self):
+    def _list_related(self):
         return {
             # live-stream thumbnail blobs are only needed by the thumbnail
             # views, never drag them out of the database for list views.
@@ -556,7 +798,19 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
         }
 
     def __repr__(self):
-        return "<Season: {} - {}>".format(self.competition, self)
+        return f"<Season: {self.competition} - {self}>"
+
+    @property
+    def upstream_backend(self):
+        """
+        The upstream backend this season is synchronised through, or
+        ``None`` when the competition is not linked to a provider.
+        """
+        return self.competition.upstream_backend
+
+    @property
+    def upstream_enabled(self):
+        return bool(self.competition.upstream_url and self.upstream_url)
 
     def flow(self, **kwargs):
         "Generate an authorization Flow"
@@ -580,6 +834,19 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
                 "https://www.googleapis.com/auth/youtubepartner",
             ],
             **kwargs,
+        )
+
+    @property
+    def youtube_ready(self):
+        """
+        Whether YouTube can be reached for the season: the client details are
+        saved and someone has completed the authorisation, which grants the
+        refresh token. Without the token every request raises ``RefreshError``.
+        """
+        return bool(
+            self.live_stream_client_id
+            and self.live_stream_client_secret
+            and self.live_stream_refresh_token
         )
 
     @property
@@ -641,6 +908,14 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
     def dates(self):
         return [dt.date() for dt in self.datetimes]
 
+    def get_tzinfo(self):
+        """The season's time zone, else the current time zone."""
+        return self.timezone or timezone.get_current_timezone()
+
+    def local_date(self, now=None):
+        """The date at ``now`` (default: the present) in the season's time zone."""
+        return timezone.localtime(now or timezone.now(), self.get_tzinfo()).date()
+
     @property
     def matches(self):
         return Match.objects.filter(stage__division__season=self).select_related(
@@ -688,9 +963,7 @@ class Season(AdminUrlMixin, OrderedSitemapNode):
         Returns:
             MediaMemoryUpload or None if no thumbnail is set
         """
-        if self.live_stream_thumbnail_image:
-            return MediaMemoryUpload(self.live_stream_thumbnail_image, resumable=True)
-        return None
+        return thumbnail_media_upload(self.live_stream_thumbnail_image)
 
     def live_stream_thumbnail_response(self, width=None, height=None) -> HttpResponse:
         """
@@ -740,6 +1013,14 @@ class Place(AdminUrlMixin, OrderedSitemapNode):
     def zoom(self):
         return self.location and self.location[2]
 
+    def get_tzinfo(self):
+        """The place's time zone, else the current time zone."""
+        return self.timezone or timezone.get_current_timezone()
+
+    def local_date(self, now=None):
+        """The date at ``now`` (default: the present) in the place's time zone."""
+        return timezone.localtime(now or timezone.now(), self.get_tzinfo()).date()
+
 
 class Venue(Place):
     """
@@ -748,7 +1029,22 @@ class Venue(Place):
     on a particular ground.
     """
 
+    ordered_within = "season"
+
     season = ForeignKey(Season, related_name="venues", on_delete=PROTECT)
+    scoreboard_auto_start = BooleanField(
+        default=True,
+        verbose_name=_("Start scoreboard clocks on time"),
+        help_text=_(
+            "The clock of each scoreboard at this venue starts at the "
+            "match's scheduled time. Turn it off to have the scorer start "
+            "each clock by hand."
+        ),
+    )
+
+    def get_tzinfo(self):
+        """The venue's time zone, else the season's, else the current one."""
+        return self.timezone or self.season.get_tzinfo()
 
     def _get_admin_namespace(self):
         return "admin:fixja:competition:season:venue"
@@ -763,6 +1059,8 @@ class Ground(Place):
     playing surface at a given venue.
     """
 
+    ordered_within = "venue"
+
     venue = ForeignKey(Venue, related_name="grounds", on_delete=PROTECT)
     live_stream = BooleanField(default=False)
     external_identifier = models.CharField(
@@ -771,6 +1069,10 @@ class Ground(Place):
     stream_key = models.CharField(
         max_length=50, blank=True, null=True, unique=True, db_index=True
     )
+
+    def get_tzinfo(self):
+        """The ground's time zone, else the venue's, season's or current one."""
+        return self.timezone or self.venue.get_tzinfo()
 
     def _get_admin_namespace(self):
         return "admin:fixja:competition:season:venue:ground"
@@ -784,14 +1086,119 @@ class Ground(Place):
         )
 
 
+class UpstreamIdentifierMixin(models.Model):
+    """
+    Link a record to the entity it mirrors on an upstream competition
+    management provider.
+
+    ``upstream_id`` is set by the synchronisation, never by hand; a record
+    which has one is managed by the provider and is updated on every sync.
+    The value is the provider's own identifier qualified by the provider's
+    key -- ``mysideline:69295321``, ``revolutionise:2433163`` -- so that it
+    is unique across providers and says where the record comes from without
+    a foreign key to anything. See :mod:`tournamentcontrol.competition.upstream`.
+    """
+
+    upstream_id = models.CharField(
+        max_length=255, blank=True, null=True, unique=True, editable=False
+    )
+
+    class Meta:
+        abstract = True
+
+    @property
+    def upstream_backend(self):
+        """The upstream backend :attr:`upstream_id` belongs to, or ``None``."""
+        if not self.upstream_id:
+            return None
+        return get_backend_for_identifier(self.upstream_id)
+
+
+class UpstreamMixin(UpstreamIdentifierMixin):
+    """
+    Link a named record (a division or a team) to the upstream entity it
+    mirrors, keeping the upstream name beside our own.
+
+    The name is the exception to "upstream is authoritative". Upstream
+    naming is frequently unwieldy -- "Born 2014 & 2013 u14 Boys" for what we
+    would rather publish as "14 Boys" -- so the local ``title`` may be
+    changed and the synchronisation will then leave it alone. To tell our
+    variation from theirs, two copies of the remote name are kept beside our
+    own:
+
+    ``upstream_title``
+        what the provider calls the record right now, refreshed on every
+        sync whether or not we use it;
+
+    ``upstream_title_synced``
+        what the provider called it when our ``title`` was last reconciled
+        with it: when the record was linked, when a remote rename was last
+        applied, or when an administrator last saved the record.
+
+    ``title != upstream_title_synced`` is therefore our variation and
+    ``upstream_title != upstream_title_synced`` is theirs, so an upstream
+    rename of a record we have renamed ourselves can be reported instead of
+    being silently discarded or silently applied.
+
+    Classes using this mixin must provide a ``title``; in practice they are
+    all :class:`~touchtechnology.common.models.SitemapNodeBase` subclasses.
+    """
+
+    upstream_title = models.CharField(
+        max_length=255, blank=True, null=True, editable=False
+    )
+
+    upstream_title_synced = models.CharField(
+        max_length=255, blank=True, null=True, editable=False
+    )
+
+    class Meta:
+        abstract = True
+
+    @property
+    def upstream_reconciled(self):
+        """The record has been reconciled with the provider at least once."""
+        return bool(self.upstream_id) and self.upstream_title_synced is not None
+
+    @property
+    def upstream_title_overridden(self):
+        """Our ``title`` differs from the remote name it was reconciled with."""
+        return self.upstream_reconciled and self.title != self.upstream_title_synced
+
+    @property
+    def upstream_title_changed(self):
+        """The provider has renamed the record since we last reconciled it."""
+        return (
+            self.upstream_reconciled
+            and self.upstream_title != self.upstream_title_synced
+        )
+
+
+def upstream_renamed(queryset):
+    """
+    Filter ``queryset`` to the records the provider has renamed since they
+    were last reconciled -- the local name of each is one an administrator
+    chose and the synchronisation will keep, so the change needs a human
+    decision.
+    """
+    return queryset.filter(
+        upstream_id__isnull=False,
+        upstream_title__isnull=False,
+        upstream_title_synced__isnull=False,
+    ).exclude(upstream_title=F("upstream_title_synced"))
+
+
 class Division(
     AdminUrlMixin,
     ModelDiffMixin,
+    UpstreamMixin,
     OrderedSitemapNode,
 ):
     """
     A model that represents a division within a competition.
     """
+
+    ordered_within = "season"
 
     season = ForeignKey(Season, related_name="divisions", on_delete=PROTECT)
 
@@ -803,6 +1210,59 @@ class Division(
     forfeit_for_score = models.SmallIntegerField(null=True)
     forfeit_against_score = models.SmallIntegerField(null=True)
     include_forfeits_in_played = BooleanField(default=True)
+
+    scoreboard_template = models.TextField(
+        blank=True,
+        verbose_name=_("Scoreboard template"),
+        help_text=_(
+            "A whole page to draw the scoreboards of this division with, in place of "
+            "the usual one. Leave it empty to use the season's."
+        ),
+    )
+
+    # The timing of a match of the division, for its scoreboard clock. With
+    # no period length the scoreboard shows the score and no clock.
+    periods = models.PositiveSmallIntegerField(
+        default=2,
+        blank=True,
+        validators=[validators.MinValueValidator(1)],
+        verbose_name=_("Periods"),
+        help_text=_("How many periods a match is played in: 2 for halves."),
+    )
+    period_minutes = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        validators=[validators.MinValueValidator(1)],
+        verbose_name=_("Period length"),
+        help_text=_(
+            "Minutes in each period. Leave it empty for a scoreboard with no clock."
+        ),
+    )
+    break_minutes = models.PositiveSmallIntegerField(
+        default=0,
+        blank=True,
+        verbose_name=_("Break length"),
+        help_text=_("Minutes between one period and the next."),
+    )
+    half_time_minutes = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        verbose_name=_("Half time length"),
+        help_text=_(
+            "Minutes of the break in the middle of a match with an even number "
+            "of periods. Leave it empty where it is as long as the other breaks."
+        ),
+    )
+    period_name = models.CharField(
+        max_length=30,
+        blank=True,
+        verbose_name=_("Period name"),
+        help_text=_(
+            "What a period is called on the scoreboard, such as Chukka. Leave "
+            "it empty to name it from the number of periods: Half for 2, "
+            "Quarter for 4, otherwise Period."
+        ),
+    )
 
     games_per_day = models.SmallIntegerField(
         null=True,
@@ -838,13 +1298,6 @@ class Division(
         ],
     )
 
-    # This is an advanced feature, we would not wish to surface it under
-    # normal circumstances, but the theory is that we can use the report URL
-    # to construct the minimum data for a division.
-    sportingpulse_url = models.URLField(
-        max_length=1024, blank=True, null=True, editable=False
-    )
-
     objects = DivisionQuerySet.as_manager()
 
     class Meta(OrderedSitemapNode.Meta):
@@ -856,6 +1309,10 @@ class Division(
             UniqueConstraint(
                 fields=["slug", "season"],
                 name="competition_division_unique_slug_season",
+            ),
+            CheckConstraint(
+                condition=Q(color__regex=r"^#[0-9a-fA-F]{6}$"),
+                name="division_color_valid_hex",
             ),
         ]
 
@@ -890,9 +1347,7 @@ class Division(
         expects.
         """
         stages = (
-            self.stages.exclude(keep_ladder=False)
-            .with_ladder_data()
-            .order_by("order")
+            self.stages.exclude(keep_ladder=False).with_ladder_data().order_by("order")
         )
         res = collections.OrderedDict()
         for stage in stages:
@@ -926,24 +1381,35 @@ class Division(
                 "home_team__division",
                 "away_team__club",
                 "away_team__division",
+                # named in place of a team until it is decided
+                "home_team_undecided",
+                "away_team_undecided",
+                "home_team_eval_related",
+                "away_team_eval_related",
             )
             # live-stream thumbnail blobs are only needed by the thumbnail
             # endpoints and YouTube sync — never in a match listing
-            .defer("live_stream_thumbnail_image")
+            .defer(
+                "live_stream_thumbnail_image",
+                "home_team_eval_related__live_stream_thumbnail_image",
+                "away_team_eval_related__live_stream_thumbnail_image",
+            )
             .annotate(
                 statistics_count=Count("statistics"),
                 videos_count=Count("videos"),
                 referee_count=Count("referees"),
             )
-            .order_by(
-                "stage__order", "datetime", "date", "time", "round"
-            )
+            .order_by("stage__order", "datetime", "date", "time", "round")
         )
         res = collections.OrderedDict()
+        stages = {}
         for match in matches:
-            res.setdefault(
-                match.stage, collections.OrderedDict()
-            ).setdefault(match.get_date(tzinfo), []).append(match)
+            # One ``Stage`` for every match of a stage, so naming undecided
+            # teams looks each stage's neighbours up once.
+            match.stage = stages.setdefault(match.stage_id, match.stage)
+            res.setdefault(match.stage, collections.OrderedDict()).setdefault(
+                match.get_date(tzinfo), []
+            ).append(match)
         return res
 
     def to_division_structure(self):
@@ -1180,6 +1646,8 @@ class Division(
 
 
 class Stage(AdminUrlMixin, OrderedSitemapNode):
+    ordered_within = "division"
+
     division = ForeignKey(
         Division, related_name="stages", label_from_instance="title", on_delete=PROTECT
     )
@@ -1235,6 +1703,54 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
         ),
     )
 
+    scoreboard_template = models.TextField(
+        blank=True,
+        verbose_name=_("Scoreboard template"),
+        help_text=_(
+            "A whole page to draw the scoreboards of this stage with, in place of "
+            "the usual one. Leave it empty to use the division's."
+        ),
+    )
+
+    # The timing of the stage's matches, for its scoreboard clock, where it is not
+    # its division's: each number left empty is its division's.
+    periods = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        validators=[validators.MinValueValidator(1)],
+        verbose_name=_("Periods"),
+        help_text=_("Leave it empty to use the division's number of periods."),
+    )
+    period_minutes = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        validators=[validators.MinValueValidator(1)],
+        verbose_name=_("Period length"),
+        help_text=_("Minutes in each period. Leave it empty to use the division's."),
+    )
+    break_minutes = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        verbose_name=_("Break length"),
+        help_text=_(
+            "Minutes between one period and the next. Leave it empty to use the division's."
+        ),
+    )
+    half_time_minutes = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        verbose_name=_("Half time length"),
+        help_text=_(
+            "Minutes of the break at half time. Leave it empty to use the division's."
+        ),
+    )
+    period_name = models.CharField(
+        max_length=30,
+        blank=True,
+        verbose_name=_("Period name"),
+        help_text=_("What a period is called. Leave it empty to use the division's."),
+    )
+
     keep_mvp = BooleanField(
         default=True,
         verbose_name="Keep MVP stats",
@@ -1278,6 +1794,16 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
                 fields=["slug", "division"],
                 name="competition_stage_unique_slug_division",
             ),
+            # A formula names a stage by its number in the division's list,
+            # so two stages may not share a value.
+            UniqueConstraint(
+                fields=["division", "order"],
+                name="competition_stage_unique_division_order",
+            ),
+            CheckConstraint(
+                condition=Q(color__regex=r"^#[0-9a-fA-F]{6}$"),
+                name="stage_color_valid_hex",
+            ),
         ]
 
     def _get_admin_namespace(self):
@@ -1293,6 +1819,23 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
 
     def _get_url_names(self):
         return super()._get_url_names() + ["build", "undo", "progress"]
+
+    @cached_property
+    def _list_select_related(self):
+        # Everything a row of the Matches tab draws: its teams, decided or
+        # not, and where it is played. Not the stage: ``self.matches`` hands
+        # every match this instance, with its division and season, so naming
+        # undecided teams reads the division's stages once for the page (see
+        # ``Stage._title_comes_after``) rather than once per match.
+        return {
+            "matches": [
+                "home_team",
+                "away_team",
+                "home_team_undecided",
+                "away_team_undecided",
+                "play_at",
+            ],
+        }
 
     def get_color(self):
         """
@@ -1324,14 +1867,49 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
     def comes_after(self):
         if self.follows:
             return self.follows
-        after = self.division.stages.filter(order__lt=self.order)
-        if after:
-            return after.latest("order")
+        after = (
+            self.division.stages.filter(order__lt=self.order).order_by("-order").first()
+        )
+        if after is not None:
+            return after
         raise Stage.DoesNotExist
+
+    # A page listing matches names every team still to be decided, and each
+    # name needs the stage it is a place in (the stage before this one, or the
+    # stage its formula names), that stage's pools and how many stages follow
+    # it. These remember the answers for this instance, so a list whose
+    # matches share one ``Stage`` asks once per stage rather than once per
+    # team. Only for naming teams: anything that changes stages uses the
+    # attributes above.
+
+    @cached_property
+    def _title_comes_after(self):
+        # ``comes_after``, read from the division's stages (which naming needs
+        # anyway) rather than a query of its own. ``None`` for the first stage
+        # of a division: ``cached_property`` does not keep an exception, so
+        # raising would query again for each team.
+        if self.follows_id is not None:
+            return self.follows
+        earlier = [stage for stage in self._title_stages if stage.order < self.order]
+        return earlier[-1] if earlier else None
+
+    @cached_property
+    def _title_stages(self):
+        # The stages of the division, in order: ``S1`` in a formula is the
+        # first of them, as ``Match.eval`` reads it.
+        return list(self.division.stages.all())
+
+    @cached_property
+    def _title_pools(self):
+        return list(self.pools.all())
+
+    @cached_property
+    def _title_preceeds_count(self):
+        return self.preceeds.count()
 
     def ladders(self):
         res = collections.OrderedDict()
-        if self.pools.count():
+        if self.pools.exists():
             for pool in self.pools.all():
                 res.setdefault(self, collections.OrderedDict()).update(pool.ladders())
         else:
@@ -1351,10 +1929,19 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
                 "home_team__division",
                 "away_team__club",
                 "away_team__division",
+                # named in place of a team until it is decided
+                "home_team_undecided",
+                "away_team_undecided",
+                "home_team_eval_related",
+                "away_team_eval_related",
             )
             # live-stream thumbnail blobs are only needed by the thumbnail
             # endpoints and YouTube sync — never in a match listing
-            .defer("live_stream_thumbnail_image")
+            .defer(
+                "live_stream_thumbnail_image",
+                "home_team_eval_related__live_stream_thumbnail_image",
+                "away_team_eval_related__live_stream_thumbnail_image",
+            )
             .annotate(
                 statistics_count=Count("statistics"),
                 videos_count=Count("videos"),
@@ -1362,6 +1949,9 @@ class Stage(AdminUrlMixin, OrderedSitemapNode):
             )
             .order_by("datetime", "date", "time", "round")
         ):
+            # One ``Stage`` for every match, so naming undecided teams looks
+            # the stage's neighbours up once (see ``Stage._title_comes_after``).
+            match.stage = self
             res.setdefault(self, collections.OrderedDict()).setdefault(
                 match.get_date(tzinfo), []
             ).append(match)
@@ -1373,6 +1963,8 @@ class StageGroup(AdminUrlMixin, OrderedSitemapNode):
     A model which represents a sub-grouping of a division; often called a
     'pool', but could also be used to represent a combined division.
     """
+
+    ordered_within = "stage"
 
     stage = ForeignKey(Stage, related_name="pools", on_delete=PROTECT)
     carry_ladder = BooleanField(
@@ -1434,10 +2026,19 @@ class StageGroup(AdminUrlMixin, OrderedSitemapNode):
                 "home_team__division",
                 "away_team__club",
                 "away_team__division",
+                # named in place of a team until it is decided
+                "home_team_undecided",
+                "away_team_undecided",
+                "home_team_eval_related",
+                "away_team_eval_related",
             )
             # live-stream thumbnail blobs are only needed by the thumbnail
             # endpoints and YouTube sync — never in a match listing
-            .defer("live_stream_thumbnail_image")
+            .defer(
+                "live_stream_thumbnail_image",
+                "home_team_eval_related__live_stream_thumbnail_image",
+                "away_team_eval_related__live_stream_thumbnail_image",
+            )
             .order_by(
                 "date",
                 "stage",
@@ -1459,7 +2060,7 @@ class StageGroup(AdminUrlMixin, OrderedSitemapNode):
         return res
 
 
-class Team(AdminUrlMixin, OrderedSitemapNode):
+class Team(AdminUrlMixin, UpstreamMixin, OrderedSitemapNode):
     """
     A model which represents a team in a competition. A team may not yet be
     placed into a division, as it might only be at the nomination stage.
@@ -1488,6 +2089,7 @@ class Team(AdminUrlMixin, OrderedSitemapNode):
         related_name="teams",
         label_from_instance="title",
     )
+    ordered_within = "division"
     division = ForeignKey(
         Division,
         blank=True,
@@ -1547,6 +2149,10 @@ class Team(AdminUrlMixin, OrderedSitemapNode):
                 fields=["title", "division"],
                 name="competition_team_unique_title_division",
             ),
+            UniqueConstraint(
+                fields=["division", "order"],
+                name="competition_team_unique_division_order",
+            ),
         ]
 
     def clean(self):
@@ -1563,14 +2169,91 @@ class Team(AdminUrlMixin, OrderedSitemapNode):
         if errors:
             raise ValidationError(errors)
 
-        return super(Team, self).clean()
+        return super().clean()
+
+    def matching_club(self):
+        """
+        The club of the team's competition that carries the team's name (or
+        the address a club of that name would have), or ``None``: the club
+        ``ensure_club`` gives a team that has none.
+        """
+        return self.division.season.competition.clubs.filter(
+            Q(title__iexact=self.title) | Q(slug=slugify(self.title))
+        ).first()
+
+    def ensure_club_permissions(self):
+        """
+        What ``ensure_club`` takes, as ``(action, model, object)``: what
+        doing the same by hand takes. The team is changed; unless its
+        competition has a club for it to take, a club is added and the
+        competition's clubs are changed.
+        """
+        if self.club is not None:
+            return []
+        required = [("change", Team, self)]
+        if self.matching_club() is None:
+            required += [
+                ("add", Club, None),
+                ("change", Competition, self.division.season.competition),
+            ]
+        return required
+
+    def ensure_club(self):
+        """
+        The team's club, first giving a team that has none a club of its own.
+
+        A person belongs to a club and a team's people come from its club, so
+        a team entered without one (a social competition, where the team is
+        all there is) cannot have a squad. Such a team takes the club of its
+        competition that carries its name; when there is none, a club named
+        after the team is created and added to the competition's clubs.
+
+        Raises ``ValidationError`` when the club cannot be created: its name
+        belongs to a club outside the competition (the same people may have
+        entered another competition, but that is not ours to assume), or
+        would not make an address for a club.
+        """
+        if self.club is not None:
+            return self.club
+        competition = self.division.season.competition
+        with transaction.atomic():
+            club = self.matching_club()
+            if club is None:
+                slug = slugify(self.title)
+                if not slug:
+                    raise ValidationError(
+                        _(
+                            'A club cannot be named after "%(team)s". Create a '
+                            "club for the team and give it to the team."
+                        ),
+                        params={"team": self.title},
+                    )
+                elsewhere = Club.objects.filter(slug=slug).first()
+                if elsewhere is not None:
+                    raise ValidationError(
+                        _(
+                            'The club "%(club)s" already has the name of this '
+                            "team, and is not one of the clubs of "
+                            "%(competition)s. Add it to the competition's clubs "
+                            "and give it to the team, or create a club of "
+                            "another name for the team."
+                        ),
+                        params={"club": elsewhere.title, "competition": competition},
+                    )
+                club = Club(title=self.title, slug=slug)
+                club.full_clean()
+                club.save()
+                competition.clubs.add(club)
+            self.club = club
+            self.save(update_fields=["club"])
+        return club
 
     @cached_property
-    def _mvp_select_related(self):
+    def _list_select_related(self):
         return {"people": ["person"]}
 
     @cached_property
-    def _mvp_prefetch_related(self):
+    def _list_prefetch_related(self):
         return {"people": ["roles"]}
 
     def _get_admin_namespace(self):
@@ -1584,13 +2267,11 @@ class Team(AdminUrlMixin, OrderedSitemapNode):
             self.pk,
         )
 
-    def __cmp__(self, other):
-        if self.division_id == other.division_id:
-            return (self.order > other.order) - (self.order < other.order)
-        return (self.division > other.division) - (self.division < other.division)
+    def _get_url_names(self):
+        return super()._get_url_names() + ["club"]
 
     def __repr__(self):
-        return "<Team: %s>" % self.title
+        return f"<Team: {self.title}>"
 
     def __str__(self):
         return self.title
@@ -1609,33 +2290,105 @@ class Team(AdminUrlMixin, OrderedSitemapNode):
         away = self.away_games.select_related(*related)
         return home | away
 
-    def future(self, offset=None):
+    # Kick-off order. A match's date and time are local to its venue, so
+    # within one team's matches they sort the same as ``datetime``; the
+    # default ordering puts stage and round ahead of time instead.
+    _kick_off = ("date", "time", "pk")
+
+    @staticmethod
+    def _future_and_past(offset=None):
+        """
+        A match is still to come until ``offset`` minutes after it kicks off.
+
+        Kick-off is compared as an instant: ``Match.datetime`` is aware, in
+        the venue's (or season's) time zone. The local ``date`` and ``time``
+        must not be compared with the clock in UTC, which put every match
+        later in the day than the current UTC time still to come at a venue
+        ahead of UTC. A match without a time falls back to its date.
+        """
         if offset is None:
             offset = 15  # FIXME add a value on a season
-        dt = timezone.now() - timedelta(minutes=offset)
-        d, t = dt.date(), dt.time()
-        return self.matches.filter((Q(date__exact=d) & Q(time__gte=t)) | Q(date__gt=d))
+        now = timezone.now()
+        cutoff = now - timedelta(minutes=offset)
+        today = timezone.localdate(now)
+        future = Q(datetime__gte=cutoff) | Q(datetime__isnull=True, date__gte=today)
+        past = Q(datetime__lt=cutoff) | Q(datetime__isnull=True, date__lt=today)
+        return future, past
+
+    def future(self, offset=None):
+        future, _ = self._future_and_past(offset)
+        return self.matches.filter(future).order_by(*self._kick_off)
 
     def past(self, offset=None):
-        if offset is None:
-            offset = 15  # FIXME add a value on a season
-        dt = timezone.now() - timedelta(minutes=offset)
-        d, t = dt.date(), dt.time()
-        return self.matches.filter((Q(date__exact=d) & Q(time__lte=t)) | Q(date__lt=d))
+        _, past = self._future_and_past(offset)
+        return self.matches.filter(past).order_by(*self._kick_off)
+
+    @classmethod
+    def prefetch_next_and_last_match(cls, teams):
+        """
+        Find the next and last match of every team in two queries, for pages
+        that list many teams (such as a club's), instead of up to four
+        queries per team in ``next_match`` and ``last_match``.
+        """
+        teams = list(teams)
+        by_pk = {team.pk: team for team in teams}
+        for team in teams:
+            team._next_match = team._last_match = None
+        if not teams:
+            return teams
+
+        future, past = cls._future_and_past()
+        pks = list(by_pk)
+        matches = (
+            Match.objects.filter(Q(home_team__in=pks) | Q(away_team__in=pks))
+            .select_related(
+                "stage__division__season__competition",
+                "stage_group",
+                "home_team__club",
+                "home_team__division",
+                "away_team__club",
+                "away_team__division",
+                # named in place of a team until it is decided
+                "home_team_undecided",
+                "away_team_undecided",
+                "home_team_eval_related",
+                "away_team_eval_related",
+            )
+            .defer(
+                "live_stream_thumbnail_image",
+                "stage__division__season__live_stream_thumbnail_image",
+                "home_team_eval_related__live_stream_thumbnail_image",
+                "away_team_eval_related__live_stream_thumbnail_image",
+            )
+            .order_by(*cls._kick_off)
+        )
+        for match in matches.filter(future):
+            for pk in (match.home_team_id, match.away_team_id):
+                if pk in by_pk and by_pk[pk]._next_match is None:
+                    by_pk[pk]._next_match = match
+        for match in matches.filter(past):
+            for pk in (match.home_team_id, match.away_team_id):
+                if pk in by_pk:
+                    by_pk[pk]._last_match = match
+        return teams
 
     def next_match(self):
-        matches = self.future()
-        if matches.count():
-            match = matches[0]
+        try:
+            match = self._next_match
+        except AttributeError:
+            match = self.future().first()
+        if match is not None:
             match.next = True
-            return match
+        return match
 
     def last_match(self):
-        matches = self.past()
-        if matches.count():
-            match = matches.reverse()[0]
+        try:
+            match = self._last_match
+        except AttributeError:
+            match = self.past().last()
+        if match is not None:
             match.last = True
-            return match
+        return match
 
     def ladders(self):
         res = collections.OrderedDict()
@@ -1669,10 +2422,19 @@ class Team(AdminUrlMixin, OrderedSitemapNode):
                 "home_team__division",
                 "away_team__club",
                 "away_team__division",
+                # named in place of a team until it is decided
+                "home_team_undecided",
+                "away_team_undecided",
+                "home_team_eval_related",
+                "away_team_eval_related",
             )
             # live-stream thumbnail blobs are only needed by the thumbnail
             # endpoints and YouTube sync — never in a match listing
-            .defer("live_stream_thumbnail_image")
+            .defer(
+                "live_stream_thumbnail_image",
+                "home_team_eval_related__live_stream_thumbnail_image",
+                "away_team_eval_related__live_stream_thumbnail_image",
+            )
             .order_by(
                 "date",
                 "stage",
@@ -1690,15 +2452,19 @@ class Team(AdminUrlMixin, OrderedSitemapNode):
         return res
 
 
-class ByeTeam(object):
-    def __init__(self, title="Bye", *args, **kwargs):
-        super(ByeTeam, self).__init__(*args, **kwargs)
-        self.pk = None
-        self.title = mark_safe(
-            '<span class="bye" title="%s">%s</span>' % (title, title)
-        )
+class ByeTeam:
+    """
+    The side of a bye match that has no team. Its title is plain text: it
+    names the match (``Match.title``) wherever text goes, attributes and
+    page titles too, and the templates escape it like any other title. It is
+    false, so ``away or home`` (and the ``default`` filter) gives the team.
+    """
 
-    def __nonzero__(self):
+    def __init__(self, title="Bye"):
+        self.pk = None
+        self.title = title
+
+    def __bool__(self):
         return False
 
     def __str__(self):
@@ -1734,6 +2500,8 @@ class UndecidedTeam(AdminUrlMixin, models.Model):
         label_from_instance="title",
     )
 
+    objects = UndecidedTeamQuerySet.as_manager()
+
     class Meta:
         ordering = ("stage_group", "formula")
         # verbose_name = 'team'
@@ -1761,7 +2529,8 @@ class UndecidedTeam(AdminUrlMixin, models.Model):
                 if group is not None:
                     return group.teams
             except IndexError:
-                # If the formula references an invalid group, fall back to division teams
+                # The formula names a stage or pool that does not exist (such
+                # as the stage before the first), fall back to division teams
                 pass
         return self.stage.division.teams
 
@@ -1771,17 +2540,21 @@ class UndecidedTeam(AdminUrlMixin, models.Model):
             return self.label
 
         try:
-            stage, group, position = stage_group_position(self.stage, self.formula)
+            stage, group, position = stage_group_position(
+                self.stage, self.formula, naming=True
+            )
 
             c = {
                 "stage": stage,
                 "group": group,
                 "position": position,
+                "preceeds_count": stage.preceeds.count() if stage else 0,
             }
 
             return stage_group_position_tpl.render(c).strip()
         except IndexError:
-            # If the formula references an invalid group, return the formula itself
+            # The formula names a stage or pool that does not exist (such as
+            # the stage before the first), return the formula itself
             return self.formula
 
     @property
@@ -1866,8 +2639,13 @@ class TeamAssociation(AdminUrlMixin, models.Model):
         Person, null=True, label_from_instance="get_full_name", on_delete=PROTECT
     )
     roles = ManyToManyField(TeamRole, blank=True, label_from_instance="name")
-    number = models.IntegerField(blank=True, null=True)
+    # Zero is a shirt number in some sports; only a negative one is refused.
+    number = models.IntegerField(
+        blank=True, null=True, validators=[validators.MinValueValidator(0)]
+    )
     is_player = BooleanField(default=True)
+
+    objects = TeamAssociationQuerySet.as_manager()
 
     def __str__(self):
         return self.person.get_full_name
@@ -1901,6 +2679,16 @@ class TeamAssociation(AdminUrlMixin, models.Model):
         )
 
     def statistics(self):
+        if hasattr(self, "stat_played"):
+            # Annotated by TeamAssociationQuerySet.with_statistics(), so a
+            # roster is totalled in the query which fetches it rather than
+            # with one more query for each player.
+            return {
+                "played": self.stat_played,
+                "points": self.stat_points,
+                "mvp": self.stat_mvp,
+            }
+
         stats = SimpleScoreMatchStatistic.objects.filter(
             player=self.person, player__teamassociation__team=self.team
         )
@@ -1964,7 +2752,105 @@ class SeasonAssociation(AdminUrlMixin, models.Model):
         ]
 
 
-class Match(AdminUrlMixin, models.Model):
+class LiveStreamTransitionMixin:
+    """
+    Shared YouTube broadcast transition for matches and season events.
+
+    Subclasses provide ``external_identifier`` and ``_live_stream_season()``.
+    """
+
+    VALID_TRANSITIONS = {"testing": ["live"], "live": ["complete"], "complete": []}
+
+    def _live_stream_season(self):
+        raise NotImplementedError
+
+    def transition_live_stream(self, status, youtube_service=None):
+        """
+        Transition the live stream status of this object.
+
+        Args:
+            status (str): The target broadcast status ('testing', 'live', 'complete')
+            youtube_service: Optional YouTube API service instance. If None, will use
+                           season's YouTube service.
+
+        Returns:
+            dict: Response from YouTube API
+
+        Raises:
+            LiveStreamIdentifierMissing: If there is no external_identifier
+            InvalidLiveStreamTransition: If the transition is invalid
+            LiveStreamTransitionWarning: Warning for potentially invalid transitions
+        """
+        if not self.external_identifier:
+            raise LiveStreamIdentifierMissing(
+                f"{self} does not have a live stream identifier"
+            )
+
+        current_status = None
+        if youtube_service:
+            try:
+                response = (
+                    youtube_service.liveBroadcasts()
+                    .list(part="status", id=self.external_identifier)
+                    .execute()
+                )
+                if response.get("items"):
+                    current_status = response["items"][0]["status"]["lifeCycleStatus"]
+            except Exception:
+                # If we can't get current status, proceed anyway
+                pass
+
+        if current_status:
+            valid_next_states = self.VALID_TRANSITIONS.get(current_status, [])
+            if status not in valid_next_states and status != current_status:
+                if current_status == "complete":
+                    raise InvalidLiveStreamTransition(
+                        f"Cannot transition from '{current_status}' to '{status}' "
+                        f"for {self}"
+                    )
+                warnings.warn(
+                    f"Potentially invalid transition from '{current_status}' to "
+                    f"'{status}' for {self}",
+                    LiveStreamTransitionWarning,
+                )
+
+        service = youtube_service or self._live_stream_season().youtube
+        response = (
+            service.liveBroadcasts()
+            .transition(
+                broadcastStatus=status,
+                id=self.external_identifier,
+                part="snippet,status",
+            )
+            .execute()
+        )
+
+        self._store_live_stream_status(status, timezone.now())
+        return response
+
+    def _store_live_stream_status(self, status, at):
+        """
+        Record the broadcast status without sending model signals.
+
+        A plain ``save()`` would fire ``post_save`` for a match, which rebuilds
+        its ladder entries; broadcast state has no bearing on standings.
+        """
+        type(self)._default_manager.filter(pk=self.pk).update(
+            live_stream_status=status, live_stream_status_at=at
+        )
+        self.live_stream_status = status
+        self.live_stream_status_at = at
+
+
+class Match(
+    LiveStreamTransitionMixin, AdminUrlMixin, UpstreamIdentifierMixin, models.Model
+):
+    """
+    A fixture. ``upstream_id`` (from :class:`UpstreamIdentifierMixin`) names
+    the match this fixture mirrors on an upstream provider; a match has no
+    name of its own, so it does not keep an upstream title.
+    """
+
     uuid = models.UUIDField(
         primary_key=False,
         default=uuid.uuid4,
@@ -2093,7 +2979,57 @@ class Match(AdminUrlMixin, models.Model):
     live_stream_bind = models.CharField(
         max_length=50, blank=True, null=True, db_index=True
     )
+    live_stream_status = models.CharField(
+        max_length=20, blank=True, null=True, db_index=True
+    )
+    live_stream_status_at = DateTimeField(blank=True, null=True)
     live_stream_thumbnail = models.URLField(blank=True, null=True)
+    # The score while the match is being played, kept by the scoreboard. It
+    # is not the result: ``home_team_score`` and ``away_team_score`` are, and
+    # only they move a ladder.
+    home_team_progress_score = models.PositiveSmallIntegerField(blank=True, null=True)
+    away_team_progress_score = models.PositiveSmallIntegerField(blank=True, null=True)
+    # When the scorer started the scoreboard clock by hand, at a venue whose
+    # clocks do not start on time.
+    clock_started_at = DateTimeField(blank=True, null=True)
+    # The timing of this match, for its scoreboard clock, where it is not
+    # its stage's: each number left empty is its stage's.
+    periods = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        validators=[validators.MinValueValidator(1)],
+        verbose_name=_("Periods"),
+        help_text=_("Leave it empty to use the stage's number of periods."),
+    )
+    period_minutes = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        validators=[validators.MinValueValidator(1)],
+        verbose_name=_("Period length"),
+        help_text=_("Minutes in each period. Leave it empty to use the stage's."),
+    )
+    break_minutes = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        verbose_name=_("Break length"),
+        help_text=_(
+            "Minutes between one period and the next. Leave it empty to use the stage's."
+        ),
+    )
+    half_time_minutes = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        verbose_name=_("Half time length"),
+        help_text=_(
+            "Minutes of the break at half time. Leave it empty to use the stage's."
+        ),
+    )
+    period_name = models.CharField(
+        max_length=30,
+        blank=True,
+        verbose_name=_("Period name"),
+        help_text=_("What a period is called. Leave it empty to use the stage's."),
+    )
     live_stream_thumbnail_image = models.BinaryField(
         blank=True,
         null=True,
@@ -2129,7 +3065,7 @@ class Match(AdminUrlMixin, models.Model):
         )
 
     def _get_url_names(self):
-        return super()._get_url_names() + ["referees", "resync-live-stream"]
+        return super()._get_url_names() + ["detail", "referees", "resync-live-stream"]
 
     def get_date(self, tzinfo):
         dt = self.get_datetime(tzinfo)
@@ -2284,13 +3220,37 @@ class Match(AdminUrlMixin, models.Model):
             match = stage_group_position_re.match(team_eval)
             if not match:
                 raise AttributeError("Invalid stage_group_position pattern")
-            stage, group, position = match.groups()
+            selected, group, position = match.groups()
         except (AttributeError, TypeError):
             if not team_undecided and self.is_bye:
                 return ByeTeam()
+            if not team_undecided and team_eval not in WIN_LOSE:
+                # No reference at all is "to be advised"; a reference that
+                # cannot be understood is shown as written.
+                title = (team_eval or "").strip() or pgettext(
+                    "abbreviation: to be advised", "TBA"
+                )
+                if plain:
+                    return title
+                return {"title": title}
             stage = group = position = None
         else:
-            stage = self.stage.comes_after
+            if selected is None:
+                # A place on the ladder of the stage before.
+                stage = self.stage._title_comes_after
+            else:
+                # A place on the ladder of the stage the formula names, as
+                # ``eval`` reads it. Stages are numbered from one.
+                stages = self.stage._title_stages
+                number = int(selected)
+                stage = stages[number - 1] if 0 < number <= len(stages) else None
+            if stage is None:
+                # The stage before the first stage of a division, or a stage
+                # the division does not have: it names nothing, so show it as
+                # written.
+                if plain:
+                    return team_eval
+                return {"title": team_eval}
 
         if team_undecided and stage is None:
             if plain:
@@ -2306,14 +3266,22 @@ class Match(AdminUrlMixin, models.Model):
             context = {
                 "position": position,
                 "stage": stage,
+                "preceeds_count": stage._title_preceeds_count,
             }
             template = stage_group_position_tpl
             if group is not None:
-                if stage.pools.count():
+                pools = stage._title_pools
+                if pools:
                     try:
-                        context["group"] = stage.pools.all()[int(group) - 1]
-                    except IndexError:
-                        # If there are ANY issues in evaluating a formula, return the formula itself
+                        index = int(group) - 1
+                        if index < 0:
+                            # G0 has no pool (a list would give the last)
+                            raise IndexError(group)
+                        context["group"] = pools[index]
+                    except (IndexError, ValueError):
+                        # If there are ANY issues in evaluating a formula
+                        # (a group beyond the stage's pools, or G0 which
+                        # would index from the end), return the formula itself
                         if plain:
                             return team_eval
                         return {"title": team_eval}
@@ -2325,7 +3293,8 @@ class Match(AdminUrlMixin, models.Model):
 
         try:
             if plain:
-                return template.render(context).strip()
+                # The templates render HTML (titles escaped); plain is text.
+                return html.unescape(template.render(context).strip())
             return {"title": template.render(context).strip()}
         except Exception:
             # If there are ANY issues in evaluating a formula, return the formula itself
@@ -2366,158 +3335,133 @@ class Match(AdminUrlMixin, models.Model):
     winner = property(lambda self: self._winner_loser("W"))
     loser = property(lambda self: self._winner_loser("L"))
 
+    @property
+    def statistics_ready(self):
+        """
+        Whether the players' statistics can be entered: both teams are known
+        and both scores are in. A bye has no opponent, so it never is.
+        """
+        return None not in (
+            self.home_team_id,
+            self.away_team_id,
+            self.home_team_score,
+            self.away_team_score,
+        )
+
     def eval(self, lazy=False):
         """
         Attempt to populate the `home_team` and `away_team` fields as
         appropriate.
 
-        When lazy=False we should always evaluate the teams, if possible.
+        Teams which have already been assigned are returned as-is. Otherwise
+        the positional (P1, G1P2) or winner/loser reference is resolved against
+        the ladder of the preceding stage or the result of the related match.
+        When a reference cannot be resolved the descriptive result of
+        ``_get_team`` is returned instead of a ``Team``.
+
+        The ``lazy`` argument is retained for backwards compatibility; teams
+        which are already assigned are never re-evaluated.
         """
         try:
             stage = self.stage.comes_after
         except Stage.DoesNotExist:
             if self.home_team_eval_related or self.away_team_eval_related:
-                # This match depends on the result of matches in the same stage.
-                stage = self.stage
+                # This match depends on the result of matches in the same
+                # stage; there is no stage before it to take a position from.
+                stage = None
             else:
                 logger.warning(
                     "Stage is first, %r should not be attempting to be evaluated.", self
                 )
                 return (self.home_team, self.away_team)
 
-        positions = {
-            index + 1: team
-            for index, team in enumerate(
-                stage.ladder_summary.values_list("team", flat=True)
-            )
-        }
-        group_positions = {
-            index + 1: [each.team for each in group.ladder]
-            for index, group in enumerate(stage.pools.all())
-        }
+        ladders = {}
+
+        def lookup(source):
+            """
+            Positions (and pool positions) on the ladder of ``source``, read
+            once per stage referenced by this match's formulas.
+            """
+            if source.pk not in ladders:
+                ladders[source.pk] = (
+                    {
+                        index + 1: each.team
+                        for index, each in enumerate(
+                            source.ladder_summary.select_related("team")
+                        )
+                    },
+                    {
+                        index + 1: [each.team for each in group.ladder]
+                        for index, group in enumerate(source.pools.all())
+                    },
+                )
+            return ladders[source.pk]
+
         res = [None, None]
         for index, field in enumerate(("home_team", "away_team")):
             team = self._get_team(field)
             is_team_model = isinstance(team, Team)
             if not is_team_model:
                 logger.warning("%r is not a Team instance.", team)
-            if not lazy:
-                # For lazy=False, use the result from _get_team() as-is
-                # (either Team instances or dictionaries with titles for invalid formulas)
-                pass
-            else:
-                # Only do additional processing when lazy=True
-                if not is_team_model:
-                    team_undecided = getattr(self, f"{field}_undecided")
-                    if team_undecided:
-                        team_eval = team_undecided.formula
-                        team_eval_related = None
-                    else:
-                        team_eval = getattr(self, f"{field}_eval")
-                        team_eval_related = getattr(self, f"{field}_eval_related")
-                    if team_eval in WIN_LOSE:
+            if not is_team_model:
+                team_undecided = getattr(self, f"{field}_undecided")
+                if team_undecided:
+                    team_eval = team_undecided.formula
+                    team_eval_related = None
+                else:
+                    team_eval = getattr(self, f"{field}_eval")
+                    team_eval_related = getattr(self, f"{field}_eval_related")
+                if team_eval in WIN_LOSE:
+                    # A winner/loser reference without its related match
+                    # cannot be resolved; keep the descriptive fallback.
+                    if team_eval_related is not None:
                         team = team_eval_related._winner_loser(team_eval)
+                else:
+                    try:
+                        match = stage_group_position_re.match(team_eval)
+                        if not match:
+                            raise AttributeError("Invalid stage_group_position pattern")
+                        selected, group, position = match.groups()
+                    except (AttributeError, TypeError):
+                        logger.debug(
+                            "Failed evaluating `stage_group_position` %s for %s",
+                            team_eval,
+                            self,
+                        )
                     else:
                         try:
-                            match = stage_group_position_re.match(team_eval)
-                            if not match:
-                                raise AttributeError(
-                                    "Invalid stage_group_position pattern"
-                                )
-                            stage, group, position = match.groups()
-                        except (AttributeError, TypeError):
-                            logger.exception(
-                                "Failed evaluating `stage_group_position` %s for %s",
-                                team_eval,
-                                self,
-                            )
-                        else:
+                            # Stages, groups and positions are numbered from
+                            # one; anything else is treated as unresolved
+                            # rather than indexing from the end.
+                            numbers = [int(n) for n in (selected, group, position) if n]
+                            if min(numbers) < 1:
+                                raise IndexError("Numbering starts at 1")
+                            # An explicit stage (S1P1, S1G2P1) is resolved
+                            # against that stage of the division, otherwise
+                            # the stage this one follows.
+                            source = stage
+                            if selected is not None:
+                                source = self.stage.division.stages.all()[
+                                    int(selected) - 1
+                                ]
+                            if source is None:
+                                raise IndexError("No stage before the first")
+                            positions, group_positions = lookup(source)
                             try:
-                                try:
-                                    g = int(group)
-                                    p = int(position)
-                                    team = group_positions[g][p - 1]
-                                except TypeError:
-                                    team = positions[int(position)]
-                            except (IndexError, KeyError):
-                                pass
+                                g = int(group)
+                                p = int(position)
+                                team = group_positions[g][p - 1]
+                            except TypeError:
+                                team = positions[int(position)]
+                        except (IndexError, KeyError):
+                            # Unable to resolve the reference (yet), fall back
+                            # to the descriptive result from _get_team().
+                            pass
             res[index] = team
         return tuple(res)
 
-    def transition_live_stream(self, status, youtube_service=None):
-        """
-        Transition the live stream status of this match.
-
-        Args:
-            status (str): The target broadcast status ('testing', 'live', 'complete')
-            youtube_service: Optional YouTube API service instance. If None, will use
-                           season's YouTube service.
-
-        Returns:
-            dict: Response from YouTube API
-
-        Raises:
-            LiveStreamIdentifierMissing: If the match has no external_identifier
-            InvalidLiveStreamTransition: If the transition is invalid
-            LiveStreamTransitionWarning: Warning for potentially invalid transitions
-        """
-        # Check if match has live stream identifier
-        if not self.external_identifier:
-            raise LiveStreamIdentifierMissing(
-                f"Match {self} does not have a live stream identifier"
-            )
-
-        # Define valid transitions
-        valid_transitions = {"testing": ["live"], "live": ["complete"], "complete": []}
-
-        # Get current broadcast status from YouTube if available
-        current_status = None
-        if youtube_service:
-            try:
-                response = (
-                    youtube_service.liveBroadcasts()
-                    .list(part="status", id=self.external_identifier)
-                    .execute()
-                )
-                if response.get("items"):
-                    current_status = response["items"][0]["status"]["lifeCycleStatus"]
-            except Exception:
-                # If we can't get current status, proceed anyway
-                pass
-
-        # Check for invalid transitions based on known current status
-        if current_status:
-            valid_next_states = valid_transitions.get(current_status, [])
-            if status not in valid_next_states and status != current_status:
-                if current_status == "complete":
-                    # Can't transition from complete to anything
-                    raise InvalidLiveStreamTransition(
-                        f"Cannot transition from '{current_status}' to '{status}' "
-                        f"for match {self}"
-                    )
-                else:
-                    # Issue warning for potentially invalid transitions
-                    warnings.warn(
-                        f"Potentially invalid transition from '{current_status}' to '{status}' "
-                        f"for match {self}",
-                        LiveStreamTransitionWarning,
-                    )
-
-        # Use provided service or get from season
-        service = youtube_service or self.stage.division.season.youtube
-
-        # Make the API call to transition the broadcast
-        response = (
-            service.liveBroadcasts()
-            .transition(
-                broadcastStatus=status,
-                id=self.external_identifier,
-                part="snippet,status",
-            )
-            .execute()
-        )
-
-        return response
+    def _live_stream_season(self):
+        return self.stage.division.season
 
     def __str__(self):
         return self.title
@@ -2533,16 +3477,11 @@ class Match(AdminUrlMixin, models.Model):
         Returns:
             MediaMemoryUpload or None if no thumbnail is available
         """
-        # Try match-specific thumbnail first
-        if self.live_stream_thumbnail_image:
-            return MediaMemoryUpload(self.live_stream_thumbnail_image, resumable=True)
-
-        # Fall back to season thumbnail
-        season = self.stage.division.season
-        if season.live_stream_thumbnail_image:
-            return MediaMemoryUpload(season.live_stream_thumbnail_image, resumable=True)
-
-        return None
+        # The match's own thumbnail first, then the season's.
+        return thumbnail_media_upload(
+            self.live_stream_thumbnail_image,
+            self.stage.division.season.live_stream_thumbnail_image,
+        )
 
     def live_stream_thumbnail_response(self, width=None, height=None) -> HttpResponse:
         """
@@ -2584,7 +3523,7 @@ class LadderBase(models.Model):
         abstract = True
 
     def __repr__(self):
-        return "<%s: #%s>" % (self.__class__.__name__, self.pk)
+        return f"<{self.__class__.__name__}: #{self.pk}>"
 
 
 class LadderEntry(LadderBase):
@@ -2599,8 +3538,12 @@ class LadderEntry(LadderBase):
 
     objects = LadderEntryManager()
 
+    class Meta:
+        # A match's entries are made home team first.
+        ordering = ("pk",)
+
     def __repr__(self):
-        return "<LadderEntry: #%s>" % self.pk
+        return f"<LadderEntry: #{self.pk}>"
 
 
 class LadderSummary(LadderBase):
@@ -2662,6 +3605,10 @@ class ExclusionDateBase(AdminUrlMixin, models.Model):
         abstract = True
         ordering = ("date",)
 
+    def __str__(self):
+        # The date as the lists of exclusion dates show it.
+        return date_format(self.date, "l j F Y") if self.date else ""
+
 
 class SeasonExclusionDate(ExclusionDateBase):
     season = ForeignKey("Season", related_name="exclusions", on_delete=CASCADE)
@@ -2685,7 +3632,7 @@ class SeasonExclusionDate(ExclusionDateBase):
 class DivisionExclusionDate(ExclusionDateBase):
     division = ForeignKey("Division", related_name="exclusions", on_delete=CASCADE)
 
-    class Meta:
+    class Meta(ExclusionDateBase.Meta):
         constraints = [
             UniqueConstraint(
                 fields=["division", "date"],
@@ -2741,6 +3688,7 @@ class SeasonMatchTime(AdminUrlMixin, MatchTimeBase):
     end_date = DateField(verbose_name="Until", blank=True, null=True)
 
     class Meta:
+        ordering = ("start",)
         verbose_name = "time slot"
 
     def _get_admin_namespace(self):
@@ -2750,7 +3698,8 @@ class SeasonMatchTime(AdminUrlMixin, MatchTimeBase):
         return (self.season.competition_id, self.season_id, self.pk)
 
     def __str__(self):
-        return "#{}".format(self.pk)
+        # The first kick-off, as the list of time slots shows it.
+        return time_format(self.start, "H:i") if self.start else ""
 
 
 class LiveStreamKey(AdminUrlMixin, models.Model):
@@ -2765,9 +3714,7 @@ class LiveStreamKey(AdminUrlMixin, models.Model):
     match streaming.
     """
 
-    season = ForeignKey(
-        Season, related_name="live_stream_keys", on_delete=CASCADE
-    )
+    season = ForeignKey(Season, related_name="live_stream_keys", on_delete=CASCADE)
 
     title = models.CharField(
         max_length=100,
@@ -2805,7 +3752,7 @@ class LiveStreamKey(AdminUrlMixin, models.Model):
         return ["add", "edit", "delete"]
 
 
-class LiveStreamEvent(AdminUrlMixin, models.Model):
+class LiveStreamEvent(LiveStreamTransitionMixin, AdminUrlMixin, models.Model):
     """
     An adhoc live stream event associated with a Season.
 
@@ -2816,9 +3763,7 @@ class LiveStreamEvent(AdminUrlMixin, models.Model):
     desk between fixtures.
     """
 
-    season = ForeignKey(
-        Season, related_name="live_stream_events", on_delete=CASCADE
-    )
+    season = ForeignKey(Season, related_name="live_stream_events", on_delete=CASCADE)
 
     title = models.CharField(
         max_length=100,
@@ -2866,6 +3811,10 @@ class LiveStreamEvent(AdminUrlMixin, models.Model):
     live_stream_bind = models.CharField(
         max_length=50, blank=True, null=True, db_index=True
     )
+    live_stream_status = models.CharField(
+        max_length=20, blank=True, null=True, db_index=True
+    )
+    live_stream_status_at = DateTimeField(blank=True, null=True)
     live_stream_thumbnail_image = models.BinaryField(
         blank=True,
         null=True,
@@ -2879,6 +3828,9 @@ class LiveStreamEvent(AdminUrlMixin, models.Model):
 
     def __str__(self):
         return self.title
+
+    def _live_stream_season(self):
+        return self.season
 
     def _get_admin_namespace(self):
         return "admin:fixja:competition:season:livestreamevent"
@@ -2917,15 +3869,10 @@ class LiveStreamEvent(AdminUrlMixin, models.Model):
         Returns:
             MediaMemoryUpload or None if no thumbnail is available
         """
-        if self.live_stream_thumbnail_image:
-            return MediaMemoryUpload(self.live_stream_thumbnail_image, resumable=True)
-
-        if self.season.live_stream_thumbnail_image:
-            return MediaMemoryUpload(
-                self.season.live_stream_thumbnail_image, resumable=True
-            )
-
-        return None
+        return thumbnail_media_upload(
+            self.live_stream_thumbnail_image,
+            self.season.live_stream_thumbnail_image,
+        )
 
     def live_stream_thumbnail_response(self, width=None, height=None) -> HttpResponse:
         """
@@ -2943,8 +3890,7 @@ class LiveStreamEvent(AdminUrlMixin, models.Model):
             Http404: If no thumbnail is available or processing fails
         """
         return create_thumbnail_response(
-            self.live_stream_thumbnail_image
-            or self.season.live_stream_thumbnail_image,
+            self.live_stream_thumbnail_image or self.season.live_stream_thumbnail_image,
             width,
             height,
         )
@@ -2954,6 +3900,11 @@ class MatchScoreSheet(AdminUrlMixin, models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     match = models.ForeignKey(Match, related_name="scoresheets", on_delete=CASCADE)
     image = CloudinaryField(verbose_name=_("Image"))
+
+    class Meta:
+        # Nothing records when a score sheet was uploaded; the key settles the
+        # order all the same.
+        ordering = ("pk",)
 
     def _get_admin_namespace(self):
         return "admin:fixja:competition:season:division:stage:match:matchscoresheet"
@@ -2969,13 +3920,16 @@ class MatchScoreSheet(AdminUrlMixin, models.Model):
         )
 
     def __str__(self):
-        return str(self.image)
+        return gettext("Score sheet for %(match)s") % {"match": self.match}
 
 
 class MatchStatisticBase(models.Model):
     match = ForeignKey("Match", related_name="statistics", on_delete=PROTECT)
     player = ForeignKey("Person", related_name="statistics", on_delete=PROTECT)
-    number = models.IntegerField(blank=True, null=True)
+    # Zero is a shirt number in some sports; only a negative one is refused.
+    number = models.IntegerField(
+        blank=True, null=True, validators=[validators.MinValueValidator(0)]
+    )
 
     def team(self):
         if self.match.home_team.people.filter(person=self.player):
@@ -3015,17 +3969,15 @@ class SimpleScoreMatchStatistic(MatchStatisticBase):
         if not self.played and self.mvp:
             errors["mvp"] = _("A person who did not play cannot earn MVP points.")
 
-        if self.played and not self.number:
+        # Zero is a shirt number; only none at all is missing.
+        if self.played and self.number is None:
             errors["number"] = _("A person who played must have a shirt number.")
 
         if errors:
             raise ValidationError(errors)
 
     def __repr__(self):
-        return "<Stat #%s: %s, %s, number=%s, played=%s>" % (
-            self.pk,
-            self.match,
-            self.player,
-            self.number,
-            self.played,
+        return (
+            f"<Stat #{self.pk}: {self.match}, {self.player}, "
+            f"number={self.number}, played={self.played}>"
         )

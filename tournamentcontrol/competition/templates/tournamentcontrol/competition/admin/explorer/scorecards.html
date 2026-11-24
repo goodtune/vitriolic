@@ -1,0 +1,59 @@
+{% extends "touchtechnology/admin/explorer/print.html" %}
+{% load i18n common %}
+
+{% block title %}{% trans "Scorecards" %}{% endblock %}
+{% block heading %}{% trans "Scorecards" %}{% endblock %}
+{% block subheading %}{% with first=matches|first %}{% if first %}{{ first.stage.division.season }}{% if first.date %} &ndash; {{ first.date|date:"l j F Y" }}{% endif %}{% endif %}{% endwith %}{% endblock %}
+
+{% block extracss %}
+	<meta name="author" content="{% block meta_author %}{{ site.name }}{% endblock %}">
+	<meta name="subject" content="{% block meta_subject %}{% endblock %}">
+	<meta name="keywords" content="{% block meta_keywords %}{% endblock %}">
+	<meta name="date" content="{% block meta_date %}{% now "c" %}{% endblock %}">
+	<style>
+		.scorecard th, .scorecard td { border: 1px solid var(--text); }
+		.scorecard thead th { color: var(--text); font-size: 13px; }
+		.scorecard .team { font-size: 15px; }
+		.scorecard tbody td { height: 30px; width: 10%; }
+		.scorecard tfoot td { height: 34px; vertical-align: top; color: var(--muted); }
+	</style>
+{% endblock %}
+
+{% block content %}
+	{% trans "TBA" as tba context "abbreviation: to be advised" %}
+	{% trans "TBC" as tbc context "abbreviation: to be confirmed" %}
+	{% for match in matches %}
+		<section class="card-sheet">
+			<table class="scorecard">
+				<thead>
+					<tr>
+						<th colspan="3">{{ match.stage.division.short_title|default:match.stage.division.title }}{% if match.stage_group %}<br>{{ match.stage_group.short_title|default:match.stage_group.title }}{% elif match.is_final %}<br>{{ match.label }}{% endif %}</th>
+						<th colspan="2">{% if match.play_at %}{{ match.play_at.content_object.abbreviation|default:match.play_at.title }}{% else %}{{ tba }}{% endif %}</th>
+						{# A scorecard is used at the ground, so its date and time are local. #}
+						<th colspan="2">{{ match.time|time:"G:i"|default:tbc }}</th>
+						<th colspan="3">{{ match.date|date:"j M Y"|default:tba }}</th>
+					</tr>
+					<tr>
+						<th colspan="5" class="team">{{ match.get_home_team.title }}</th>
+						<th colspan="5" class="team">{{ match.get_away_team.title }}</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for row in "12345" %}<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>{% endfor %}
+				</tbody>
+				<tfoot>
+					<tr>
+						<td colspan="3">{% trans "Captain" %}</td>
+						<td colspan="2" rowspan="2">{% trans "Score" %}</td>
+						<td colspan="3">{% trans "Captain" %}</td>
+						<td colspan="2" rowspan="2">{% trans "Score" %}</td>
+					</tr>
+					<tr><td colspan="3"></td><td colspan="3"></td></tr>
+					<tr><td colspan="10">{% trans "Referees" %}</td></tr>
+				</tfoot>
+			</table>
+		</section>
+	{% empty %}
+		<p class="empty">{% trans "No match to print." %}</p>
+	{% endfor %}
+{% endblock %}

@@ -11,7 +11,6 @@ that AI models should be able to generate. Each fixture includes:
 - Validation criteria
 """
 
-import itertools
 import textwrap
 
 from test_plus import TestCase
@@ -46,16 +45,14 @@ class DrawFormatFixturesTestCase(TestCase):
             title="It's a Knockout!",
             teams=["NSW", "QLD", "WA", "VIC"],
             draw_formats={
-                "Knockout": textwrap.dedent(
-                    """\
+                "Knockout": textwrap.dedent("""\
                         ROUND
                         1: 1 vs 2 Semi 1
                         2: 3 vs 4 Semi 2
                         ROUND
                         3: L1 vs L2 Bronze
                         ROUND
-                        4: W1 vs W2 Final"""
-                )
+                        4: W1 vs W2 Final""")
             },
             stages=[
                 StageFixture(
@@ -83,6 +80,42 @@ class DrawFormatFixturesTestCase(TestCase):
             for m in Match.objects.all()
         ]
         self.assertCountEqual(actual_matches, expected_matches)
+
+    def test_build_logs_each_step(self):
+        fixture = DivisionStructure(
+            title="Logged",
+            teams=["NSW", "QLD"],
+            draw_formats={"Round Robin": round_robin_format(2)},
+            stages=[
+                StageFixture(
+                    title="Pools",
+                    pools=[
+                        PoolFixture(
+                            title="Pool A",
+                            teams=[0, 1],
+                            draw_format_ref="Round Robin",
+                        )
+                    ],
+                )
+            ],
+        )
+        logger = "tournamentcontrol.competition.draw.builders"
+        with self.assertLogs(logger, "DEBUG") as logs:
+            build(self.season, fixture)
+        self.assertEqual(
+            logs.output,
+            [
+                f"INFO:{logger}:Building division 'Logged' for season {self.season.pk}",
+                f"DEBUG:{logger}:Created division: Logged",
+                f"DEBUG:{logger}:Created team: NSW",
+                f"DEBUG:{logger}:Created team: QLD",
+                f"DEBUG:{logger}:Created stage: Pools",
+                f"DEBUG:{logger}:Created pool: Pool A",
+                f"DEBUG:{logger}:DrawGenerator produced 1 matches",
+                f"DEBUG:{logger}:Generated 1 matches from draw format for pool Pool A",
+                f"INFO:{logger}:Successfully built division 'Logged'",
+            ],
+        )
 
     def test_two_pools_with_finals(self):
         """Test case for a simple two-pool format with finals."""

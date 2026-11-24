@@ -1,0 +1,13 @@
+{% extends "touchtechnology/admin/explorer/base.html" %}
+{% load i18n admin admin_explorer %}
+
+{% block full_content %}
+	<main id="main" class="error-page" tabindex="-1">
+		<div>
+			<p class="code">{% block error-code %}{% endblock %}</p>
+			{% block error-details %}{% endblock %}
+			{% block search-form %}{% endblock %}
+			<p><a class="button" href="{% url 'admin:index' %}">{% icon "dashboard" %}{% trans "Back to the dashboard" %}</a></p>
+		</div>
+	</main>
+{% endblock %}

@@ -17,23 +17,28 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        django: [42, 52, 60]
+        django: [52, 60, 61]
         python: [311, 312, 313, 314]
         exclude:
-          # Django 4.2 doesn't support Python 3.14
-          - django: 42
-            python: 314
-          # Django 6.0 doesn't support Python 3.11
+          # Django 6.0+ requires Python 3.12+
           - django: 60
+            python: 311
+          - django: 61
             python: 311
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          lfs: true
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.4.0
 
       - name: Run Tests
         run: uvx tox
         env:
           TOXENV: dj${{ matrix.django }}-py${{ matrix.python }}
+          # The runner's Docker no longer reports a container's gateway, which
+          # tox-docker reads to find the host its services are published on
+          # (KeyError: 'Gateway'). Their ports are published on the runner.
+          TOX_DOCKER_GATEWAY: 127.0.0.1

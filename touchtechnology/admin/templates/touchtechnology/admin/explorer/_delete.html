@@ -1,0 +1,9 @@
+{% load i18n common admin_explorer %}{% comment %}
+	The Delete item of a row's menu: it posts to ``action`` after the person
+	confirms. Give it ``kind`` to say what the row is when its model's name
+	does not (a page of the sitemap is a SitemapNode, a "folder").
+{% endcomment %}{% firstof kind model|type as type %}
+<form method="post" action="{{ action }}" data-confirm="{% blocktrans %}The {{ type }} “{{ obj }}” will be removed for good.{% endblocktrans %}" data-confirm-title="{% blocktrans %}Delete this {{ type }}?{% endblocktrans %}" data-confirm-label="{% trans "Delete" %}">
+	{% csrf_token %}
+	<button type="submit" class="destructive-item">{% icon "trash" %}{% trans "Delete" %}</button>
+</form>

@@ -1,0 +1,50 @@
+{% extends "tournamentcontrol/competition/base.html" %}
+{% load i18n tz %}
+
+{% block body_class %}{{ block.super }} venue{% endblock %}
+
+{% block page_title %}{% trans competition.title %} - {% trans season.title %} - {% trans venue.title %}{% endblock %}
+
+{% block content %}
+	{% block heading %}
+		<h1>{% trans competition.title %} - {% trans season.title %}</h1>
+		<h2>{% trans venue.title %}</h2>
+	{% endblock %}
+
+	{% block grounds %}
+		{% if grounds %}
+			<ul id="grounds">
+				{% for g in grounds %}
+					{% url application.name|add:":ground" competition=competition.slug season=season.slug venue=venue.slug ground=g.slug as url1 %}
+					{% url application.name|add:":ground" season=season.slug venue=venue.slug ground=g.slug as url2 %}
+					{% url application.name|add:":ground" venue=venue.slug ground=g.slug as url3 %}
+					<li class="{{ g.slug }}"><a href="{{ url1|default:url2|default:url3 }}">{% trans g.title %}</a></li>
+				{% endfor %}
+			</ul>
+		{% endif %}
+	{% endblock %}
+
+	{% block dates %}
+		{% if dates %}
+			<ul id="dates">
+				{% url application.name|add:":venue" competition=competition.slug season=season.slug venue=venue.slug as url1 %}
+				{% url application.name|add:":venue" season=season.slug venue=venue.slug as url2 %}
+				{% url application.name|add:":venue" venue=venue.slug as url3 %}
+				<li class="all{% if not selected_date %} current{% endif %}"><a href="{{ url1|default:url2|default:url3 }}">{% trans "All days" %}</a></li>
+				{% for d in dates %}
+					{% url application.name|add:":venue" competition=competition.slug season=season.slug venue=venue.slug datestr=d|date:"Ymd" as url1 %}
+					{% url application.name|add:":venue" season=season.slug venue=venue.slug datestr=d|date:"Ymd" as url2 %}
+					{% url application.name|add:":venue" venue=venue.slug datestr=d|date:"Ymd" as url3 %}
+					<li{% if d == selected_date %} class="current"{% endif %}><a href="{{ url1|default:url2|default:url3 }}">{{ d|date:"D j M" }}</a></li>
+				{% endfor %}
+			</ul>
+		{% endif %}
+	{% endblock %}
+
+	{% block matches %}
+		{# kick-off times are local to the place, as on the match detail page #}
+		{% timezone venue.timezone|default:season.timezone %}
+			{% include "tournamentcontrol/competition/_place_matches.html" with show_ground=grounds %}
+		{% endtimezone %}
+	{% endblock %}
+{% endblock %}

@@ -19,7 +19,6 @@ def remove_hash_prefix(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("competition", "0011_custom_twitter_ladderpoints_fields"),
     ]

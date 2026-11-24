@@ -1,0 +1,13 @@
+{% load i18n admin_workbook %}{% comment %}
+	On a phone the rail is folded away, so a page names the sections of its
+	component at its top, to move between them in one tap. They are the
+	sections the rail shows this person (see ``Explorer.shown``).
+{% endcomment %}{% if component %}{% admin_tree as tree %}{% for root in tree.roots %}{% if root.on_trail and root.children|length > 1 %}
+<nav aria-label="{% blocktrans with name=component.verbose_name %}{{ name }} sections{% endblocktrans %}">
+	<ul class="wb-sections">
+		{% for section in root.children %}
+			<li><a href="{{ section.url }}"{% if section.url == request.path %} aria-current="page"{% endif %}>{{ section.label }}</a></li>
+		{% endfor %}
+	</ul>
+</nav>
+{% endif %}{% endfor %}{% endif %}

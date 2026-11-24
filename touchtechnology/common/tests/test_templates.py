@@ -1,14 +1,67 @@
-from urllib.parse import urlparse, urlunparse
+import platform
+import sys
+from importlib import import_module, metadata
 
-from django.template import Context, Template
+import django
+from django.template import Context, Template, engines
+from django.template.engine import Engine
 from django.test.utils import override_settings
-from django.utils.http import urlencode
 from test_plus import TestCase
 
 from touchtechnology.common.models import SitemapNode
 
 CSSIFY_TEMPLATE = Template("{% load common %}{{ value|cssify }}")
 TWITTIFY_TEMPLATE = Template("{% load common %}{{ value|twittify }}")
+
+
+class LibraryRegistrationTest(TestCase):
+    """
+    Regression test for goodtune/vitriolic#82.
+
+    The ``common`` template tag library used to call ``get_template`` at
+    import time. In a fresh process (such as a celery worker generating
+    scorecards) that caused the template engine to be initialised while the
+    ``common`` module was only partially imported, so Django's library
+    discovery silently skipped it and every ``{% load common %}`` then failed
+    with ``'common' is not a registered tag library``.
+    """
+
+    MODULE = "touchtechnology.common.templatetags.common"
+
+    def setUp(self):
+        super().setUp()
+        original_module = sys.modules.pop(self.MODULE)
+        original_engines = engines._engines
+        engines._engines = {}
+        Engine.get_default.cache_clear()
+
+        def restore():
+            sys.modules[self.MODULE] = original_module
+            engines._engines = original_engines
+            Engine.get_default.cache_clear()
+
+        self.addCleanup(restore)
+
+    def test_common_registered_when_imported_before_engine(self):
+        # Simulate a process where the library module is imported before the
+        # template engine has been constructed for the first time.
+        import_module(self.MODULE)
+        libraries = engines["django"].engine.template_libraries
+        self.assertIn("common", libraries)
+        self.assertIn("dashboard", libraries)
+
+    def test_common_registered_when_discovered_by_engine(self):
+        # Simulate a process where engine construction is what first imports
+        # the library module.
+        libraries = engines["django"].engine.template_libraries
+        self.assertIn("common", libraries)
+        self.assertIn("dashboard", libraries)
+
+    def test_load_common_renders(self):
+        import_module(self.MODULE)
+        template = Template("{% load common %}{{ value|cssify }}")
+        value = template.render(Context({"value": "some-normal-slug"}))
+        self.assertEqual("some_normal_slug", value)
 
 
 class CssifyTest(TestCase):
@@ -30,7 +83,7 @@ class CssifyTest(TestCase):
 
 class NavigationTest(TestCase):
     @classmethod
-    def setUpClass(cls):
+    def setUpTestData(cls):
         cls.home = SitemapNode.objects.create(title="Home Page", slug="home")
         cls.about = SitemapNode.objects.create(title="About Us", slug="about")
         cls.about_people = SitemapNode.objects.create(
@@ -50,30 +103,94 @@ class NavigationTest(TestCase):
             hidden_from_navigation=True,
         )
 
-    @classmethod
-    def tearDownClass(cls):
-        pass
-
     def test_basic(self):
         template = Template("{% load common %}{% navigation %}")
         value = template.render(Context())
         self.assertHTMLEqual(
             value,
-            """
+            f"""
             <ul class="navigation">
-                <li class="root first NoneType" id="node{}">
+                <li class="root first NoneType" id="node{self.home.pk}">
                     <a href="/">Home Page</a>
                 </li>
-                <li class=" has_children NoneType" id="node{}">
+                <li class=" has_children NoneType" id="node{self.about.pk}">
                     <a href="/about/">About Us</a>
                 </li>
-                <li class=" last NoneType" id="node{}">
+                <li class=" last NoneType" id="node{self.contact.pk}">
                     <a href="/contact/">Contact Us</a>
                 </li>
             </ul>
-            """.format(
-                self.home.pk, self.about.pk, self.contact.pk
-            ),
+            """,
+        )
+
+    def test_a_tag_makes_a_single_query(self):
+        # Every page of a site runs several of these, so each one counts.
+        template = Template("{% load common %}{% navigation %}")
+        with self.assertNumQueries(1):
+            template.render(Context())
+
+    def test_the_children_of_a_hidden_node_are_hidden_too(self):
+        """
+        The nodes created here are added to the ones in ``setUpTestData``::
+
+            Home Page
+            About Us
+            ├── Our People
+            │   ├── Gary Reynolds
+            │   └── Fred Nurks (hidden)
+            └── Our Work
+            Contact Us
+            Staff Only (hidden)
+            └── Rosters
+            Retired (disabled)
+            └── Archive
+
+        Rosters and Archive are not hidden or disabled themselves, but are
+        within a node that is.
+        """
+        hidden = SitemapNode.objects.create(
+            title="Staff Only", slug="staff", hidden_from_navigation=True
+        )
+        SitemapNode.objects.create(title="Rosters", slug="rosters", parent=hidden)
+        disabled = SitemapNode.objects.create(
+            title="Retired", slug="retired", enabled=False
+        )
+        SitemapNode.objects.create(title="Archive", slug="archive", parent=disabled)
+
+        template = Template("{% load common %}{% navigation start_at=0 stop_at=3 %}")
+        value = template.render(Context())
+        self.assertHTMLEqual(
+            value,
+            f"""
+            <ul class="navigation">
+                <li class="root first NoneType" id="node{self.home.pk}">
+                    <a href="/">Home Page</a>
+                </li>
+                <li class=" has_children NoneType" id="node{self.about.pk}">
+                    <a href="/about/">About Us</a>
+                    <ul class="navigation">
+                        <li class=" first has_children NoneType"
+                            id="node{self.about_people.pk}">
+                            <a href="/about/people/">Our People</a>
+                            <ul class="navigation">
+                                <li class=" first last NoneType"
+                                    id="node{self.about_people_gary.pk}">
+                                    <a href="/about/people/goodtune/">
+                                        Gary Reynolds
+                                    </a>
+                                </li>
+                            </ul>
+                        </li>
+                        <li class=" last NoneType" id="node{self.about_work.pk}">
+                            <a href="/about/work/">Our Work</a>
+                        </li>
+                    </ul>
+                </li>
+                <li class=" last NoneType" id="node{self.contact.pk}">
+                    <a href="/contact/">Contact Us</a>
+                </li>
+            </ul>
+            """,
         )
 
     def test_current_node(self):
@@ -82,21 +199,19 @@ class NavigationTest(TestCase):
         value = template.render(context)
         self.assertHTMLEqual(
             value,
-            """
+            f"""
             <ul class="navigation">
-                <li class="root first NoneType" id="node{}">
+                <li class="root first NoneType" id="node{self.home.pk}">
                     <a href="/">Home Page</a>
                 </li>
-                <li class=" has_children NoneType" id="node{}">
+                <li class=" has_children NoneType" id="node{self.about.pk}">
                     <a href="/about/">About Us</a>
                 </li>
-                <li class=" current last NoneType" id="node{}">
+                <li class=" current last NoneType" id="node{self.contact.pk}">
                     <a href="/contact/">Contact Us</a>
                 </li>
             </ul>
-            """.format(
-                self.home.pk, self.about.pk, self.contact.pk
-            ),
+            """,
         )
 
     def test_start_stop(self):
@@ -104,33 +219,28 @@ class NavigationTest(TestCase):
         value = template.render(Context())
         self.assertHTMLEqual(
             value,
-            """
+            f"""
             <ul class="navigation">
-                <li class="root first NoneType" id="node{}">
+                <li class="root first NoneType" id="node{self.home.pk}">
                     <a href="/">Home Page</a>
                 </li>
-                <li class=" has_children NoneType" id="node{}">
+                <li class=" has_children NoneType" id="node{self.about.pk}">
                     <a href="/about/">About Us</a>
                     <ul class="navigation">
-                        <li class=" has_children first NoneType" id="node{}">
+                        <li class=" has_children first NoneType"
+                            id="node{self.about_people.pk}">
                             <a href="/about/people/">Our People</a>
                         </li>
-                        <li class=" last NoneType" id="node{}">
+                        <li class=" last NoneType" id="node{self.about_work.pk}">
                             <a href="/about/work/">Our Work</a>
                         </li>
                     </ul>
                 </li>
-                <li class=" NoneType last" id="node{}">
+                <li class=" NoneType last" id="node{self.contact.pk}">
                     <a href="/contact/">Contact Us</a>
                 </li>
             </ul>
-            """.format(
-                self.home.pk,
-                self.about.pk,
-                self.about_people.pk,
-                self.about_work.pk,
-                self.contact.pk,
-            ),
+            """,
         )
 
 
@@ -273,12 +383,9 @@ class TwittifyTest(TestCase):
 
 @override_settings(ROOT_URLCONF="example_app.urls")
 class QueryStringTest(TestCase):
-
     fixtures = ["query_string"]
 
-    def setUp(self):
-        self.query = dict(year=2013)
-        self.url = urlparse(self.reverse("querystring:index"))
+    query = {"year": 2013}
 
     def test_no_filter_no_page(self):
         self.get("querystring:index")
@@ -290,9 +397,7 @@ class QueryStringTest(TestCase):
         self.assertResponseNotContains('<span id="9">9</span>')
 
     def test_no_filter_page(self):
-        query = dict(page=2)
-        url = self.url._replace(query=urlencode(query, True))
-        self.get(urlunparse(url))
+        self.get("querystring:index", data={"page": 2})
 
         self.assertResponseContains('<a href="?page=3">3</a>')
         self.assertResponseNotContains('<a href="?page=4">4</a>')
@@ -301,24 +406,22 @@ class QueryStringTest(TestCase):
         self.assertResponseContains('<span id="9">9</span>')
 
     def test_filter_no_page(self):
-        url = self.url._replace(query=urlencode(self.query, True))
-        self.get(urlunparse(url))
+        self.get("querystring:index", data=self.query)
 
-        link = '<a href="?year={year}&amp;page={page}">{page}</a>'
-        self.assertResponseContains(link.format(page=2, **self.query))
-        self.assertResponseNotContains(link.format(page=3, **self.query))
+        year = self.query["year"]
+        self.assertResponseContains(f'<a href="?year={year}&amp;page=2">2</a>')
+        self.assertResponseNotContains(f'<a href="?year={year}&amp;page=3">3</a>')
 
         self.assertResponseContains('<span id="5">5</span>')
         self.assertResponseNotContains('<span id="9">9</span>')
 
     def test_filter_page(self):
-        query = dict(page=2, **self.query)
-        url = self.url._replace(query=urlencode(query, True))
-        self.get(urlunparse(url))
+        self.get("querystring:index", data={"page": 2, **self.query})
 
-        link = '<a href="?year={year}&amp;page={page}">{page}</a>'
-        self.assertResponseContains(link.format(page=2, **self.query))
-        self.assertResponseNotContains(link.format(page=3, **self.query))
+        # The page keeps its place among the request's parameters.
+        year = self.query["year"]
+        self.assertResponseContains(f'<a href="?page=2&amp;year={year}">2</a>')
+        self.assertResponseNotContains(f'<a href="?page=3&amp;year={year}">3</a>')
 
         self.assertResponseNotContains('<span id="5">5</span>')
         self.assertResponseContains('<span id="9">9</span>')
@@ -326,45 +429,48 @@ class QueryStringTest(TestCase):
 
 @override_settings(ROOT_URLCONF="example_app.urls")
 class ContextTest(TestCase):
+    # The templates render the bare value, with no element to assert on.
     def test_env(self):
-        self.get("context:env")
-        self.assertResponseContains("dev", html=False)
+        self.get_check_200("context:env")
+        self.assertContext("SITE_ENV", "dev")
 
     def test_tz(self):
-        self.get("context:tz")
-        self.assertResponseContains("UTC", html=False)
+        self.get_check_200("context:tz")
+        self.assertContext("TIME_ZONE", "UTC")
 
 
 class VersionTest(TestCase):
     def test_version_python(self):
         """Test version tag for Python returns expected structure."""
         template = Template("{% load common %}{% version 'python' %}")
-        output = template.render(Context()).strip()
-        # Should contain a version div with Python info
-        self.assertIn('class="version"', output)
-        self.assertIn('id="pkg_Python"', output)  # name is "Python" for python package
-        self.assertIn("Python", output)
-        # Should contain a version number (e.g., 3.12.x)
-        self.assertRegex(output, r"\d+\.\d+")
+        output = template.render(Context())
+        self.assertHTMLEqual(
+            output,
+            '<div class="version" id="pkg_Python">'
+            f'<span class="release">Python {platform.python_version()}</span>'
+            "</div>",
+        )
 
     def test_version_django(self):
         """Test version tag for Django package."""
         template = Template("{% load common %}{% version 'django' %}")
-        output = template.render(Context()).strip()
-        # Should contain a version div with Django info
-        self.assertIn('class="version"', output)
-        self.assertIn(
-            'id="pkg_django"', output
-        )  # name is lowercase for regular packages
-        self.assertIn("Django", output)
-        # Should contain a version number
-        self.assertRegex(output, r"\d+\.\d+")
+        output = template.render(Context())
+        # A final release has no pre-release part.
+        state = "release" if django.VERSION[3] == "final" else "development"
+        self.assertHTMLEqual(
+            output,
+            '<div class="version" id="pkg_django">'
+            f'<span class="{state}">Django {metadata.version("django")}</span>'
+            "</div>",
+        )
 
     def test_version_nonexistent_package(self):
         """Test version tag for non-existent package."""
         template = Template("{% load common %}{% version 'nonexistentpackage123' %}")
-        output = template.render(Context()).strip()
-        # Should contain unversioned div when package not found
-        self.assertIn('class="version"', output)
-        self.assertIn('id="unknown"', output)
-        self.assertIn("Unversioned", output)
+        output = template.render(Context())
+        self.assertHTMLEqual(
+            output,
+            '<div class="version" id="unknown">'
+            '<span class="development">Unversioned</span>'
+            "</div>",
+        )

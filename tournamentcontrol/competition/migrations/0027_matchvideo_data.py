@@ -15,7 +15,6 @@ def noop(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("competition", "0026_matchvideo"),
     ]

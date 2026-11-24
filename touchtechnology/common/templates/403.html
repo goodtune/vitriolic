@@ -1,0 +1,10 @@
+{% extends "http4xx.html" %}
+{% load i18n %}
+
+{% block code %}403{% endblock %}
+
+{% block page_title %}{% trans "Forbidden" %}{% endblock %}
+
+{% block content %}
+	<p>{% trans "You do not have permission to view this page." %}</p>
+{% endblock %}

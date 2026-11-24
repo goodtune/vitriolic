@@ -1,0 +1,22 @@
+{% extends "touchtechnology/admin/explorer/list.inc.html" %}
+{% load i18n admin admin_explorer %}
+
+{% block actions %}{% endblock %}
+
+{% block table-headings %}
+	<th>{% trans "Team" %}</th>
+	<th>{% trans "Competition" %}</th>
+	<th>{% trans "Season" %}</th>
+	<th class="wide-only">{% trans "Division" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	<td class="title-cell"><a href="{{ obj.urls.edit }}">{% icon "team" %}<span>{{ obj.title }}</span></a></td>
+	<td>{{ obj.division.season.competition.short_title|default:obj.division.season.competition.title }}</td>
+	<td>{{ obj.division.season.short_title|default:obj.division.season.title }}</td>
+	<td class="wide-only">{{ obj.division.title }}</td>
+{% endblock table-columns %}
+
+{% block table-row-empty %}
+	<tr><td colspan="5" class="empty-state">{% trans "This club has no teams yet." %}</td></tr>
+{% endblock %}

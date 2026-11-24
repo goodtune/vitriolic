@@ -1,0 +1,31 @@
+{% extends "touchtechnology/admin/workbook/edit.html" %}
+{% load i18n common admin_workbook %}
+
+{% block page_title %}{% blocktrans with types=model|types %}Add {{ types }}{% endblocktrans %}{% endblock %}
+{% block eyebrow %}{% trans "Add several at once" %}{% endblock %}
+{% block heading %}{% blocktrans with types=model|types %}Add {{ types }}{% endblocktrans %}{% endblock %}
+{% block lede %}<p class="wb-lede">{% blocktrans with types=model|types %}Each row you fill in adds one of the {{ types }}, after any that already exist. Rows left blank are ignored.{% endblocktrans %}</p>{% endblock %}
+{% block form-title %}{% blocktrans with count=formset.forms|length %}{{ count }} rows{% endblocktrans %}{% endblock %}
+{% block form-class %}{% endblock %}
+
+{% block form-fieldset %}
+	{{ formset.management_form }}
+	<ol class="wb-bulk">
+		{% for form in formset %}
+			<li class="wb-bulk-row">
+				<span class="wb-bulk-number" aria-hidden="true">{{ form.instance.order|default:forloop.counter }}</span>
+				{% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+				<div class="wb-bulk-fields">
+					{% for field in form.visible_fields %}
+						{% field field %}
+					{% endfor %}
+				</div>
+			</li>
+		{% endfor %}
+	</ol>
+{% endblock %}
+
+{% block extracss %}
+	{{ block.super }}
+	{{ formset.media|admin_media }}
+{% endblock %}

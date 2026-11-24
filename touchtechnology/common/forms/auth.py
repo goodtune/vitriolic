@@ -28,7 +28,7 @@ class EmailAuthenticationForm(BootstrapFormControlMixin, AuthenticationForm):
     username = EmailField(label=_("Email Address"))
 
     def __init__(self, *args, **kwargs):
-        super(EmailAuthenticationForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         for field_name in self.fields:
             self.fields[field_name].widget.attrs["class"] += " text-center"
 
@@ -58,9 +58,7 @@ class RegistrationForm(forms.Form):
         password2 = self.cleaned_data.get("password2")
         if password1 and password2:
             if password1 != password2:
-                raise forms.ValidationError(
-                    _("The two password fields " "didn't match.")
-                )
+                raise forms.ValidationError(_("The two password fields didn't match."))
         return password2
 
 
@@ -70,10 +68,10 @@ class PermissionForm(ModelForm):
     """
 
     staff_only: bool = True
-    max_checkboxes: int = 7  # Set based on number of rows visible in MVP layout
+    max_checkboxes: int = 7  # Set based on number of rows visible in the admin layout
 
     def __init__(self, permission, *args, **kwargs):
-        super(PermissionForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.content_type = ContentType.objects.get_for_model(self.instance)
         self.permission = permission
 
@@ -100,16 +98,13 @@ class PermissionForm(ModelForm):
         self.fields["groups"].widget.attrs.setdefault("class", "form-control")
 
     def __repr__(self):
-        return "<%s: %s?%s>" % (
-            self.__class__.__name__,
-            self.permission.codename,
-            urlencode(
-                {
-                    "staff_only": self.staff_only,
-                    "max_checkboxes": self.max_checkboxes,
-                }
-            ),
+        query = urlencode(
+            {
+                "staff_only": self.staff_only,
+                "max_checkboxes": self.max_checkboxes,
+            }
         )
+        return f"<{self.__class__.__name__}: {self.permission.codename}?{query}>"
 
     @cached_property
     def _users_with_perms(self):
@@ -152,7 +147,7 @@ class PermissionForm(ModelForm):
             for grant in grant_users.union(grant_groups):
                 assign_perm(self.permission.codename, grant, self.instance)
 
-        return super(PermissionForm, self).save(*args, **kwargs)
+        return super().save(*args, **kwargs)
 
 
 def permissionformset_factory(
@@ -188,7 +183,7 @@ def permissionformset_factory(
 
     meta = type("Meta", (), {"model": model, "fields": ("id",)})
     form_class = type(
-        "%sPermissionForm" % model.__name__,
+        f"{model.__name__}PermissionForm",
         (PermissionForm,),
         {
             "Meta": meta,
@@ -198,7 +193,7 @@ def permissionformset_factory(
     )
     formset_base = formset_factory(form_class)
     formset_class = type(
-        "%sPermissionFormSet" % model.__name__,
+        f"{model.__name__}PermissionFormSet",
         (PermissionFormSetMixin, formset_base),
         {},
     )

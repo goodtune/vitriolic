@@ -1,0 +1,35 @@
+{% extends "tournamentcontrol/competition/compops/base.html" %}
+{% load tz %}
+{% block title %}Timekeeper · {{ venue.title }}{% endblock %}
+{% block extracss %}<meta http-equiv="refresh" content="30">{% endblock %}
+{% block body %}{% timezone tzinfo %}
+<header class="topbar">
+	<a class="brand" href="{% url 'compops:index' %}">TOURNAMENT OPS</a>
+	<span class="season">{{ season }}</span>
+	<span class="spacer"></span>
+</header>
+<main class="index">
+	<h1>Timekeeper · {{ venue.title }}</h1>
+	{% if venue.scoreboard_auto_start %}
+		<p class="sub">The clocks of this venue start on time, by themselves.</p>
+	{% else %}
+		<p class="sub">One press starts the clock on every field of a round.</p>
+	{% endif %}
+	{% for round in rounds %}
+		<section class="round">
+			<h2>{{ round.kick_off|time:"H:i" }}</h2>
+			{% if round.waiting %}
+				{% url 'compops:timekeeper-start' competition=season.competition.slug season=season.slug venue=venue.slug kick_off=round.key as start_url %}
+				<form method="post" action="{{ start_url }}">{% csrf_token %}<button class="btn p" type="submit">Start {{ round.waiting|length }} clock{{ round.waiting|length|pluralize }}</button></form>
+			{% endif %}
+			<ul class="list">
+				{% for match, clock in round.matches %}
+					<li><span class="item"><span class="title">{{ match.ground.title }}</span><span class="comp">{{ match.get_home_team_plain }} v {{ match.get_away_team_plain }}</span><span class="when">{% if clock is None %}No clock{% elif clock.start is None %}Waiting{% elif match.clock_started_at %}Started {{ clock.start|time:"H:i:s" }}{% else %}On time{% endif %}</span></span></li>
+				{% endfor %}
+			</ul>
+		</section>
+	{% empty %}
+		<p class="empty">No matches at {{ venue.title }} today.</p>
+	{% endfor %}
+</main>
+{% endtimezone %}{% endblock %}

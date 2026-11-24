@@ -1,0 +1,35 @@
+{% extends "touchtechnology/content/admin/explorer/base.html" %}
+{% load i18n common admin admin_explorer %}
+
+{% block page_title %}{% if pagenode.object_id %}{{ pagenode.title }}{% else %}{% trans "New page" %}{% endif %}{% endblock %}
+{% block page_kind %}{% if pagenode.object_id %}{% trans "Page" %}{% else %}{% trans "Not saved yet" %}{% endif %}{% endblock %}
+{% block page_icon %}<span class="title-icon">{% icon "page" %}</span>{% endblock %}
+
+{% block page_actions %}
+	{% if pagenode.id %}
+		{% if pagenode.get_absolute_url %}<a class="button quiet" href="{{ pagenode.get_absolute_url }}" target="_blank">{% icon "external" %}<span>{% trans "View on the site" %}</span></a>{% endif %}
+		{% if pagenode.is_leaf_node %}<a class="button destructive-quiet" href="{% url 'admin:content:page:delete' pagenode.id %}">{% icon "trash" %}<span>{% trans "Delete" %}</span></a>{% endif %}
+	{% endif %}
+	<div class="form-buttons">
+		<a class="button" href="{% url 'admin:content:index' %}{% if pagenode.parent %}?r={{ pagenode.parent.pk }}{% endif %}">{% trans "Cancel" %}</a>
+		<button type="submit" form="edit-form" class="button primary">{% icon "check" %}<span>{% trans "Save" %}</span></button>
+	</div>
+{% endblock %}
+
+{% block content %}
+	<form id="edit-form" action="" method="post">
+		{% csrf_token %}
+		<section class="form-section">
+			<h2>{% trans "Where it sits" %}</h2>
+			<div class="fields">{% for f in forms.sitemapnode %}{% field f %}{% endfor %}</div>
+		</section>
+		<section class="form-section">
+			<h2>{% trans "What it says" %}</h2>
+			{% for section, content in contents %}{% field content.copy "" %}{% endfor %}
+		</section>
+		<section class="form-section">
+			<h2>{% trans "How it looks" %}</h2>
+			<div class="fields">{% for f in forms.page %}{% field f %}{% endfor %}</div>
+		</section>
+	</form>
+{% endblock %}

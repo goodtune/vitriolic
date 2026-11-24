@@ -1,0 +1,29 @@
+{% extends "touchtechnology/admin/explorer/list.inc.html" %}
+{% load i18n admin admin_explorer %}
+
+{% block actions %}
+	{% url 'admin:fixja:competition:season:division:bulk' competition.pk season.pk as bulk_url %}
+	{% trans "Add several divisions" as bulk_title %}
+	{% include "tournamentcontrol/competition/admin/explorer/_add_many.inc.html" with name="division" url=bulk_url title=bulk_title %}
+	{{ block.super }}
+{% endblock %}
+
+{% block table-headings %}
+	<th>{% trans "Division" %}</th>
+	<th class="wide-only">{% trans "Short title" %}</th>
+	<th class="num">{% trans "Teams" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	{{ block.super }}
+	<td class="wide-only">{{ obj.short_title|default:"&ndash;" }}</td>
+	<td class="num">{{ obj.teams.count }}</td>
+{% endblock %}
+
+{% block empty-row-colspan %}4{% endblock %}
+
+{% block row-buttons-items %}
+	<a href="{% url 'admin:fixja:competition:season:division:scorers' competition.pk season.pk obj.pk %}">{% icon "chart" %}{% trans "Leaders" %}</a>
+	<a href="{% url 'admin:fixja:competition:season:division:export-json' competition.pk season.pk obj.pk %}">{% icon "download" %}{% trans "Export as JSON" %}</a>
+	{{ block.super }}
+{% endblock %}

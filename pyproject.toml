@@ -7,22 +7,33 @@ license = "BSD-3-Clause"
 authors = [
     { "name" = "Gary Reynolds", "email" = "gary@touch.asn.au" }
 ]
-classifiers = []
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Web Environment",
+    "Framework :: Django",
+    "Framework :: Django :: 5.2",
+    "Framework :: Django :: 6.0",
+    "Framework :: Django :: 6.1",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+]
 requires-python = ">=3.11,<3.15"
 dependencies = [
     "django-guardian>=2.4",
-    "django-mcp-server>=0.5.5",
-    "django-modelforms>=1.0",
+    "django-modelforms>=1.0.2",
     "django-mptt",
     "django-timezone-field",
-    "django>=4.2",
+    "django>=5.2",
     "first",
-    # django-mcp-server imports `FastMCP` from `mcp.server`, which mcp 2.0
-    # removed, but it only requires `mcp>=1.8.0` -- so a fresh install
-    # resolves mcp 2.x and `django.setup()` fails before anything runs.
-    # Drop this once django-mcp-server releases a version that supports
-    # mcp 2.x; 0.5.7 is the latest and does not.
-    "mcp<2",
+    "mcp>=2.3,<3",
     "namedentities",
     "psycopg",
 ]
@@ -30,15 +41,23 @@ dynamic = ["version"]
 
 [dependency-groups]
 dev = [
-    "black>=25.1.0",
-    "isort>=6.0.1",
     "ruff>=0.12.8",
 ]
+docs = [
+    "vale==3.28.1.0",
+]
 test = [
-    "coverage",
+    "babel==2.18.0",
     "django-environ",
+    "django-template-partials>=25.3",
     "django-test-plus",
     "factory_boy",
+    "fakeredis>=2.39",
+    # fakeredis 2.40.0, the newest, cannot make a client with redis 8.2: it
+    # reads ``__closure__`` from every ``__init__`` it finds, and 8.2 has one
+    # written in C. Lift this when a fakeredis release works with it. The
+    # package itself asks only for redis>=5.0.1.
+    "redis<8.3",
     "freezegun",
     "mcp",
     "packaging>=25.0",
@@ -48,21 +67,23 @@ test = [
     "pytest-playwright",
     "pytest",
     "requests",
+    "responses",
     "tblib",
+    "uvicorn>=0.30",
     "whitenoise>=6.9.0",
 ]
 
 [project.optional-dependencies]
-admin = ["django-bootstrap3", "django-gravatar2"]
+admin = []
 common = []
 content = []
 news = [
-    "babel",
     "django-imagekit",
     "python-dateutil",
     "python-magic",
 ]
 competition = [
+    "beautifulsoup4>=4.12",
     "pydantic>=2.0",
     "celery>5",
     "cloudinary",
@@ -71,6 +92,7 @@ competition = [
     "django-formtools",
     "django-htmx>=1.23.2",
     "django-mathfilters",
+    "django-oauth-toolkit>=3.4",
     "djangorestframework>3.11",
     "drf-nested-routers",
     "google-api-python-client",
@@ -81,35 +103,47 @@ competition = [
     "pyparsing",
     "python-dateutil",
     "python-magic",
+    "requests",
+]
+async = [
+    "datastar-py>=1.0.3",
+    "redis>=5.0.1",
 ]
 # Deprecated optional dependencies
 redis = []
 
 [build-system]
-requires = ["setuptools", "setuptools-scm[toml]>=6.2"]
+requires = ["setuptools", "setuptools-scm[toml]>=6.2", "Babel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 include-package-data = true
 zip-safe = false
 
+# Compile the translation catalogues as part of the build; see the module.
+[tool.setuptools.cmdclass]
+build_py = "build_catalogues.BuildPyWithCatalogues"
+
 [tool.setuptools.packages.find]
 include = ["touchtechnology*", "tournamentcontrol*"]
 
 [tool.setuptools_scm]
 
-[tool.isort]
-combine_as_imports = true
-default_section = "THIRDPARTY"
-include_trailing_comma = true
-multi_line_output = 5
-
-[tool.black]
-line-length = 88
-target-version = ["py39", "py312"]
-
 [tool.ruff]
 line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+# Ruff's default rule set plus import sorting (replaces flake8 and isort).
+# Line length is the formatter's job, so E501 stays off.
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+# Generated migrations were never linted by flake8; only sort their imports.
+"**/migrations/*.py" = ["E", "F"]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
 
 [tool.uv]
 prerelease = "if-necessary-or-explicit"

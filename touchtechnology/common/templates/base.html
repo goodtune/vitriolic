@@ -18,6 +18,10 @@
 		<link rel="stylesheet" href="{% get_static_prefix %}css/{% if not debug %}min/{% endif %}reset.css" />
 		<link rel="stylesheet" href="{% get_static_prefix %}css/{% if not debug %}min/{% endif %}text.css" />
 		<link rel="stylesheet" href="{% get_static_prefix %}css/{% if not debug %}min/{% endif %}960.css" />
+		{% block defaultcss %}
+			{# Default look for the stock templates; override this block (or basecss) to drop it. #}
+			<link rel="stylesheet" href="{% static 'touchtechnology/common/css/vitriolic.css' %}" />
+		{% endblock %}
 	{% endblock %}
 {% block extracss %}{% endblock %}
 {% block extrajs %}{% endblock %}

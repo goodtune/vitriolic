@@ -3,9 +3,22 @@ from django.contrib.auth.models import Group
 from django.utils.translation import gettext_lazy as _
 from modelforms.forms import ModelForm
 
-from touchtechnology.common.forms.mixins import UserMixin
+from touchtechnology.common.forms.mixins import BootstrapFormControlMixin, UserMixin
 
 UserModel = get_user_model()
+
+
+class AdminFormControlMixin(BootstrapFormControlMixin):
+    """
+    The admin's own form base.
+
+    Forms the admin builds dynamically derive from this rather than from the
+    public site's mixin, so the admin can change how its forms behave without
+    changing the public forms. The admin's shells draw their controls
+    themselves and rely on no Bootstrap class, so this gives the widgets none.
+    """
+
+    control_class = None
 
 
 class UserEditForm(UserMixin, ModelForm):
@@ -28,7 +41,7 @@ class UserEditForm(UserMixin, ModelForm):
 
 class GroupEditForm(UserMixin, ModelForm):
     def __init__(self, *args, **kwargs):
-        super(GroupEditForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         # The django.contrib applications don't benefit from the
         # touchtechnology.common database fields, so we need to tweak this
         # field queryset the old fashioned way to make sure we're doing a join.
@@ -43,5 +56,5 @@ class GroupEditForm(UserMixin, ModelForm):
             "permissions",
         )
         help_texts = {
-            "permissions": _("Members of this group will have " "these permissions."),
+            "permissions": _("Members of this group will have these permissions."),
         }

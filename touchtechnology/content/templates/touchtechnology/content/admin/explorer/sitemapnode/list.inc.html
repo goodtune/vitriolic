@@ -1,0 +1,40 @@
+{% extends "touchtechnology/admin/explorer/list.inc.html" %}
+{% load i18n admin admin_explorer %}
+
+{% block table-headings %}
+	<th>{% trans "Page" %}</th>
+	<th>{% trans "Shown" %}</th>
+	<th class="wide-only">{% trans "Address" %}</th>
+{% endblock table-headings %}
+
+{% block table-columns %}
+	<td class="title-cell">
+		{% with edit_url=obj|admin_url:"edit" %}
+			{% if change_perm in object_perms and edit_url %}<a href="{{ edit_url }}">{% if obj.content_type.model == "page" %}{% icon "page" %}{% elif obj.content_type.model == "placeholder" %}{% icon "puzzle" %}{% else %}{% icon "folder" %}{% endif %}<span>{{ obj }}</span></a>{% else %}<span>{{ obj }}</span>{% endif %}
+		{% endwith %}
+	</td>
+	<td>
+		{% if not obj.enabled %}<span class="tag bad">{% trans "Off" %}</span>{% endif %}
+		{% if not obj.hidden_from_sitemap %}<span class="tag" title="{% trans "Listed in the site map" %}">{% trans "Menu" %}</span>{% endif %}
+		{% if not obj.hidden_from_robots %}<span class="tag" title="{% trans "Visible to search engines" %}">{% trans "Search" %}</span>{% endif %}
+	</td>
+	<td class="wide-only"><a href="{{ obj.get_absolute_url }}" target="_blank">{{ obj.get_absolute_url }}</a></td>
+{% endblock table-columns %}
+
+{% block empty-row-colspan %}4{% endblock %}
+
+{% block row-buttons-extra %}
+	{% if not obj.is_leaf_node %}
+		<a class="button compact" href="?r={{ obj.pk }}">{% icon "folder-open" %}<span>{% trans "Open" %}</span></a>
+	{% endif %}
+	{% url 'admin:reorder' obj.pk "up" as up_url %}
+	{% url 'admin:reorder' obj.pk "down" as down_url %}
+	{% include "touchtechnology/admin/explorer/_reorder.inc.html" %}
+{% endblock row-buttons-extra %}
+
+{% block row-buttons-items %}
+	<a href="{{ obj.get_absolute_url }}" target="_blank">{% icon "external" %}{% trans "View on the site" %}</a>
+	{# A node is what it holds; its model's name would call every one a folder. #}
+	{% if obj.content_type.model == "page" %}{% trans "page" as kind %}{% elif obj.content_type.model == "placeholder" %}{% trans "application" as kind %}{% else %}{% trans "folder" as kind %}{% endif %}
+	{{ block.super }}
+{% endblock row-buttons-items %}

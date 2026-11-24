@@ -1,0 +1,29 @@
+{% extends "tournamentcontrol/competition/admin/workbook/base.html" %}
+{% load i18n common admin_workbook %}
+
+{% block page_title %}{% trans "Produce scorecards" %}{% endblock %}
+
+{% block content %}
+	{% trans "Reports" as eyebrow %}{% trans "Produce scorecards" as title %}{% blocktrans asvar lede with step=wizard.steps.step1 count=wizard.steps.count %}Step {{ step }} of {{ count }}{% endblocktrans %}
+	{% include "tournamentcontrol/competition/admin/workbook/_page_head.html" %}
+
+	<form class="wb-sheet wb-narrow wb-form" action="" method="post">{% csrf_token %}
+		{{ wizard.management_form }}
+		{% include "touchtechnology/admin/workbook/_problems.html" with form=wizard.form %}
+		{% with field_template="touchtechnology/admin/workbook/templatetags/field.html" %}
+			<div class="wb-fields">
+				{% for f in wizard.form %}
+					{% field f %}
+				{% endfor %}
+			</div>
+		{% endwith %}
+		<div class="wb-formfoot">
+			<div class="wb-actions">
+				<button class="wb-button wb-button-primary" type="submit">{% if wizard.steps.current == wizard.steps.last %}{% trans "Generate" %}{% else %}{% trans "Next" %}{% endif %}</button>
+				{% if wizard.steps.prev %}
+					<button class="wb-button" name="wizard_prev_step" value="{{ wizard.steps.prev }}">{% trans "Back" %}</button>
+				{% endif %}
+			</div>
+		</div>
+	</form>
+{% endblock %}

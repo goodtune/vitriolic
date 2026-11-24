@@ -5,6 +5,7 @@ from operator import add, or_
 from dateutil.parser import parse
 from django import forms
 from django.db.models import Q
+from django.forms.formsets import DELETION_FIELD_NAME
 from django.http import HttpResponse, HttpResponseRedirect
 from django.utils.translation import gettext_lazy as _
 from first import first
@@ -14,6 +15,7 @@ from touchtechnology.common.forms.fields import (
     ModelChoiceField,
     ModelMultipleChoiceField,
 )
+from tournamentcontrol.competition.draw.generators import MatchCollection
 from tournamentcontrol.competition.models import Season
 from tournamentcontrol.competition.tasks import generate_pdf_scorecards
 from tournamentcontrol.competition.utils import generate_scorecards
@@ -44,7 +46,7 @@ class SeasonForm(forms.Form):
     """
 
     def __init__(self, *args, **kwargs):
-        super(SeasonForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         seasons = (
             Season.objects.exclude(complete=True)
@@ -53,9 +55,7 @@ class SeasonForm(forms.Form):
         )
         self.fields["season"] = ModelChoiceField(
             queryset=seasons,
-            label_from_instance=lambda s: "{0} {1}".format(
-                s.competition.title, s.title
-            ),
+            label_from_instance=lambda s: f"{s.competition.title} {s.title}",
         )
 
 
@@ -66,7 +66,7 @@ class FilterForm(forms.Form):
     """
 
     def __init__(self, season, *a, **kw):
-        super(FilterForm, self).__init__(*a, **kw)
+        super().__init__(*a, **kw)
 
         # given a Season instance get all the matches which should have a
         # scorecard produced.
@@ -140,7 +140,7 @@ class FilterForm(forms.Form):
             query_filter &= Q(stage__division__in=divisions)
 
         matches = self.matches.filter(query_filter)
-        if not matches.count():
+        if not matches.exists():
             raise forms.ValidationError(
                 _("There are no matches that satisfy your criteria.")
             )
@@ -152,7 +152,7 @@ class FilterForm(forms.Form):
 
 class ScorecardWizardBase(SessionWizardView):
     def get_context_data(self, form, **kwargs):
-        context = super(ScorecardWizardBase, self).get_context_data(form, **kwargs)
+        context = super().get_context_data(form, **kwargs)
         context.update(self.extra_context)
         return context
 
@@ -185,8 +185,14 @@ class ScorecardWizardBase(SessionWizardView):
                 kw["_schema_name"] = self.request.tenant.schema_name
                 kw["base_url"] = self.request.build_absolute_uri("/")
 
+            # The task arguments must be serializable by celery, so model
+            # instances are passed by primary key and reloaded by the task.
             result = generate_pdf_scorecards.delay(
-                matches, templates, extra_context, **kw
+                match_pks=[pk for pk in matches.values_list("pk", flat=True)],
+                templates=templates,
+                extra_context={},
+                season_pk=season.pk,
+                **kw,
             )
 
             reverse_kwargs = {
@@ -200,7 +206,9 @@ class ScorecardWizardBase(SessionWizardView):
             )
             response = HttpResponseRedirect(redirect_to)
         else:
-            output = generate_scorecards(matches, templates, extra_context)
+            output = generate_scorecards(
+                matches, templates, mode, extra_context=extra_context
+            )
             response = HttpResponse(output)
 
         return response
@@ -221,9 +229,14 @@ class DrawGenerationWizard(SessionWizardView):
     stage = None
     template_name = "tournamentcontrol/competition/admin/draw_generation/wizard.html"
 
+    def get_template_names(self):
+        # The page of the shell the admin wears, which the view was given.
+        shell = self.extra_context["shell"]
+        return shell.names(self.template_name)
+
     def get_form_initial(self, step):
         if step == "0":
-            if self.stage.pools.count():
+            if self.stage.pools.exists():
                 queryset = self.stage.pools.all()
             else:
                 queryset = self.stage.division.stages.filter(pk=self.stage.pk)
@@ -231,15 +244,18 @@ class DrawGenerationWizard(SessionWizardView):
 
     def get_form_kwargs(self, step):
         if step == "1":
+            # A stage or pool marked Skip offers no matches.
             data = self.get_cleaned_data_for_step("0")
-            matches = functools.reduce(add, [d["matches"] for d in data])
+            matches = functools.reduce(
+                add,
+                (d["matches"] for d in data if not d.get(DELETION_FIELD_NAME)),
+                MatchCollection(),
+            )
             return {"queryset": matches}
         return {}
 
     def get_context_data(self, form, **kwargs):
-        context = super(DrawGenerationWizard, self).get_context_data(
-            form=form, **kwargs
-        )
+        context = super().get_context_data(form=form, **kwargs)
         context.update(self.extra_context)
         context.update(
             {

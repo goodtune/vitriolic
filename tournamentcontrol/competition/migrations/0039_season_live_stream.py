@@ -4,7 +4,6 @@ import touchtechnology.common.db.models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("competition", "0038_match_live_stream"),
     ]

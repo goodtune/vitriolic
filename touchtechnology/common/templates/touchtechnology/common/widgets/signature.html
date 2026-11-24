@@ -1,0 +1,9 @@
+{% load i18n %}<div class="signature-field" data-signature-field>
+	<canvas class="signature-field-canvas" width="600" height="200" role="img" aria-label="{% trans "Signature" %}"></canvas>
+	<input type="hidden" name="{{ widget.name }}"{% if widget.value != None %} value="{{ widget.value }}"{% endif %}{% include "django/forms/widgets/attrs.html" %}>
+	<p class="signature-field-actions">
+		<button type="button" class="signature-field-clear" data-signature-clear>{% trans "Clear" %}</button>
+		<span class="signature-field-hint">{% trans "Sign in the box with a mouse, a finger or a stylus." %}</span>
+	</p>
+	<noscript><p class="signature-field-hint">{% trans "Signing needs JavaScript, which is turned off in this browser." %}</p></noscript>
+</div>

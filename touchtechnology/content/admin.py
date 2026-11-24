@@ -1,23 +1,29 @@
 import logging
 import os
+from collections import namedtuple
 
 from django.contrib import messages
-from django.core.files.storage import default_storage
-from django.db.models import Q
+from django.contrib.auth.decorators import permission_required
+from django.core.exceptions import PermissionDenied
+from django.core.files.storage import FileSystemStorage, default_storage
+from django.db.models import Count, Q
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
-from django.urls import include, path, re_path, resolve, reverse
+from django.urls import NoReverseMatch, include, path, re_path, resolve, reverse
+from django.utils.decorators import method_decorator
 from django.utils.functional import cached_property
+from django.utils.http import urlencode
 from django.utils.translation import gettext_lazy as _
-from first import first
 
 from touchtechnology.admin.base import AdminComponent
+from touchtechnology.admin.explorer import Explorer, Node
 from touchtechnology.admin.mixins import AdminUrlMixin
 from touchtechnology.common.decorators import (
     require_POST_m,
     staff_login_required_m,
 )
 from touchtechnology.common.models import SitemapNode
+from touchtechnology.common.utils import select_template_name
 from touchtechnology.content.forms import (
     FileUploadForm,
     NewFolderForm,
@@ -42,13 +48,105 @@ from touchtechnology.content.models import (
 logger = logging.getLogger(__name__)
 
 
+class ContentExplorer(Explorer):
+    """
+    The site's pages as the tree they are: the Sitemap section holds the top
+    level of the site, and each folder or page the ones beneath it.
+    (After the Explorer entry.)
+    """
+
+    ICONS = {"placeholder": "puzzle"}
+
+    def _sitemap_index(self):
+        url = str(self.component.reverse("index"))
+        for n, section in enumerate(self.sections()):
+            if section.url == url:
+                return n
+        return None
+
+    def section_node(self, request, index, section):
+        node = super().section_node(request, index, section)
+        if index == self._sitemap_index():
+            node.expandable = True
+        return node
+
+    def section_children(self, request, index):
+        if index == self._sitemap_index():
+            return self.sitemap_nodes(request, None)
+        return super().section_children(request, index)
+
+    def sitemap_nodes(self, request, parent):
+        nodes = SitemapNode.objects.filter(self.component.filter, parent=parent)
+        return [
+            self.sitemap_node(node) for node in nodes.select_related("content_type")
+        ]
+
+    def sitemap_node(self, node):
+        kind = getattr(node.content_type, "name", None)
+        try:
+            url = str(node.urls["edit"])
+        except NoReverseMatch:
+            url = None
+        return Node(
+            key=self.key(f"x:node:{node.pk}"),
+            label=node.title,
+            url=url,
+            icon=self.ICONS.get(kind) or self.shell.icons["kinds"].get(kind, "folder"),
+            expandable=not node.is_leaf_node(),
+        )
+
+    def custom_children(self, request, name, arg):
+        if name == "node":
+            return self.sitemap_nodes(request, int(arg))
+        return []
+
+    def trail(self, request, context):
+        node = None
+        for key in ("node", "pagenode", "object"):
+            if isinstance(context.get(key), SitemapNode) and context[key].pk:
+                node = context[key]
+                break
+        if node is None and request.GET.get("r", "").isdigit():
+            node = SitemapNode.objects.filter(pk=request.GET["r"]).first()
+        index = self._sitemap_index()
+        if node is None or index is None:
+            return super().trail(request, context)
+        keys = [self.key(f"s{index}")]
+        keys += [
+            self.key(f"x:node:{n.pk}") for n in node.get_ancestors(include_self=True)
+        ]
+        return keys
+
+    def parent_key(self, request, local):
+        if local.startswith("x:node:"):
+            node = SitemapNode.objects.filter(pk=local.split(":")[2]).first()
+            if node is not None and node.parent_id:
+                return self.key(f"x:node:{node.parent_id}")
+            index = self._sitemap_index()
+            return self.key(f"s{index}") if index is not None else self.key("")
+        return super().parent_key(request, local)
+
+    def label_of(self, request, local):
+        if local.startswith("x:node:"):
+            node = SitemapNode.objects.filter(pk=local.split(":")[2]).first()
+            return node.title if node else ""
+        return super().label_of(request, local)
+
+    def url_of(self, request, local):
+        if local.startswith("x:node:"):
+            node = SitemapNode.objects.filter(pk=local.split(":")[2]).first()
+            return self.sitemap_node(node).url if node else None
+        return super().url_of(request, local)
+
+
 class ContentAdminComponent(AdminComponent):
     verbose_name = _("Content")
+    explorer_class = ContentExplorer
 
     filter = Q(content_type__app_label="content") | Q(content_type__isnull=True)
 
     def __init__(self, app, name="content", app_name="content"):
-        super(ContentAdminComponent, self).__init__(app, name, app_name)
+        super().__init__(app, name, app_name)
 
     def get_urls(self):
         folder_patterns = (
@@ -142,10 +240,23 @@ class ContentAdminComponent(AdminComponent):
         ]
         return urlpatterns
 
+    def tasks(self, request):
+        return (
+            {
+                "label": _("Edit the website's pages"),
+                "url": self.reverse("index"),
+                "note": _("Pages, menus, files and redirects"),
+                "icon": "file-text",
+                "priority": 21,
+            },
+        )
+
     def dropdowns(self):
         dl = (
             (_("Sitemap"), self.reverse("index"), "sitemap"),
-            (_("Media"), self.reverse("media:list"), "folder-open"),
+            # Media is for a person who may view the site's files; its page
+            # draws the same picture glyph.
+            (_("Media"), self.reverse("media:list"), "image", "content.view_file"),
             (_("Chunks"), self.reverse("chunk:list"), "pencil-square-o"),
             (_("Redirects"), self.reverse("redirect:list"), "reply"),
             (_("Applications"), self.reverse("real_placeholder:list"), "puzzle-piece"),
@@ -199,6 +310,10 @@ class ContentAdminComponent(AdminComponent):
     @staff_login_required_m
     def edit_folder(self, request, pk=None, *args, **kwargs):
         form_class = NewSitemapNodeForm if pk is None else SitemapNodeForm
+        # Folders have no list of their own: a new one is found in the sitemap.
+        post_save_redirect = (
+            self.redirect(self.reverse("index")) if pk is None else None
+        )
         return self.generic_edit(
             request,
             SitemapNode,
@@ -206,6 +321,7 @@ class ContentAdminComponent(AdminComponent):
             form_class=form_class,
             related=(),
             permission_required=True,
+            post_save_redirect=post_save_redirect,
             extra_context=kwargs,
         )
 
@@ -214,7 +330,16 @@ class ContentAdminComponent(AdminComponent):
         node = get_object_or_404(SitemapNode, pk=pk)
         if not node.is_leaf_node():
             raise Http404
-        return self.generic_delete(request, SitemapNode, pk=pk, extra_context=kwargs)
+        redirect_to = str(self.reverse("index"))
+        if node.parent_id:
+            redirect_to = f"{redirect_to}?{urlencode({'r': node.parent_id})}"
+        return self.generic_delete(
+            request,
+            SitemapNode,
+            pk=pk,
+            post_delete_redirect=self.redirect(redirect_to),
+            extra_context=kwargs,
+        )
 
     # Page views
 
@@ -222,13 +347,18 @@ class ContentAdminComponent(AdminComponent):
     def list_pages(self, request, **extra_context):
         try:
             root = SitemapNode.objects.get(pk=request.GET["r"])
-            descendants = root.get_descendants()
-            nodes = descendants.filter(self.filter).filter(level=root.level + 1)
         except KeyError:
-            nodes = SitemapNode.objects.filter(self.filter).filter(level=0)
+            nodes = SitemapNode.objects.filter(level=0)
+        else:
+            # Each row's parent is this very ``root``, so a row's address is
+            # the folder's and its own slug: the folder's is worked out once.
+            root._cached_absolute_url = root.get_absolute_url()
+            nodes = root.children.all()
+            # The folder being looked in, for the page's heading.
+            extra_context.setdefault("root", root)
         return self.generic_list(
             request,
-            nodes,
+            nodes.filter(self.filter).select_related("content_type"),
             paginate_by=0,
             permission_required=True,
             extra_context=extra_context,
@@ -241,7 +371,7 @@ class ContentAdminComponent(AdminComponent):
             instance = get_object_or_404(SitemapNode, pk=pk)
             if instance.parent_id:
                 post_save_redirect = self.redirect(
-                    self.reverse("index") + "?r=%d" % instance.parent_id
+                    self.reverse("index") + f"?r={instance.parent_id}"
                 )
         return self.generic_parent_edit_related(
             request,
@@ -272,7 +402,7 @@ class ContentAdminComponent(AdminComponent):
             node.delete()
             redirect_to = self.reverse("index")
             if node.parent:
-                redirect_to += "?r=%d" % node.parent_id
+                redirect_to += f"?r={node.parent_id}"
             return HttpResponseRedirect(redirect_to)
 
         context = {
@@ -318,7 +448,8 @@ class ContentAdminComponent(AdminComponent):
     def list_placeholders(self, request, *args, **kwargs):
         return self.generic_list(
             request,
-            Placeholder,
+            # Each row shows how many nodes of the sitemap mount it.
+            Placeholder.objects.annotate(node_count=Count("nodes")),
             paginate_by=0,
             permission_required=True,
             extra_context=kwargs,
@@ -332,8 +463,35 @@ class ContentAdminComponent(AdminComponent):
 
     @staff_login_required_m
     def delete_placeholder_x(self, request, pk, *args, **kwargs):
+        def refuse_while_mounted(placeholder):
+            # Deleting an application deletes every node of the sitemap that
+            # mounts it (``Placeholder.nodes`` is a GenericRelation), so the
+            # person takes those out of the sitemap first.
+            nodes = placeholder.nodes.all()
+            if not nodes:
+                return None
+            messages.error(
+                request,
+                _(
+                    "“%(name)s” was not deleted: the sitemap still uses it at "
+                    "%(nodes)s. Delete those from the sitemap first."
+                )
+                % {
+                    "name": placeholder,
+                    "nodes": ", ".join(
+                        f"{node} ({node.get_absolute_url()})" for node in nodes
+                    ),
+                },
+            )
+            return self.redirect(self.reverse("real_placeholder:list"))
+
         return self.generic_delete(
-            request, Placeholder, pk=pk, permission_required=True, extra_context=kwargs
+            request,
+            Placeholder,
+            pk=pk,
+            permission_required=True,
+            pre_delete_callback=refuse_while_mounted,
+            extra_context=kwargs,
         )
 
     @staff_login_required_m
@@ -349,7 +507,7 @@ class ContentAdminComponent(AdminComponent):
             try:
                 site = instance.object.site(instance)
             except ValueError:
-                logger.exception("Application is unavailable, " "no custom form class.")
+                logger.exception("Application is unavailable, no custom form class.")
             else:
                 kwargs_form_class = site.kwargs_form_class or kwargs_form_class
 
@@ -368,11 +526,7 @@ class ContentAdminComponent(AdminComponent):
 
                 redirect_to = self.reverse("index")
                 if instance.parent:
-                    redirect_to += "?r=%d" % instance.parent_id
-
-                # post_save_callback if we ever move this to a generic_edit
-                # pattern in future.
-                instance.object.invalidate_cache()
+                    redirect_to += f"?r={instance.parent_id}"
 
                 return HttpResponseRedirect(redirect_to)
         else:
@@ -406,7 +560,7 @@ class ContentAdminComponent(AdminComponent):
                 raise Http404
             redirect_to = reverse("admin:content:index", current_app=self.app)
             if node.parent:
-                redirect_to += "?r=%d" % node.parent_id
+                redirect_to += f"?r={node.parent_id}"
             # if this was not a POST request, we don't make changes to the
             # database, we just display the warning page.
             node.delete()
@@ -439,10 +593,27 @@ class ContentAdminComponent(AdminComponent):
     def perms_chunk(self, request, pk, *args, **kwargs):
         return self.generic_permissions(request, Chunk, pk=pk, **kwargs)
 
+    # Media views. The site's files have no model: the content app's
+    # ``view_file``, ``add_file`` and ``delete_file`` permissions, held by
+    # ``Page``, guard them.
+
+    def folder_url(self, path):
+        """The list of the folder at ``path``, or of all the files when it is empty."""
+        if path:
+            return self.reverse("media:edit", kwargs={"path": path})
+        return self.reverse("media:list")
+
     @staff_login_required_m
+    @method_decorator(permission_required("content.view_file", raise_exception=True))
     def ls(self, request, path=None, *args, **kwargs):
         try:
             directories, files = default_storage.listdir(path or ".")
+        except FileNotFoundError as e:
+            # A site nobody has uploaded to has no media folder yet, which is
+            # an empty site's files, not a missing page. A folder in it can be.
+            if path:
+                raise Http404(e)
+            directories, files = [], []
         except OSError as e:
             raise Http404(e)
 
@@ -459,6 +630,11 @@ class ContentAdminComponent(AdminComponent):
         form_kwargs = dict(path=path)
 
         if request.method == "POST":
+            # Uploading a file or opening a folder adds to the site's files:
+            # viewing them is not enough.
+            if not request.user.has_perm("content.add_file"):
+                raise PermissionDenied
+
             # Give the Forms the POST and FILES from the request
             form_kwargs.update(dict(data=request.POST, files=request.FILES))
 
@@ -466,17 +642,29 @@ class ContentAdminComponent(AdminComponent):
             file_form = FileUploadForm(prefix="file", **form_kwargs)
 
             if folder_form.is_valid() and file_form.is_valid():
-                redirect_to = "."
+                # Back to this folder, or into the one just opened.
+                redirect_to = self.folder_url(path)
                 saved = None
 
                 if folder_form.has_changed():
-                    saved = folder_form.save()
+                    try:
+                        saved = folder_form.save()
+                    except NotImplementedError:
+                        messages.error(
+                            request,
+                            _(
+                                "The folder “%(name)s” was not made: this site's "
+                                "storage cannot make folders."
+                            )
+                            % {"name": folder_form.cleaned_data["name"]},
+                        )
+                        return self.redirect(redirect_to)
                     logger.debug("created folder %s", saved)
                     folder_name = os.path.basename(saved)
                     messages.success(
                         request, _('Opened new folder "%s".') % folder_name
                     )
-                    redirect_to = folder_name + "/"  # FIXME reverse this
+                    redirect_to = self.folder_url(os.path.join(saved, ""))
 
                 if file_form.has_changed():
                     saved = file_form.save()
@@ -499,7 +687,7 @@ class ContentAdminComponent(AdminComponent):
         directories = [_directories(d) for d in directories]
         match = resolve(request.path)
 
-        class FileOrFolder(AdminUrlMixin, object):
+        class FileOrFolder(AdminUrlMixin):
             def __init__(s, pk, name):
                 s.pk = pk
                 s.name = name
@@ -508,7 +696,7 @@ class ContentAdminComponent(AdminComponent):
                 return s.name
 
             def __repr__(s):
-                return "<%s: %s, %r>" % (s.__class__.__name__, s.name, s.urls)
+                return f"<{s.__class__.__name__}: {s.name}, {s.urls!r}>"
 
             def _get_admin_namespace(s):
                 return match.namespace
@@ -525,7 +713,7 @@ class ContentAdminComponent(AdminComponent):
                 args = s._get_url_args()
                 crud = {
                     "detail": default_storage.url(os.path.join(*args)),
-                    "delete": reverse("%s:delete" % namespace, args=args),
+                    "delete": reverse(f"{namespace}:delete", args=args),
                 }
                 return crud
 
@@ -543,7 +731,6 @@ class ContentAdminComponent(AdminComponent):
         object_list = [Folder(d[0], d[1]) for d in directories] + [
             File(f, f) for f in files
         ]
-        from collections import namedtuple
 
         context = {
             "path": path,
@@ -554,8 +741,9 @@ class ContentAdminComponent(AdminComponent):
             "file_form": file_form,
             "writable": writable,
             "object_list": object_list,
-            "queryset": Page.objects.all(),
-            "list_template": first(self.template_path("list.inc.html", "file")),
+            "list_template": select_template_name(
+                self.template_path("list.inc.html", "file")
+            ),
             "model": namedtuple("file", ()),
         }
         context.update(kwargs)
@@ -564,14 +752,15 @@ class ContentAdminComponent(AdminComponent):
         return self.render(request, templates, context)
 
     @staff_login_required_m
+    @method_decorator(permission_required("content.delete_file", raise_exception=True))
     def rm(self, request, path=None, filename=None, *args, **kwargs):
         try:
             directories, files = default_storage.listdir(path or ".")
         except OSError as e:
             logger.exception("path: %r", path)
-            raise Http404(e[1])
+            raise Http404(e)
 
-        class File(object):
+        class File:
             def __init__(self, path):
                 self.path = path
 
@@ -591,46 +780,53 @@ class ContentAdminComponent(AdminComponent):
                 return not any([item for item in listdir if item])
 
         fullpath = os.path.join(path or "", filename or "")
+        # The folder this file or folder is in: "" at the top.
+        parentdir = os.path.join(os.path.dirname(path.rstrip("/")), "") if path else ""
+
+        # Django's own FileSystemStorage has no rmdir, but its delete() removes
+        # an empty directory. Any other storage says whether it can.
+        if isinstance(default_storage, FileSystemStorage):
+            rmdir = default_storage.delete
+        else:
+            rmdir = getattr(default_storage, "rmdir", None)
 
         if filename:
-            cls, action, tpl = File, default_storage.delete, "file"
-            item = os.path.basename(fullpath)
-        elif hasattr(default_storage, "rmdir"):
-            cls, action, tpl = Folder, default_storage.rmdir, "folder"
-            item = os.path.basename(os.path.dirname(fullpath))
+            cls, action, tpl, kind = File, default_storage.delete, "file", _("file")
         else:
-            raise Http404(
-                "We can't handle this, as the "
-                "backend storage system does not "
-                "support removing directories."
-            )
-
-        if path is not None:
-            parentdir = os.path.normpath(os.path.join(path, "..")) + "/"
-        else:
-            parentdir = ""
-
+            cls, action, tpl, kind = Folder, rmdir, "folder", _("folder")
         obj = cls(fullpath)
+        item = os.path.basename(obj.path)
+
+        if action is None:
+            messages.error(
+                request,
+                _(
+                    "The folder “%(name)s” was not removed: this site's storage "
+                    "cannot remove folders."
+                )
+                % {"name": item},
+            )
+            return self.redirect(self.folder_url(parentdir))
+
         if not obj.is_leaf_node():
             messages.error(request, _('The folder "%s" is not empty.') % item)
-            return self.redirect(self.reverse("media:edit", kwargs={"path": parentdir}))
+            return self.redirect(self.folder_url(parentdir))
 
         if request.method == "POST":
             action(fullpath)
-            messages.success(request, 'Successfully deleted %s "%s"' % (tpl, item))
-            if path:
-                if cls is Folder:
-                    return self.redirect(
-                        self.reverse("media:edit", kwargs={"path": parentdir})
-                    )
-                return self.redirect(self.reverse("media:edit", kwargs={"path": path}))
-            return self.redirect(self.reverse("media:list"))
+            messages.success(
+                request,
+                _('The %(kind)s "%(name)s" has been deleted.')
+                % {"kind": kind, "name": item},
+            )
+            return self.redirect(self.folder_url(parentdir if cls is Folder else path))
 
         context = {
             "path": path,
             "parentdir": parentdir,
             "filename": filename,
             "object": obj,
+            "kind": kind,
         }
         context.update(kwargs)
 

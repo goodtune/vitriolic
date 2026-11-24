@@ -16,7 +16,6 @@ def initial_uuid(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("competition", "0019_auto_20161210_0922"),
     ]

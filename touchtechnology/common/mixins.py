@@ -1,4 +1,4 @@
-class NodeRelationMixin(object):
+class NodeRelationMixin:
     """
     A mixin to allow a Node subclass to determine the type of
     relationship it has with another. Used by the ``navigation``

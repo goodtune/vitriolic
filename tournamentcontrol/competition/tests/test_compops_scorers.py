@@ -1,0 +1,237 @@
+import datetime
+from unittest import mock
+from zoneinfo import ZoneInfo
+
+from django.contrib.auth.models import Permission
+from django.urls import reverse
+from django.utils import timezone
+from freezegun import freeze_time
+from test_plus import TestCase
+
+from tournamentcontrol.competition.compops import events
+from tournamentcontrol.competition.models import SimpleScoreMatchStatistic
+from tournamentcontrol.competition.tests import factories
+
+TZ = ZoneInfo("Australia/Brisbane")
+
+DATASTAR = {"headers": {"Datastar-Request": "true"}}
+
+
+@freeze_time("2026-10-08 00:00 +10:00")
+class ScorersFixture(TestCase):
+    def setUp(self):
+        super().setUp()
+        events.reset_backend()
+        self.staff = factories.UserFactory.create(is_staff=True)
+        self.staff.user_permissions.add(
+            *Permission.objects.filter(
+                codename__in=[
+                    "add_simplescorematchstatistic",
+                    "change_simplescorematchstatistic",
+                ]
+            )
+        )
+        self.nostats = factories.UserFactory.create(is_staff=True)
+        self.season = factories.SeasonFactory.create(
+            slug="pc26",
+            slug_locked=True,
+            competition__slug="pacific-cup",
+            competition__slug_locked=True,
+            timezone="Australia/Brisbane",
+            statistics=True,
+        )
+        stage = factories.StageFactory.create(division__season=self.season)
+        when = timezone.make_aware(datetime.datetime(2026, 10, 8, 8), TZ)
+        self.match = factories.MatchFactory.create(
+            stage=stage,
+            datetime=when,
+            date=when.date(),
+            time=when.time(),
+            home_team_score=2,
+            away_team_score=1,
+        )
+        self.home = [self.player(self.match.home_team, n) for n in (1, 2)]
+        self.away = [self.player(self.match.away_team, n) for n in (3,)]
+        self.kw = {
+            "competition": "pacific-cup",
+            "season": "pc26",
+            "datestr": "20261008",
+        }
+        self.url = reverse(
+            "compops:match-scorers", kwargs={**self.kw, "match_pk": self.match.pk}
+        )
+
+    def scorers(self, method, data=None, extra=None):
+        return getattr(self, method)(
+            "compops:match-scorers",
+            match_pk=self.match.pk,
+            data=data,
+            extra=extra or {},
+            **self.kw,
+        )
+
+    def body(self):
+        return b"".join(self.last_response.streaming_content).decode()
+
+    def player(self, team, number):
+        person = factories.PersonFactory.create()
+        factories.TeamAssociationFactory.create(team=team, person=person, number=number)
+        return person
+
+    def payload(self, home_points, away_points):
+        data = {}
+        for prefix, people, points in (
+            ("home", self.home, home_points),
+            ("away", self.away, away_points),
+        ):
+            data.update(
+                {
+                    f"{prefix}-TOTAL_FORMS": str(len(people)),
+                    f"{prefix}-INITIAL_FORMS": str(len(people)),
+                    f"{prefix}-MIN_NUM_FORMS": "0",
+                    f"{prefix}-MAX_NUM_FORMS": "1000",
+                }
+            )
+            for i, (person, pts) in enumerate(zip(people, points)):
+                data.update(
+                    {
+                        f"{prefix}-{i}-played": "1",
+                        f"{prefix}-{i}-number": str(i + 1),
+                        f"{prefix}-{i}-points": str(pts),
+                        f"{prefix}-{i}-mvp": "",
+                    }
+                )
+        return data
+
+
+class ScorersListTests(ScorersFixture):
+    def test_list_shows_match_awaiting_scorers(self):
+        with self.login(self.staff):
+            self.get("compops:scorers", **self.kw)
+        self.assertResponseContains('<span class="score">2 – 1</span>')
+        self.assertResponseContains(
+            f'<a class="btn" href="{self.url}" '
+            f"data-on:click__prevent=\"@get('{self.url}')\">Enter scorers</a>"
+        )
+
+    def test_unbalanced_match_is_marked(self):
+        SimpleScoreMatchStatistic.objects.create(
+            match=self.match, player=self.home[0], number=1, played=1, points=1
+        )
+        with self.login(self.staff):
+            self.get("compops:scorers", **self.kw)
+        self.assertResponseContains('<span class="pill warn">out of balance</span>')
+
+    def test_user_without_statistics_permission_sees_no_button(self):
+        with self.login(self.nostats):
+            self.get("compops:scorers", **self.kw)
+        self.assert_http_200_ok()
+        self.assertResponseContains('<span class="score">2 – 1</span>')
+        self.assertResponseNotContains(
+            f'<a class="btn" href="{self.url}" '
+            f"data-on:click__prevent=\"@get('{self.url}')\">Enter scorers</a>"
+        )
+
+
+class ScorersModalTests(ScorersFixture):
+    def test_modal_renders_both_rosters(self):
+        with self.login(self.staff):
+            self.scorers("get", extra=DATASTAR)
+        self.assert_http_200_ok()
+        body = self.body()
+        self.assertIn('data: elements <div id="modal-body" class="modal"', body)
+        self.assertIn('name="home-TOTAL_FORMS" value="2"', body)
+        self.assertIn('name="away-TOTAL_FORMS" value="1"', body)
+        self.assertIn("event: datastar-patch-signals", body)
+        self.assertIn('data: signals {"modal":true}', body)
+        self.assertIn('data-signals="{home_total: 0, away_total: 0}"', body)
+        self.assertIn('<span data-text="$home_total">0</span>', body)
+        self.assertIn('<span data-text="$away_total">0</span>', body)
+
+    def test_valid_post_saves_and_closes(self):
+        with self.login(self.staff), self.captureOnCommitCallbacks(execute=True):
+            self.scorers("post", self.payload([1, 1], [1]), DATASTAR)
+        self.assert_http_200_ok()
+        body = self.body()
+        self.assertIn('data: signals {"modal":false}', body)
+        self.assertIn('data: elements <div id="scorers"', body)
+        self.assertIn('<span id="scorers-count" class="count zero">0</span>', body)
+        self.assertIn('<span id="scorers-count-tab" class="count zero">0</span>', body)
+        self.assertEqual(
+            SimpleScoreMatchStatistic.objects.filter(match=self.match).count(), 3
+        )
+        (event,) = events.recent(self.season.pk)
+        self.assertEqual(event["type"], "statistics-entered")
+        self.assertEqual(event["actor"], self.staff.get_username())
+
+    def test_player_in_shirt_number_zero_is_saved(self):
+        # Legal in some sports; only no number at all is refused.
+        data = self.payload([1, 1], [1])
+        data["home-0-number"] = "0"
+        with self.login(self.staff), self.captureOnCommitCallbacks(execute=True):
+            self.scorers("post", data, DATASTAR)
+        self.assert_http_200_ok()
+        self.assertIn('data: signals {"modal":false}', self.body())
+        self.assertEqual(
+            sorted(
+                SimpleScoreMatchStatistic.objects.filter(match=self.match).values_list(
+                    "number", flat=True
+                )
+            ),
+            [0, 1, 2],
+        )
+
+    def test_one_event_is_published_after_both_sides_are_saved(self):
+        seen = []
+        publish = events.publish
+
+        def record(*args, **kwargs):
+            # Runs where the receiver calls it, at signal time.
+            seen.append(
+                SimpleScoreMatchStatistic.objects.filter(
+                    match=self.match, player=self.away[0]
+                ).exists()
+            )
+            return publish(*args, **kwargs)
+
+        with (
+            mock.patch.object(events, "publish", side_effect=record) as patched,
+            self.login(self.staff),
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            self.scorers("post", self.payload([1, 1], [1]), DATASTAR)
+        self.assertEqual(patched.call_count, 1)
+        self.assertEqual(seen, [True])
+        (event,) = events.recent(self.season.pk)
+        self.assertEqual(event["type"], "statistics-entered")
+
+    def test_points_that_do_not_sum_re_render_the_modal(self):
+        with self.login(self.staff):
+            self.scorers("post", self.payload([1, 0], [1]), DATASTAR)
+        self.assert_http_200_ok()
+        body = self.body()
+        self.assertIn('data: elements <div id="modal-body" class="modal"', body)
+        self.assertIn("does not equal", body.lower())
+        self.assertIn('data-signals="{home_total: 1, away_total: 1}"', body)
+        self.assertIn('<span data-text="$home_total">1</span>', body)
+        self.assertEqual(
+            SimpleScoreMatchStatistic.objects.filter(match=self.match).count(), 0
+        )
+
+    def test_plain_post_redirects_to_day(self):
+        with self.login(self.staff):
+            self.scorers("post", self.payload([1, 1], [1]))
+        self.assert_http_302_found(url=reverse("compops:day", kwargs=self.kw))
+
+    def test_without_permission_is_403(self):
+        with self.login(self.nostats):
+            self.scorers("post", self.payload([1, 1], [1]))
+        self.assert_http_403_forbidden()
+
+    def test_match_without_score_is_404(self):
+        self.match.home_team_score = None
+        self.match.away_team_score = None
+        self.match.save()
+        with self.login(self.staff):
+            self.scorers("get")
+        self.assert_http_404_not_found()

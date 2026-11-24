@@ -6,7 +6,6 @@ import touchtechnology.common.db.models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("competition", "0029_seasonreferee"),
     ]

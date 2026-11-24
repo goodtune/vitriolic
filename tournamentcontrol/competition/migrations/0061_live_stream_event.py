@@ -13,7 +13,6 @@ import touchtechnology.common.db.models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("competition", "0060_season_enable_experimental_views"),
     ]
@@ -34,9 +33,7 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "external_identifier",
-                    models.CharField(
-                        max_length=50, primary_key=True, serialize=False
-                    ),
+                    models.CharField(max_length=50, primary_key=True, serialize=False),
                 ),
                 (
                     "stream_key",
@@ -101,9 +98,7 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "external_identifier",
-                    models.CharField(
-                        max_length=20, primary_key=True, serialize=False
-                    ),
+                    models.CharField(max_length=20, primary_key=True, serialize=False),
                 ),
                 (
                     "live_stream_bind",

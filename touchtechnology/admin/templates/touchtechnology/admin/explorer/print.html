@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+{% load i18n static admin admin_explorer %}{% admin_brand as brand %}{% get_current_language as LANGUAGE_CODE %}
+<html lang="{{ LANGUAGE_CODE|default:"en" }}">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>{% block title %}{% block heading_text %}{% endblock %} &ndash; {{ brand.name }}{% endblock %}</title>
+	<link rel="stylesheet" href="{% static 'touchtechnology/admin/explorer/css/print.css' %}">
+	{% include "touchtechnology/admin/explorer/_brand.html" %}
+	{% block extracss %}{% endblock %}
+</head>
+<body class="sheet {% block body_class %}{% endblock %}">
+	<header class="sheet-head">
+		<div class="sheet-brand">
+			{% if brand.logo %}<span class="sheet-logo"><img src="{{ brand.logo|brand_logo_url }}" alt="{{ brand.name }}"></span>{% else %}<span class="sheet-tile" aria-hidden="true">{{ brand.name|initials }}</span>{% endif %}
+			<span>{{ brand.name }}</span>
+		</div>
+		<div class="sheet-titles">
+			<h1>{% block heading %}{% endblock %}</h1>
+			<p>{% block subheading %}{% endblock %}</p>
+		</div>
+		<nav class="sheet-tools" aria-label="{% trans "This sheet" %}">
+			{% block tools %}{% endblock %}
+			<button type="button" class="sheet-button" onclick="window.print()">{% trans "Print" %}</button>
+		</nav>
+	</header>
+	<main class="sheet-body">
+		{% block content %}{% endblock %}
+	</main>
+	<footer class="sheet-foot">
+		{% trans "Printed" %} {% now "j F Y, H:i" %}{% if user.is_authenticated %} &ndash; {{ user.get_full_name|default:user.get_username }}{% endif %}
+	</footer>
+</body>
+</html>

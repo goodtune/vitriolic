@@ -1,0 +1,16 @@
+{% extends "touchtechnology/admin/explorer/list.inc.html" %}
+{% load i18n admin admin_explorer %}
+
+{% block table-headings %}
+	<th>{% trans "Draw format" %}</th>
+	<th class="num">{% trans "Teams" %}</th>
+	<th>{% trans "Finals" %}</th>
+{% endblock table-headings %}
+
+{% block table-columns %}
+	{{ block.super }}
+	<td class="num">{{ obj.teams|default:"&ndash;" }}</td>
+	<td>{% if obj.is_final %}<span class="tag attention">{% icon "competition" %}{% trans "Finals" %}</span>{% endif %}</td>
+{% endblock table-columns %}
+
+{% block empty-row-colspan %}4{% endblock %}

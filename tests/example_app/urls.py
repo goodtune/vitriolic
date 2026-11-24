@@ -21,6 +21,8 @@ urlpatterns = [
     path("pagination/", test_pagination.urls),
     path("accounts/", accounts.urls),  # can't login without it
     path("news/", news.urls),
+    path("signature/", views.sign, name="sign"),
+    path("signature/<int:pk>/", views.signed, name="signed"),
     path("", include("touchtechnology.common.urls")),
     path("", views.index, name="index"),
 ]

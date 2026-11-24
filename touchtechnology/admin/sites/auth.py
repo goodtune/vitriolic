@@ -25,7 +25,7 @@ class UsersGroups(AdminComponent):
     unprotected = False
 
     def __init__(self, app, name="auth", app_name="auth"):
-        super(UsersGroups, self).__init__(app, name, app_name)
+        super().__init__(app, name, app_name)
         self.user_class = get_user_model()
 
     @property
@@ -61,6 +61,17 @@ class UsersGroups(AdminComponent):
             path("group/", include(group_patterns, namespace="groups")),
         ]
         return urlpatterns
+
+    def tasks(self, request):
+        return (
+            {
+                "label": _("Manage who can sign in"),
+                "url": self.reverse("users:list"),
+                "note": _("Users, groups and what they may do"),
+                "icon": "users",
+                "priority": 90,
+            },
+        )
 
     def dropdowns(self):
         dl = (

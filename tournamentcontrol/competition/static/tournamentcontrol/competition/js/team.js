@@ -1,10 +1,14 @@
-window.addEvent('domready', function() {
-	$('id_club').addEvent('change', function(event) {
-		var title = $('id_title');
-		var select = event.target;
-		var options = select.getElements('option');
-
-		/* set the title to that of the club */
-		title.set('value', options[select.selectedIndex].get('text'))
+/* Name a new team after the club it is chosen from. */
+document.addEventListener("DOMContentLoaded", function () {
+	var club = document.getElementById("id_club");
+	var title = document.getElementById("id_title");
+	if (!club || !title) {
+		return;
+	}
+	club.addEventListener("change", function () {
+		var option = club.options[club.selectedIndex];
+		if (option && option.value) {
+			title.value = option.text;
+		}
 	});
 });

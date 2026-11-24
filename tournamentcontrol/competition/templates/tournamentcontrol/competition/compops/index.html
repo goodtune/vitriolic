@@ -1,0 +1,59 @@
+{% extends "tournamentcontrol/competition/compops/base.html" %}
+{% block body %}
+{% comment %}
+One season's row. ``section`` says which list it is in: the lists by date
+name the competition and how far off the season is, the list of every season
+sits under its competition's heading and needs neither. How far off is only
+said within 60 days; beyond that the date says it better. With
+``front_door``, the page is that of someone who is not staff: a row leads to
+the season's booths, or to its scoreboards for someone who may only keep
+those, and has a button for the scoreboards of someone who may do both.
+{% endcomment %}
+{% partialdef event %}
+<li><a class="item" href="{% if season.compops_booth %}{% url 'compops:booth-index' competition=season.competition.slug season=season.slug %}{% elif front_door %}{% url 'compops:scoreboard-index' competition=season.competition.slug season=season.slug %}{% else %}{% url 'compops:season' competition=season.competition.slug season=season.slug %}{% endif %}"><span class="title">{{ season.title }}</span>{% if section != "all" %}<span class="comp">{{ season.competition.title }}</span>{% endif %}{% if not season.enabled %}<span class="tag">Not public</span>{% endif %}{% if section == "upcoming" and season.compops_days <= 60 %}<span class="note">{% if season.compops_days == 1 %}tomorrow{% else %}in {{ season.compops_days }} days{% endif %}</span>{% elif section == "recent" and season.compops_days <= 60 %}<span class="note">{% if season.compops_days == 1 %}ended yesterday{% else %}ended {{ season.compops_days }} days ago{% endif %}</span>{% endif %}<span class="when">{% if not season.first_day %}No matches scheduled{% elif season.first_day == season.last_day %}{{ season.first_day|date:"j M Y" }}{% else %}{{ season.first_day|date:"j M" }} – {{ season.last_day|date:"j M Y" }}{% endif %}</span></a>{% if season.compops_booth and season.compops_score %}<a class="btn" href="{% url 'compops:scoreboard-index' competition=season.competition.slug season=season.slug %}">Scoreboards</a>{% endif %}{% if section == "now" and not front_door %}{% if season.compops_next_day == season.compops_today %}<a class="btn p" href="{% url 'compops:day' competition=season.competition.slug season=season.slug datestr=season.compops_next_day|date:'Ymd' %}">Open today</a>{% else %}<a class="btn" href="{% url 'compops:day' competition=season.competition.slug season=season.slug datestr=season.compops_next_day|date:'Ymd' %}">Next: {{ season.compops_next_day|date:"D j M" }}</a>{% endif %}{% endif %}</li>
+{% endpartialdef %}
+<header class="topbar">
+	<a class="brand" href="{% url 'compops:index' %}">TOURNAMENT OPS</a>
+	<span class="spacer"></span>
+	<span class="who">{{ user.get_username }}</span>
+</header>
+<main class="index">
+	<h1>{% if booths and not scoreboards %}Commentary booths{% elif scoreboards and not booths %}Scoreboards{% else %}Events{% endif %}</h1>
+	{% if not events.competitions %}
+		<p class="empty">There are no events yet.</p>
+	{% endif %}
+	{% if events.current %}
+		<section class="now">
+			<h2>On now</h2>
+			<ul class="list">{% with section="now" %}{% for season in events.current %}{% partial event %}{% endfor %}{% endwith %}</ul>
+		</section>
+	{% endif %}
+	{% if events.upcoming %}
+		<section class="upcoming">
+			<h2>Upcoming</h2>
+			<ul class="list">{% with section="upcoming" %}{% for season in events.upcoming %}{% partial event %}{% endfor %}{% endwith %}</ul>
+		</section>
+	{% endif %}
+	{% if events.recent %}
+		<section class="recent">
+			<h2>Recent</h2>
+			<ul class="list">{% with section="recent" %}{% for season in events.recent %}{% partial event %}{% endfor %}{% endwith %}</ul>
+		</section>
+	{% endif %}
+	{% if front_door and events.unscheduled %}
+		<section>
+			<h2>Not yet scheduled</h2>
+			<ul class="list">{% with section="unscheduled" %}{% for season in events.unscheduled %}{% partial event %}{% endfor %}{% endwith %}</ul>
+		</section>
+	{% endif %}
+	{% if events.competitions and not front_door %}
+		<section class="all">
+			<h2>All events</h2>
+			{% with section="all" %}{% for competition, seasons in events.competitions %}
+				<h3>{{ competition.title }}</h3>
+				<ul class="list">{% for season in seasons %}{% partial event %}{% endfor %}</ul>
+			{% endfor %}{% endwith %}
+		</section>
+	{% endif %}
+</main>
+{% endblock %}

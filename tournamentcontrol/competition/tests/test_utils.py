@@ -1,26 +1,21 @@
+import datetime
 import textwrap
 
 from test_plus import TestCase
 
+from touchtechnology.admin.tests.shells import IconMixin, per_shell
 from tournamentcontrol.competition import utils
+from tournamentcontrol.competition.models import Match
 from tournamentcontrol.competition.tests.factories import (
     DivisionFactory,
     MatchFactory,
+    SeasonFactory,
     StageFactory,
     StageGroupFactory,
     SuperUserFactory,
+    TeamFactory,
     UndecidedTeamFactory,
 )
-
-
-class MessagesTestMixin:
-    """
-    Mixin stub for testing Django messages.
-
-    Drop once we no longer support Django < 5.0.
-    """
-
-    def assertMessages(self, *args, **kwargs): ...
 
 
 class UtilTests(TestCase):
@@ -38,8 +33,7 @@ class UtilTests(TestCase):
 
     def test_round_robin_format_even(self):
         self.assertEqual(
-            textwrap.dedent(
-                """
+            textwrap.dedent("""
                 ROUND
                 1: 1 vs 4
                 2: 2 vs 3
@@ -49,16 +43,14 @@ class UtilTests(TestCase):
                 ROUND
                 5: 1 vs 2
                 6: 3 vs 4
-                """
-            ).strip(),
+                """).strip(),
             utils.round_robin_format(range(1, 5)),
         )
 
     def test_round_robin_format_integer_input(self):
         """Test that integer input works correctly."""
         result = utils.round_robin_format(4)
-        expected = textwrap.dedent(
-            """
+        expected = textwrap.dedent("""
             ROUND
             1: 1 vs 4
             2: 2 vs 3
@@ -68,8 +60,7 @@ class UtilTests(TestCase):
             ROUND
             5: 1 vs 2
             6: 3 vs 4
-            """
-        ).strip()
+            """).strip()
         self.assertEqual(expected, result)
 
     def test_round_robin_format_integer_equals_range(self):
@@ -134,6 +125,175 @@ class UtilTests(TestCase):
         self.assertEqual(utils.revpow(2**4, 2), 4)
 
 
+class RegradeTests(TestCase):
+    """
+    ``regrade`` moves a team between divisions of a season: its unplayed
+    matches in the old division become byes (through ``convert_to_byes``)
+    and it fills the byes of the new division.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.season = SeasonFactory.create()
+        self.lower = DivisionFactory.create(season=self.season, title="Lower")
+        self.upper = DivisionFactory.create(season=self.season, title="Upper")
+        self.lower_stage = StageFactory.create(division=self.lower)
+        self.upper_stage = StageFactory.create(division=self.upper)
+        self.team, self.rival, self.third = [
+            TeamFactory.create(division=self.lower, title=f"Lower {n}", order=n)
+            for n in range(1, 4)
+        ]
+        self.upper_teams = [
+            TeamFactory.create(division=self.upper, title=f"Upper {n}", order=n)
+            for n in range(1, 4)
+        ]
+        self.dates = [
+            datetime.date(2026, 3, 7) + datetime.timedelta(weeks=n) for n in range(5)
+        ]
+
+    def test_regrade(self):
+        # Round 1 played; round 2 forfeited; round 3 a processed bye of the
+        # team; rounds 4 and 5 unplayed and scheduled.
+        played = MatchFactory.create(
+            stage=self.lower_stage,
+            home_team=self.team,
+            away_team=self.rival,
+            date=self.dates[0],
+            home_team_score=3,
+            away_team_score=1,
+        )
+        forfeit = MatchFactory.create(
+            stage=self.lower_stage,
+            home_team=self.rival,
+            away_team=self.team,
+            date=self.dates[1],
+            is_forfeit=True,
+            forfeit_winner=self.rival,
+            home_team_score=5,
+            away_team_score=0,
+        )
+        processed_bye = MatchFactory.create(
+            stage=self.lower_stage,
+            home_team=self.team,
+            away_team=None,
+            date=self.dates[2],
+            is_bye=True,
+            bye_processed=True,
+        )
+        home = MatchFactory.create(
+            stage=self.lower_stage,
+            home_team=self.team,
+            away_team=self.third,
+            date=self.dates[3],
+            time=datetime.time(19, 0),
+        )
+        away = MatchFactory.create(
+            stage=self.lower_stage,
+            home_team=self.rival,
+            away_team=self.team,
+            date=self.dates[4],
+            time=datetime.time(20, 0),
+        )
+        untouched = MatchFactory.create(
+            stage=self.lower_stage,
+            home_team=self.rival,
+            away_team=self.third,
+            date=self.dates[3],
+            round=4,
+        )
+        # The upper division has a bye each week from round 4 on, and an
+        # earlier bye that is left alone (the default regrade date is that
+        # of the team's first unscored match, the processed bye in round 3).
+        earlier = MatchFactory.create(
+            stage=self.upper_stage,
+            home_team=self.upper_teams[0],
+            away_team=None,
+            date=self.dates[1],
+            is_bye=True,
+        )
+        upper_home = MatchFactory.create(
+            stage=self.upper_stage,
+            home_team=self.upper_teams[1],
+            away_team=None,
+            date=self.dates[3],
+            is_bye=True,
+        )
+        upper_away = MatchFactory.create(
+            stage=self.upper_stage,
+            home_team=None,
+            away_team=self.upper_teams[2],
+            date=self.dates[4],
+            is_bye=True,
+        )
+
+        # ``regrade`` moves the team, reorders and rewires the matches.
+        utils.regrade(self.team, self.upper)
+
+        # The team takes the next order in the upper division and the lower
+        # division closes the gap it left.
+        self.team.refresh_from_db()
+        self.assertEqual((self.team.division, self.team.order), (self.upper, 4))
+        self.assertEqual(
+            list(self.lower.teams.order_by("order").values_list("title", "order")),
+            [("Lower 2", 1), ("Lower 3", 2)],
+        )
+        for match in (played, forfeit, processed_bye, untouched):
+            before = Match.objects.filter(pk=match.pk).values().get()
+            match.refresh_from_db()
+            self.assertEqual(Match.objects.filter(pk=match.pk).values().get(), before)
+        self.assertEqual(processed_bye.home_team, self.team)
+        for match, side in ((home, "home_team"), (away, "away_team")):
+            match.refresh_from_db()
+            self.assertIs(match.is_bye, True)
+            self.assertIsNone(getattr(match, side))
+            self.assertIsNone(match.time)
+            self.assertIsNone(match.datetime)
+            self.assertIsNone(match.play_at)
+        self.assertEqual(home.away_team, self.third)
+        self.assertEqual(away.home_team, self.rival)
+        earlier.refresh_from_db()
+        self.assertIs(earlier.is_bye, True)
+        self.assertIsNone(earlier.away_team)
+        upper_home.refresh_from_db()
+        self.assertIs(upper_home.is_bye, False)
+        self.assertEqual(upper_home.away_team, self.team)
+        upper_away.refresh_from_db()
+        self.assertIs(upper_away.is_bye, False)
+        self.assertEqual(upper_away.home_team, self.team)
+
+    def test_convert_to_byes_returns_the_matches_changed(self):
+        # Only the team's own unplayed matches from the given date change;
+        # the ids returned are those matches, and a repeat finds none.
+        home = MatchFactory.create(
+            stage=self.lower_stage,
+            home_team=self.team,
+            away_team=self.rival,
+            date=self.dates[0],
+        )
+        away = MatchFactory.create(
+            stage=self.lower_stage,
+            home_team=self.third,
+            away_team=self.team,
+            date=self.dates[1],
+        )
+        other = MatchFactory.create(
+            stage=self.lower_stage,
+            home_team=self.rival,
+            away_team=self.third,
+            date=self.dates[1],
+        )
+        self.assertEqual(
+            sorted(utils.convert_to_byes(self.team, self.dates[1])), [away.pk]
+        )
+        home.refresh_from_db()
+        self.assertIs(home.is_bye, False)
+        self.assertEqual(home.home_team, self.team)
+        other.refresh_from_db()
+        self.assertIs(other.is_bye, False)
+        self.assertEqual(utils.convert_to_byes(self.team, self.dates[0]), [home.pk])
+        self.assertEqual(utils.convert_to_byes(self.team, self.dates[0]), [])
+
+
 class StageGroupPositionTests(TestCase):
     """
     Tests for the stage_group_position function.
@@ -146,7 +306,7 @@ class StageGroupPositionTests(TestCase):
         """
         # Create a division with multiple stages so we can reference one
         division = DivisionFactory.create()
-        stage1 = StageFactory.create(division=division, order=1)
+        StageFactory.create(division=division, order=1)
         stage2 = StageFactory.create(division=division, order=2)
 
         # Stage1 has no pools, but we try to access group 1 from stage1
@@ -177,6 +337,59 @@ class StageGroupPositionTests(TestCase):
             IndexError, r"Invalid group 2 for stage .* \(stage has 1 pools\)"
         ):
             utils.stage_group_position(stage2, "S1G2P1")
+
+    def test_stage_group_position_in_a_first_stage_raises_index_error(self):
+        """
+        A formula with no stage in it refers to the stage before; the first
+        stage of a division has none, as a division of two stages has no
+        stage 3.
+        """
+        stage = StageFactory.create(title="Finals", order=1)
+        for formula in ("P1", "G1P2"):
+            with self.subTest(formula):
+                with self.assertRaisesRegex(
+                    IndexError,
+                    rf"^{formula} refers to the stage before Finals, the first "
+                    r"stage of its division$",
+                ):
+                    utils.stage_group_position(stage, formula)
+
+    def test_stage_group_position_with_a_zero_raises_index_error(self):
+        """
+        Stages and pools are numbered from one: ``S0`` and ``G0`` name none,
+        as a number past the last does.
+        """
+        division = DivisionFactory.create()
+        stage1 = StageFactory.create(division=division, order=1)
+        StageGroupFactory.create(stage=stage1)
+        stage2 = StageFactory.create(division=division, order=2)
+
+        with self.assertRaisesRegex(IndexError, r"^Invalid stage 0 for division "):
+            utils.stage_group_position(stage2, "S0P1")
+        with self.assertRaisesRegex(
+            IndexError, r"^Invalid group 0 for stage .* \(stage has 1 pools\)$"
+        ):
+            utils.stage_group_position(stage2, "G0P1")
+
+    def test_stage_group_position_past_the_last_raises_index_error(self):
+        """
+        A stage number past the last stage of the division, or a pool number
+        past the last pool of the stage, names none, as a zero does.
+        """
+        division = DivisionFactory.create()
+        stage1 = StageFactory.create(division=division, order=1)
+        StageGroupFactory.create(stage=stage1)
+        StageGroupFactory.create(stage=stage1)
+        stage2 = StageFactory.create(division=division, order=2)
+
+        with self.assertRaisesRegex(
+            IndexError, r"^Invalid stage 3 for division .* \(division has 2 stages\)$"
+        ):
+            utils.stage_group_position(stage2, "S3P1")
+        with self.assertRaisesRegex(
+            IndexError, r"^Invalid group 5 for stage .* \(stage has 2 pools\)$"
+        ):
+            utils.stage_group_position(stage2, "S1G5P1")
 
     def test_stage_group_position_with_valid_pool_succeeds(self):
         """
@@ -238,7 +451,7 @@ class StageGroupPositionTests(TestCase):
         that access UndecidedTeam.title or UndecidedTeam.choices properties.
         """
         # Create a superuser for admin access using SuperUserFactory
-        superuser = SuperUserFactory.create()
+        SuperUserFactory.create()
 
         # Create a division with multiple stages
         division = DivisionFactory.create()
@@ -259,7 +472,7 @@ class StageGroupPositionTests(TestCase):
         )
 
         # Build the edit_stage URL using the same pattern as other admin tests
-        edit_stage_url = stage2.urls["edit"]
+        stage2.urls["edit"]
 
         # After the fix, accessing these properties should NOT raise IndexError
         # Instead they should gracefully handle the error
@@ -277,7 +490,8 @@ class StageGroupPositionTests(TestCase):
             self.assertEqual(choices, stage2.division.teams)
 
 
-class TwoStageFormulaProblemTests(TestCase):
+@per_shell
+class TwoStageFormulaProblemTests(IconMixin, TestCase):
     """
     Tests for the two-stage scenario as requested by @goodtune.
 
@@ -293,6 +507,7 @@ class TwoStageFormulaProblemTests(TestCase):
 
     def setUp(self):
         """Set up the two-stage competition scenario."""
+        super().setUp()
         # Create superuser for admin access
         self.user = SuperUserFactory.create()
 
@@ -338,7 +553,7 @@ class TwoStageFormulaProblemTests(TestCase):
         self.assertEqual(undecided_team_g2p2.title, f"2nd {self.pool2.title}")
 
         # Create a Match between the two undecided teams
-        match = MatchFactory.create(
+        final = MatchFactory.create(
             stage=self.finals_stage,
             home_team_undecided=undecided_team_g1p1,
             away_team_undecided=undecided_team_g2p2,
@@ -350,9 +565,9 @@ class TwoStageFormulaProblemTests(TestCase):
         # Call the stage edit admin view which displays UndecidedTeam titles
         self.login(self.user)
         self.get(self.finals_stage.urls["edit"])
-        self.response_200()
+        self.assert_http_200_ok()
         # The page should contain the match label
-        self.assertResponseContains("Final")
+        self.assertResponseContains(self.match_title(final))
 
     def test_invalid_formulas_gracefully_handled_in_admin_view(self):
         """
@@ -402,17 +617,13 @@ class TwoStageFormulaProblemTests(TestCase):
         # Test that accessing the match in admin view doesn't crash
         self.login(self.user)
         self.get(self.finals_stage.urls["edit"])
-        self.response_200()
+        self.assert_http_200_ok()
         # The match should be displayed on the stage edit page
-        self.assertResponseContains("Invalid Formula Match")
+        self.assertResponseContains(self.match_title(match_with_invalid_formulas))
         # Verify that the home_team and away_team formulas are rendered correctly
         # Invalid formulas should show the formula itself as fallback
-        self.assertResponseContains(
-            "G5P2"
-        )  # home_team_eval formula should be displayed
-        self.assertResponseContains(
-            "G3P1"
-        )  # away_team_eval formula should be displayed
+        self.assertResponseContains(self.team_cell("Home", "G5P2"))
+        self.assertResponseContains(self.team_cell("Away", "G3P1"))
 
         # Test the eval() method directly - it should handle the IndexError gracefully
         # The Match.eval() method should return a tuple of (home_team, away_team)
@@ -455,7 +666,7 @@ class TwoStageFormulaProblemTests(TestCase):
         )
 
         # Create matches using both teams to force title evaluation in admin
-        MatchFactory.create(
+        mixed = MatchFactory.create(
             stage=self.finals_stage,
             home_team_undecided=valid_team,
             away_team_undecided=invalid_team,
@@ -480,11 +691,28 @@ class TwoStageFormulaProblemTests(TestCase):
         # Test that the admin view renders successfully with mixed formulas
         self.login(self.user)
         self.get(self.finals_stage.urls["edit"])
-        self.response_200()
+        self.assert_http_200_ok()
         # The match label should appear
-        self.assertResponseContains("Mixed Formula Match")
+        self.assertResponseContains(self.match_title(mixed))
         # Verify that the home_team and away_team formulas are rendered correctly
         # Valid team (G1P1) should show the resolved title
-        self.assertResponseContains(f"1st {self.pool1.title}")
+        self.assertResponseContains(self.team_cell("Home", f"1st {self.pool1.title}"))
         # Invalid team (G3P1) should show the formula as fallback
-        self.assertResponseContains("G3P1")
+        self.assertResponseContains(self.team_cell("Away", "G3P1"))
+
+    def match_title(self, match):
+        """The link to edit ``match``, labelled with its label, in its list row."""
+        return self.by_shell(
+            workbook=f'<a href="{match.urls["edit"]}">{match.label}</a>',
+            explorer=(
+                f'<a href="{match.urls["edit"]}">{self.icon("match")}'
+                f"<span>{match.label}</span></a>"
+            ),
+        )
+
+    def team_cell(self, side, title):
+        """The ``side`` ("Home" or "Away") cell of a match row showing ``title``."""
+        return self.by_shell(
+            workbook=f'<td data-label="{side}">{title}</td>',
+            explorer=f"<td>{title}</td>",
+        )

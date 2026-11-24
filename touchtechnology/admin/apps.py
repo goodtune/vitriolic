@@ -6,10 +6,13 @@ from django.core import checks
 from django.utils.module_loading import import_string
 from first import first
 
+from touchtechnology.admin.branding import brand_check
+
 
 class AdminConfig(AppConfig):
     """Registers admin sites and performs application checks."""
 
+    default_auto_field = "django.db.models.AutoField"
     default_site = "touchtechnology.admin.sites.admin.AdminSite"
     name = "touchtechnology.admin"
     label = "touchtechnology_name"
@@ -22,6 +25,9 @@ class AdminConfig(AppConfig):
 
         site.register(UsersGroups)
         site.register(Settings)
+
+
+checks.register(brand_check, "config")
 
 
 @checks.register("config")
@@ -89,19 +95,5 @@ def touchtechnology_assumptions(app_configs, **kwargs):
                 hint=None,
             )
         )
-
-    REQUIRED_APPS = {
-        "bootstrap3": "django-bootstrap3",
-        "django_gravatar": "django-gravatar2",
-    }
-
-    for app, package in REQUIRED_APPS.items():
-        if app not in INSTALLED_APPS:
-            errors.append(
-                checks.Critical(
-                    "touchtechnology.admin requires {}".format(package),
-                    hint='Add "{}" to INSTALLED_APPS'.format(app),
-                )
-            )
 
     return errors

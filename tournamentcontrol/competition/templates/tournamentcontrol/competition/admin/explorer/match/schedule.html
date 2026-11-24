@@ -1,0 +1,57 @@
+{% extends "touchtechnology/admin/explorer/form_page.html" %}
+{% load i18n common admin admin_explorer %}
+
+{% block page_title %}{% trans "Allocate" %}{% endblock %}
+{% block page_kind %}{{ date|date:"l j F Y" }}{% if division %} &ndash; {{ division.title }}{% if stage %}, {{ stage.title }}{% endif %}{% endif %}{% endblock %}
+{% block page_icon %}<span class="title-icon">{% icon "allocate" %}</span>{% endblock %}
+{% block cancel-url %}{{ season.urls.edit }}#schedule-tab{% endblock %}
+{% block page_nav %}{% include "tournamentcontrol/competition/admin/explorer/_day_nav.html" with day_url="admin:fixja:match-schedule" day_page="schedule" %}{% endblock %}
+
+{% block form-body %}
+	{{ formset.management_form }}
+	{% if formset.non_form_errors %}
+		<div class="form-errors" role="alert">{% icon "alert" %}<ul>{% for error in formset.non_form_errors %}<li>{{ error }}</li>{% endfor %}</ul></div>
+	{% endif %}
+	<p class="muted">{% trans "Give each match a kick-off time and a ground. A clash of ground and time is refused when you save." %}</p>
+	{% regroup formset.forms by instance.stage.division as grouped %}
+	{% for group in grouped %}
+		<section class="slot">
+			<h2 class="slot-head">{% icon "division" %}{{ group.grouper }} <span class="count">{{ group.list|length }}</span></h2>
+			<div class="table-wrap">
+				<table class="listing allocate-table">
+					<thead>
+						<tr>
+							<th>{% trans "Round" %}</th>
+							<th>{% trans "Match" %}</th>
+							<th>{% trans "Time" %}</th>
+							<th>{% trans "Ground" %}</th>
+						</tr>
+					</thead>
+					<tbody>
+						{% for form in group.list %}
+							{% with match=form.instance %}
+								<tr>
+									<td class="nowrap">{{ form.id }}{% if match.label %}{{ match.label }}{% else %}{% blocktrans with n=match.round %}Round {{ n }}{% endblocktrans %}{% endif %}{% if match.stage_group %} <small class="muted">{{ match.stage_group.title }}</small>{% endif %}</td>
+									<td class="match-name">{{ match.get_home_team_plain }} <span class="muted">v</span> {{ match.get_away_team_plain }}</td>
+									<td>
+										<label class="visually-hidden" for="{{ form.time.id_for_label }}">{% blocktrans %}Time of {{ match }}{% endblocktrans %}</label>
+										{{ form.time|widget }}
+										{% if form.time.errors %}<ul class="field-errors">{% for e in form.time.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+									</td>
+									<td>
+										<label class="visually-hidden" for="{{ form.play_at.id_for_label }}">{% blocktrans %}Ground of {{ match }}{% endblocktrans %}</label>
+										{{ form.play_at|widget }}
+										{% if form.play_at.errors %}<ul class="field-errors">{% for e in form.play_at.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+									</td>
+								</tr>
+								{% if form.non_field_errors %}<tr class="row-errors"><td colspan="4"><ul class="field-errors">{% for e in form.non_field_errors %}<li>{{ e }}</li>{% endfor %}</ul></td></tr>{% endif %}
+							{% endwith %}
+						{% endfor %}
+					</tbody>
+				</table>
+			</div>
+		</section>
+	{% empty %}
+		<p class="empty-state">{% trans "No match on this day is waiting for a time and a ground." %}</p>
+	{% endfor %}
+{% endblock %}

@@ -1,7 +1,7 @@
 import os.path
 
 
-class TemplateChoiceIterator(object):
+class TemplateChoiceIterator:
     def __init__(self, field):
         self.field = field
 
@@ -34,4 +34,4 @@ class TemplateChoiceIterator(object):
 
     def choice(self, obj):
         path = obj.path.replace(self.field.template_folder, "", 1)
-        return (obj.path, "%s (%s)" % (path, obj.name))
+        return (obj.path, f"{path} ({obj.name})")

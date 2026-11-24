@@ -14,7 +14,19 @@ from zoneinfo import ZoneInfo
 
 from django.apps import apps
 from django.contrib.auth import get_user_model
-from django.db.models import Case, CharField, F, Func, Q, Value, When
+from django.db.models import (
+    Case,
+    CharField,
+    Count,
+    Exists,
+    F,
+    Func,
+    OuterRef,
+    Q,
+    Subquery,
+    Value,
+    When,
+)
 from django.db.models.functions import Cast, Concat
 from django.http import HttpResponse
 from django.template.loader import select_template
@@ -22,6 +34,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from PIL import Image
 
+from touchtechnology.admin.shells import DEFAULT_SHELL, get_shell
 from touchtechnology.common.prince import prince
 from tournamentcontrol.competition.draw.schemas import (
     MatchDescriptor,
@@ -45,11 +58,131 @@ team_needs_progressing = and_(
     Q(stage__division__season__complete=False),
 )
 
+# An undecided team with no formula stands in for a team nothing here can
+# work out: a placeholder.
+home_team_placeholder = Q(home_team__isnull=True, home_team_undecided__formula="")
+away_team_placeholder = Q(away_team__isnull=True, away_team_undecided__formula="")
+
+# A match mirrored from an upstream provider which has yet to name its teams.
+# The sync saves such a match with a placeholder on each side still to be
+# named (see ``upstream.sync``) and fills the team in on a later sync, so the
+# match is not waiting on progression here. Each side either is a placeholder
+# or is not waiting at all: a reference with a formula on a synced match, and
+# a placeholder on a match of our own, both still need progressing.
+team_awaits_upstream = and_(
+    Q(upstream_id__isnull=False),
+    and_(
+        or_(home_team_placeholder, ~home_team_needs_progressing),
+        or_(away_team_placeholder, ~away_team_needs_progressing),
+    ),
+)
+
+
+def undecided_team_awaits_upstream():
+    """
+    The undecided team behind ``team_awaits_upstream``: the sync's
+    placeholder. It has no formula, and it stands on matches mirrored from an
+    upstream provider and on no match of our own, so only the provider can
+    name its team; the next sync writes over any team chosen for it here.
+
+    A function, where its neighbours are ``Q`` objects: ``models`` imports
+    this module, so ``Match`` can only be looked up once the apps are ready.
+    """
+    Match = apps.get_model("competition", "Match")
+    # The default manager annotates team titles through outer joins which the
+    # subqueries have no use for.
+    matches = Match._base_manager.filter(
+        Q(home_team_undecided=OuterRef("pk")) | Q(away_team_undecided=OuterRef("pk"))
+    )
+    return Q(
+        Exists(matches.filter(upstream_id__isnull=False)),
+        ~Exists(matches.filter(upstream_id__isnull=True)),
+        formula="",
+    )
+
+
 legitimate_bye_match = and_(
     Q(is_bye=True), or_(Q(home_team__isnull=False), Q(away_team__isnull=False))
 )
 
 match_unplayed = or_(Q(home_team_score__isnull=True), Q(away_team_score__isnull=True))
+
+# A match whose part in its stage's ladder is settled: both scores are in, its
+# bye has been processed, or it was washed out. A ladder is complete once every
+# match of its stage is.
+match_decided = or_(
+    Q(home_team_score__isnull=False, away_team_score__isnull=False),
+    or_(Q(is_bye=True, bye_processed=True), Q(is_washout=True)),
+)
+
+
+def _own_ladder():
+    """
+    The two halves of "names a place on the ladder of its own stage, while
+    that ladder is open", for a row with a ``stage`` (a ``Match`` or an
+    ``UndecidedTeam``): the pattern a formula naming the stage's own ladder
+    matches, and an ``Exists`` true while the ladder is open.
+
+    ``Match.eval`` fills ``S1P1`` from the first stage of the division
+    whatever stage the match is in, as the ladder stands when it is asked, so
+    the place is not settled until every match of the stage which can be
+    played has been decided. A match waiting on progression itself does not
+    hold the ladder open: it is what the progression is for, and holding two
+    such matches back for each other would progress neither.
+
+    A function, where its neighbours are ``Q`` objects: ``models`` imports
+    this module, so ``Match`` and ``Stage`` can only be looked up once the
+    apps are ready.
+    """
+    Match = apps.get_model("competition", "Match")
+    Stage = apps.get_model("competition", "Stage")
+    # The number of the row's stage in its division, counting from one as
+    # ``Match.eval`` and ``Stage._title_stages`` do.
+    number = Subquery(
+        Stage.objects.filter(
+            division=OuterRef("stage__division"), order__lte=OuterRef("stage__order")
+        )
+        .order_by()
+        .values("division")
+        .annotate(number=Count("pk"))
+        .values("number")
+    )
+    pattern = Concat(Value("^S"), Cast(number, CharField()), Value(r"(G\d+)?P\d+$"))
+    # The default manager annotates team titles through outer joins which the
+    # subquery has no use for.
+    ladder_open = Exists(
+        Match._base_manager.filter(stage=OuterRef("stage"))
+        .exclude(match_decided)
+        .exclude(team_needs_progressing)
+    )
+    return pattern, ladder_open
+
+
+def team_awaits_own_ladder():
+    """
+    A match with a side still to be decided which names a place on the ladder
+    of the match's own stage, while that ladder is open (``_own_ladder``), so
+    it is not progressed ahead of the ladder.
+    """
+    own_ladder, ladder_open = _own_ladder()
+    names_own_ladder = (
+        Q(home_team__isnull=True, home_team_eval__regex=own_ladder)
+        | Q(home_team__isnull=True, home_team_undecided__formula__regex=own_ladder)
+        | Q(away_team__isnull=True, away_team_eval__regex=own_ladder)
+        | Q(away_team__isnull=True, away_team_undecided__formula__regex=own_ladder)
+    )
+    return Q(names_own_ladder, ladder_open)
+
+
+def undecided_team_awaits_own_ladder():
+    """
+    The undecided team behind ``team_awaits_own_ladder``: its formula names a
+    place on the ladder of its own stage while that ladder is open
+    (``_own_ladder``), so the place is not filled by hand ahead of the ladder.
+    """
+    own_ladder, ladder_open = _own_ladder()
+    return Q(ladder_open, formula__regex=own_ladder)
+
 
 stage_group_position_re = re.compile(
     r"""
@@ -115,7 +248,7 @@ def team_title_case_clause(team):
         ),
         When(
             is_bye=True,
-            then=Value('<span class="bye" title="Bye">Bye</span>'),
+            then=Value("Bye"),
         ),
         default=Value(None, output_field=CharField()),
     )
@@ -128,12 +261,13 @@ class FauxQueryset(list):
     """
 
     def __init__(self, model, team=None, *args, **kwargs):
-        super(FauxQueryset, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         # the team attribute is a legacy from a previous implementation
         # detail, we need to improve this. FIXME.
         self.team = team
         self.model = model
         self.ordered = True
+        self.totally_ordered = True
         self.db = None
         self._prefetch_related_lookups = True  # ModelChoiceIterator
 
@@ -374,7 +508,7 @@ def round_robin_format(
     for round in round_robin(teams, rounds):
         s += "ROUND\n"
         for home, away in round:
-            s += "%s: %s vs %s\n" % (i, home, away)
+            s += f"{i}: {home} vs {away}\n"
             i += 1
     return s.strip()
 
@@ -442,8 +576,8 @@ def single_elimination_final_format(number_of_pools, bronze_playoff=None):
         for pool in range(number_of_pools):
             match = MatchDescriptor(
                 pool + 1,
-                "G%dP1" % (pool + 1),
-                "G%dP2" % (number_of_pools - pool),
+                f"G{pool + 1}P1",
+                f"G{number_of_pools - pool}P2",
                 f"{initial.round_label} {pool + 1}",
             )
             initial.add(match)
@@ -468,8 +602,8 @@ def single_elimination_final_format(number_of_pools, bronze_playoff=None):
         for i in range(matches_this_round):
             match = MatchDescriptor(
                 series[-1].matches[-1].match_id + i + 1,
-                "W%s" % (series[-1].matches[i].match_id),
-                "W%s" % (series[-1].matches[-1 - i].match_id),
+                f"W{series[-1].matches[i].match_id}",
+                f"W{series[-1].matches[-1 - i].match_id}",
                 f"{this_round.round_label} {i + 1}",
             )
             this_round.add(match)
@@ -481,8 +615,8 @@ def single_elimination_final_format(number_of_pools, bronze_playoff=None):
     if bronze_playoff is not None:
         match = MatchDescriptor(
             series[-1].matches[0].match_id + 1,
-            "L%s" % (series[-2].matches[0].match_id),
-            "L%s" % (series[-2].matches[1].match_id),
+            f"L{series[-2].matches[0].match_id}",
+            f"L{series[-2].matches[1].match_id}",
             bronze_playoff,
         )
         series[-1].add(match)
@@ -493,7 +627,15 @@ def single_elimination_final_format(number_of_pools, bronze_playoff=None):
     return series
 
 
-def stage_group_position(stage, formula):
+def stage_group_position(stage, formula, *, naming=False):
+    """
+    The stage, pool and position ``formula`` names, relative to ``stage``.
+
+    With ``naming``, the stage before ``stage`` is read from its naming cache
+    (``Stage._title_comes_after``), so a page naming many teams of one stage
+    looks it up once. Only for naming teams; anything that changes stages
+    leaves it off.
+    """
     match = stage_group_position_re.match(formula)
     if not match:
         logger.exception("Formula %r is invalid", formula)
@@ -504,39 +646,129 @@ def stage_group_position(stage, formula):
 
     if s is None:
         logger.debug("No stage specified in formula %r", formula)
-        s = stage.comes_after
+        if naming:
+            s = stage._title_comes_after
+        else:
+            try:
+                s = stage.comes_after
+            except stage.DoesNotExist:
+                s = None
+        if s is None:
+            # As for a stage number past the last stage of the division.
+            logger.warning(
+                "Formula %r refers to the stage before %r, the first stage",
+                formula,
+                stage,
+            )
+            raise IndexError(
+                f"{formula} refers to the stage before {stage}, the first stage "
+                "of its division"
+            )
     else:
-        try:
-            s = stage.division.stages.all()[int(s) - 1]
-        except IndexError:
-            logger.exception("Invalid stage %r for division %r", s, stage.division)
-            raise
+        # Stages are numbered from one, so S0 names none, as a number past
+        # the last stage does.
+        stages = stage.division.stages.all()
+        stage_count = stages.count()
+        if not 1 <= int(s) <= stage_count:
+            logger.warning(
+                "Invalid stage %r for division %r (division has %d stages)",
+                s,
+                stage.division,
+                stage_count,
+            )
+            raise IndexError(
+                f"Invalid stage {s} for division {stage.division} "
+                f"(division has {stage_count} stages)"
+            )
+        s = stages[int(s) - 1]
     logger.debug("stage=%r", s)
 
     if g is None:
         logger.debug("No group specified in formula %r", formula)
     else:
+        # Pools are numbered from one too, so G0 names none.
         pools = s.pools.all().order_by("order")
-        if pools.count() >= int(g):
-            try:
-                g = pools[int(g) - 1]
-            except IndexError:
-                logger.exception("Invalid group %r for stage %r", g, stage)
-                raise
-        else:
-            pool_count = pools.count()
-            logger.exception(
+        pool_count = pools.count()
+        if not 1 <= int(g) <= pool_count:
+            logger.warning(
                 "Invalid group %r for stage %r (stage has %d pools)", g, s, pool_count
             )
             raise IndexError(
                 f"Invalid group {g} for stage {s} (stage has {pool_count} pools)"
             )
+        g = pools[int(g) - 1]
     logger.debug("group=%r", g)
 
     p = int(p)
     logger.debug("position=%r", p)
 
     return s, g, p
+
+
+def first_stage_position_message(stage_title, formula):
+    """
+    Why the position ``formula`` names no team on a stage titled
+    ``stage_title`` that no stage comes before, or ``None`` when this rule
+    allows it. A position with no stage in it (``P1``, ``G1P2``) is a place
+    on the ladder of the stage before, as ``stage_group_position`` resolves
+    it, and such a stage has none. A position that names its stage
+    (``S1G1P1``) and a winner or loser (``W``, ``L``) are not this rule's to
+    refuse.
+
+    For a saved stage, ``first_stage_position_error`` asks whether a stage
+    comes before it. This is for a stage that is first by construction, such
+    as the first stage of a ``DivisionStructure`` still to be built.
+    """
+    match = stage_group_position_re.fullmatch(formula)
+    if match is None or match["stage"] is not None:
+        return None
+    return _(
+        "%(formula)s refers to the stage before this one, but %(stage)s is "
+        "the first stage of the division."
+    ) % {"formula": formula, "stage": stage_title}
+
+
+def first_stage_position_error(stage, formula):
+    """
+    Why the position ``formula`` names no team when a match or an undecided
+    team of ``stage`` uses it, or ``None`` when this rule allows it: the
+    message of ``first_stage_position_message`` when ``stage`` is the first
+    stage of its division, as ``stage_group_position`` decides that when a
+    match is read.
+    """
+    error = first_stage_position_message(stage.title, formula)
+    if error is None:
+        return None
+    try:
+        stage.comes_after
+    except stage.DoesNotExist:
+        return error
+    return None
+
+
+def zero_position_error(formula):
+    """
+    Why the numbers of the position ``formula`` are refused, or ``None`` when
+    they are not. One is a zero (``S0P1``, ``G0P1``, ``P0``): stages, pools
+    and positions are numbered from one, as ``stage_group_position`` counts
+    them, so it names no team. Or one has a leading zero (``S01P1``): ``int``
+    reads it as the same number, but a formula is matched as text in the
+    database too (``team_awaits_own_ladder``), so it has one spelling. A
+    formula the pattern does not read is not this rule's to refuse.
+    """
+    match = stage_group_position_re.fullmatch(formula)
+    if match is None:
+        return None
+    numbers = [n for n in match.groups() if n is not None]
+    if 0 in [int(n) for n in numbers]:
+        return _("%(formula)s: stage, pool and position numbers start at 1.") % {
+            "formula": formula
+        }
+    if any(n.startswith("0") for n in numbers):
+        return _(
+            "%(formula)s: stage, pool and position numbers have no leading zero."
+        ) % {"formula": formula}
+    return None
 
 
 #
@@ -596,7 +828,11 @@ def generate_fixture_grid(
         dates = season.matches.dates("date", "day")
 
     if templates is None:
-        templates = ["tournamentcontrol/competition/admin/grid.html"]
+        # The admin's callers name the templates of their own shell; this is for
+        # those that do not.
+        templates = get_shell(DEFAULT_SHELL).names(
+            "tournamentcontrol/competition/admin/grid.html"
+        )
 
     if extra_context is None:
         extra_context = {}
@@ -684,6 +920,31 @@ def forfeit_notification_recipients(match):
 #
 
 
+def convert_to_byes(team, from_date):
+    """
+    Turn every unplayed match of ``team`` dated on or after ``from_date``
+    into a bye for its opponent: the team's side is cleared, ``is_bye`` is
+    set, and the time and place are released (the date is kept, so the bye
+    is processed in its round). The matches are updated in bulk, without
+    signals: an unplayed match has no ladder entries to rebuild. A forfeit
+    or a processed bye of the team is left alone, as the ladder has counted
+    it.
+
+    Returns the ids of the matches changed. Shared by ``regrade`` and the
+    ``withdraw_team`` administration tool.
+    """
+    released = {"is_bye": True, "time": None, "datetime": None, "play_at": None}
+    counted = Q(is_forfeit=True) | Q(is_bye=True, bye_processed=True)
+    home = team.home_games.filter(match_unplayed, date__gte=from_date).exclude(counted)
+    away = team.away_games.filter(match_unplayed, date__gte=from_date).exclude(counted)
+    pks = list(home.values_list("pk", flat=True)) + list(
+        away.values_list("pk", flat=True)
+    )
+    home.update(home_team=None, **released)
+    away.update(away_team=None, **released)
+    return pks
+
+
 def regrade(team, to, from_date=None):
     Division = apps.get_model("competition", "Division")
     Team = apps.get_model("competition", "Team")
@@ -697,33 +958,17 @@ def regrade(team, to, from_date=None):
     if from_date is None:
         from_date = team.matches.filter(match_unplayed).earliest("date").date
 
-    # Update the sequence numbers of all teams in the current division to keep
-    # them in order without any gaps
-    team.division.teams.filter(order__gt=team.order).update(order=F("order") - 1)
+    team.move_to(to)
 
     # All unplayed matches that this team is assigned to play need to be turned
     # into byes, removing them from the home_team and away_team fields. Strip
     # the time and field also.
-    old_matches = team.matches.filter(match_unplayed, date__gte=from_date)
-    old_matches.filter(home_team=team).update(
-        home_team=None, is_bye=True, time=None, datetime=None, play_at=None
-    )
-    old_matches.filter(away_team=team).update(
-        away_team=None, is_bye=True, time=None, datetime=None, play_at=None
-    )
+    convert_to_byes(team, from_date)
 
     # Move team into the bye matches in the new division.
     new_matches = to.matches.filter(legitimate_bye_match, date__gte=from_date)
     new_matches.filter(home_team=None).update(home_team=team, is_bye=False)
     new_matches.filter(away_team=None).update(away_team=team, is_bye=False)
-
-    # Determine the highest sequence value in the target division and assign
-    # that to our team. If it throws an DoesNotExist exception, the division
-    # is empty and we need to set it to 1.
-    try:
-        team.order = to.teams.latest("order").order + 1
-    except Team.DoesNotExist:
-        team.order = 1
 
 
 #
@@ -733,7 +978,7 @@ def regrade(team, to, from_date=None):
 
 def team_and_division(o):
     "For use on Model.team_clashes as label_from_instance argument."
-    return "%s (%s)" % (o.title, o.division.title)
+    return f"{o.title} ({o.division.title})"
 
 
 #
@@ -866,10 +1111,38 @@ def create_thumbnail_preview(
         image.save(output_buffer, format="JPEG", quality=quality, optimize=True)
 
     except Exception as e:
-        logger.warning(f"Failed to create thumbnail preview: {e}")
+        logger.warning("Failed to create thumbnail preview: %s", e)
         return ThumbnailPreview()
 
     return ThumbnailPreview(output_buffer.getvalue(), original_mime)
+
+
+# YouTube's thumbnails.set takes at most 2 MB, and recommends 1280x720.
+YOUTUBE_THUMBNAIL_MAX_BYTES = 2 * 1024 * 1024
+YOUTUBE_THUMBNAIL_SIZE = (1280, 720)
+YOUTUBE_THUMBNAIL_QUALITIES = (90, 80, 70, 60, 50, 40, 30)
+
+
+def fit_youtube_thumbnail(image_data):
+    """
+    The thumbnail as YouTube will take it. An image within the size limit is
+    returned as it is. A larger one is scaled down to fit 1280x720 and encoded
+    again as JPEG, at a lower quality each time until it is within the limit.
+
+    Returns ``None`` when it cannot be made to fit: it is over the limit and
+    cannot be read as an image.
+    """
+    if len(image_data) <= YOUTUBE_THUMBNAIL_MAX_BYTES:
+        return image_data
+    for quality in YOUTUBE_THUMBNAIL_QUALITIES:
+        fitted = create_thumbnail_preview(
+            image_data, *YOUTUBE_THUMBNAIL_SIZE, quality=quality
+        ).image_data
+        if fitted is None:
+            return None
+        if len(fitted) <= YOUTUBE_THUMBNAIL_MAX_BYTES:
+            return fitted
+    return None
 
 
 def matches_timeline(matches_by_date):
@@ -904,11 +1177,7 @@ def matches_timeline(matches_by_date):
         )
         for match in ordered:
             gap = None
-            if (
-                previous is not None
-                and match.datetime is not None
-                and not match.is_bye
-            ):
+            if previous is not None and match.datetime is not None and not match.is_bye:
                 gap = match.datetime - previous.datetime
             item = {
                 "match": match,
@@ -921,10 +1190,7 @@ def matches_timeline(matches_by_date):
             if (
                 not next_found
                 and not match.is_bye
-                and (
-                    match.home_team_score is None
-                    or match.away_team_score is None
-                )
+                and (match.home_team_score is None or match.away_team_score is None)
             ):
                 item["is_next"] = True
                 next_found = True

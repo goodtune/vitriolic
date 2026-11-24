@@ -1,0 +1,22 @@
+{% extends "touchtechnology/admin/explorer/form_page.html" %}
+{% load i18n admin admin_explorer %}
+
+{% block page_title %}{% trans "Give the team a club" %}{% endblock %}
+{% block page_kind %}{{ team }}{% endblock %}
+{% block page_icon %}<span class="title-icon">{% icon "team" %}</span>{% endblock %}
+
+{% block form-actions %}
+	<div class="form-buttons">
+		<a class="button" href="{{ cancel_url }}">{% trans "Cancel" %}</a>
+		<button type="submit" form="edit-form" class="button primary">{% icon "check" %}<span>{% trans "Give the team a club" %}</span></button>
+	</div>
+{% endblock %}
+
+{% block form-body %}
+	<p>{% blocktrans %}The people of a team come from its club. {{ team }} has no club, so nobody can be added to it yet.{% endblocktrans %}</p>
+	{% if club %}
+		<p>{% blocktrans %}{{ team }} will join {{ club }}, the club of {{ competition }} that has its name.{% endblocktrans %}</p>
+	{% else %}
+		<p>{% blocktrans %}A club named {{ team }} will be created, added to the clubs of {{ competition }} and given this team.{% endblocktrans %}</p>
+	{% endif %}
+{% endblock %}

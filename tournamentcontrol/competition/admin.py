@@ -1,15 +1,18 @@
 import base64
 import collections
+import datetime
 import functools
 import logging
 import operator
 from zoneinfo import ZoneInfo
 
+from celery import states
 from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
+from django.core.exceptions import FieldDoesNotExist, ValidationError
 from django.db import models
-from django.db.models import Case, F, Q, Sum, When
+from django.db.models import Case, Count, F, Prefetch, Q, Sum, When
 from django.forms.models import _get_foreign_key
 from django.http import (
     Http404,
@@ -18,27 +21,35 @@ from django.http import (
     HttpResponseRedirect,
 )
 from django.shortcuts import get_object_or_404
+from django.template.loader import select_template
 from django.template.response import TemplateResponse
 from django.urls import include, path, re_path, reverse
-from django.utils import timezone
+from django.utils import formats, timezone
+from django.utils.formats import date_format
+from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _, ngettext
 from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
 from guardian.utils import get_40x_or_None
 
 from touchtechnology.admin.base import AdminComponent
+from touchtechnology.admin.explorer import Explorer, Folder, Node, Rel
+from touchtechnology.admin.setup import Setup, Step
+from touchtechnology.admin.trail import tab_of
 from touchtechnology.common.decorators import (
     csrf_exempt_m,
+    require_POST_m,
     staff_login_required_m,
 )
+from touchtechnology.common.prince import PrinceError, PrinceUnavailable, prince
 from touchtechnology.common.utils import get_perms_for_model
-from touchtechnology.common.prince import prince
 from tournamentcontrol.competition.dashboard import (
     BasicResultWidget,
     DetailResultWidget,
     MostValuableWidget,
     ProgressStageWidget,
     ScoresheetWidget,
+    matches_require_basic_results,
 )
 from tournamentcontrol.competition.decorators import (
     competition_by_pk_m,
@@ -46,8 +57,10 @@ from tournamentcontrol.competition.decorators import (
 )
 from tournamentcontrol.competition.forms import (
     ClubAssociationForm,
+    ClubEditForm,
     ClubRoleForm,
     CompetitionForm,
+    DivisionBulkCreateForm,
     DivisionForm,
     DivisionStructureJSONFormSet,
     DrawFormatForm,
@@ -59,23 +72,28 @@ from tournamentcontrol.competition.forms import (
     MatchEditForm,
     MatchLiveStreamFormSet,
     MatchRefereeForm,
+    MatchResultFormSet,
     MatchScheduleFormSet,
+    MatchStatisticFormset,
     MatchStreamForm,
     MatchWashoutFormSet,
     PersonEditForm,
     PersonMergeForm,
+    ProgressMatchesFormSet,
+    ProgressTeamsFormSet,
     RescheduleDateFormSet,
     SeasonAssociationFormSet,
     SeasonForm,
-    SeasonMatchTimeFormSet,
     StageForm,
     StageGroupForm,
     TeamAssociationForm,
     TeamAssociationFormSet,
+    TeamBulkCreateForm,
     TeamForm,
     TeamRoleForm,
     UndecidedTeamForm,
     VenueForm,
+    bulk_create_formset_factory,
 )
 from tournamentcontrol.competition.models import (
     Club,
@@ -92,6 +110,7 @@ from tournamentcontrol.competition.models import (
     LiveStreamKey,
     Match,
     MatchScoreSheet,
+    OrderedSitemapNode,
     Person,
     Place,
     Season,
@@ -107,14 +126,15 @@ from tournamentcontrol.competition.models import (
     TeamRole,
     UndecidedTeam,
     Venue,
+    upstream_renamed,
 )
-from tournamentcontrol.competition.sites import CompetitionAdminMixin
 from tournamentcontrol.competition.tasks import (
     build_live_stream_event_body,
     generate_pdf_grid,
     generate_pdf_scorecards,
     sync_live_stream,
     sync_live_stream_event,
+    synchronise_upstream_season,
 )
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
@@ -122,10 +142,24 @@ from tournamentcontrol.competition.utils import (
     generate_scorecards,
     legitimate_bye_match,
     match_unplayed,
+    team_awaits_own_ladder,
+    team_awaits_upstream,
+    team_needs_progressing,
 )
 from tournamentcontrol.competition.wizards import DrawGenerationWizard
 
 SCORECARD_PDF_WAIT = getattr(settings, "TOURNAMENTCONTROL_SCORECARD_PDF_WAIT", 5)
+
+PDF_FAILED_MESSAGE = _(
+    "The PDF service didn't respond, so your PDF could not be generated. "
+    "Please try again."
+)
+
+# Shown when the PDF binary cannot be run, so trying again will not help.
+PDF_UNAVAILABLE_MESSAGE = _(
+    "PDF dependencies are unavailable, so your PDF could not be generated. "
+    "Trying again will not help; ask an administrator to check the PDF setup."
+)
 
 # Shown when the season's stored OAuth2 refresh token is expired or revoked
 # and the YouTube platform can no longer be reached on its behalf.
@@ -134,7 +168,289 @@ YOUTUBE_AUTH_EXPIRED_MESSAGE = _(
     "Re-authorise from the YouTube button on the seasons list and try again."
 )
 
+# Shown when the season cannot reach YouTube at all: its client details are
+# missing, or nobody has completed the authorisation (``Season.youtube_ready``).
+YOUTUBE_NOT_AUTHORISED_MESSAGE = _(
+    "YouTube access has not been authorised for this season. "
+    "Authorise from the YouTube button on the seasons list and try again."
+)
+
+# The same, where the change is saved because YouTube only mirrors it.
+YOUTUBE_NOT_UPDATED_MESSAGE = _(
+    "YouTube access has not been authorised for this season, so the change "
+    "was saved here but not made on YouTube."
+)
+
 log = logging.getLogger(__name__)
+
+
+def _step(key, title, done, note, url, optional=False):
+    return Step(title, bool(done), note or "", url, optional, key=key)
+
+
+def match_days(season):
+    """Each day of ``season``'s matches, with how far its matches have come."""
+    scheduled = Q(time__isnull=False, play_at__isnull=False) | Q(is_bye=True)
+    played = Q(home_team_score__isnull=False, away_team_score__isnull=False) | Q(
+        is_bye=True, bye_processed=True
+    )
+    rows = (
+        Match.objects.filter(stage__division__season=season, date__isnull=False)
+        .values("date")
+        .annotate(
+            total=Count("pk"),
+            scheduled=Count("pk", filter=scheduled),
+            played=Count("pk", filter=played | Q(is_washout=True)),
+        )
+        .order_by("date")
+    )
+    today = season.local_date()
+    return [dict(row, past=row["date"] <= today) for row in rows]
+
+
+def awaiting_results(matches):
+    """
+    Of ``matches``, those waiting for a result, exactly as the home page's
+    widget counts them (see ``matches_require_basic_results``).
+    """
+    return matches_require_basic_results(matches=matches)
+
+
+def season_checklist(season):
+    """
+    The jobs that set ``season`` up, in the order they are done. Entering
+    results is not one of them: it is the work of every match day once the
+    season is set up, offered by the home page's tasks and the Awaiting
+    Scores widget.
+    """
+    edit = str(season.urls["edit"])
+    timeslots = season.timeslots.count()
+    venues = season.venues.count()
+    grounds = Ground.objects.filter(venue__season=season).count()
+    exclusions = season.exclusions.count()
+    divisions = list(
+        season.divisions.annotate(
+            team_count=Count("teams", distinct=True),
+            match_count=Count("stages__matches", distinct=True),
+        ).order_by("order")
+    )
+    teams = sum(division.team_count for division in divisions)
+    without_teams = [d for d in divisions if d.team_count < 2]
+    without_draw = [d for d in divisions if not d.match_count]
+    matches = Match.objects.filter(stage__division__season=season)
+    total = matches.count()
+    unscheduled = (
+        matches.exclude(is_bye=True)
+        .filter(Q(date__isnull=True) | Q(time__isnull=True) | Q(play_at__isnull=True))
+        .count()
+    )
+
+    def division_link(division, tab):
+        return f"{division.urls['edit']}#{tab}-tab"
+
+    steps = [
+        _step(
+            "details",
+            _("Name the season and when it starts"),
+            bool(season.start_date),
+            season.start_date
+            and _("Starts %(date)s")
+            % {"date": date_format(season.start_date, "j F Y")},
+            f"{edit}#season-tab",
+        ),
+        _step(
+            "timeslots",
+            _("Add the kick-off times"),
+            timeslots > 0,
+            (
+                ngettext("%(n)d time slot", "%(n)d time slots", timeslots)
+                % {"n": timeslots}
+                if timeslots
+                else _("When matches can start each day")
+            ),
+            f"{edit}#timeslots-tab",
+        ),
+        _step(
+            "venues",
+            _("Add venues and their grounds"),
+            grounds > 0,
+            (
+                _("%(venues)d venues, %(grounds)d grounds")
+                % {"venues": venues, "grounds": grounds}
+                if venues
+                else _("Where the matches are played")
+            ),
+            f"{edit}#venues-tab",
+        ),
+        _step(
+            "exclusions",
+            _("Mark the dates with no matches"),
+            exclusions > 0,
+            (
+                ngettext("%(n)d date set aside", "%(n)d dates set aside", exclusions)
+                % {"n": exclusions}
+                if exclusions
+                else _("Public holidays and breaks")
+            ),
+            f"{edit}#exclusions-tab",
+            optional=True,
+        ),
+        _step(
+            "divisions",
+            _("Add the divisions"),
+            bool(divisions),
+            (
+                ngettext("%(n)d division", "%(n)d divisions", len(divisions))
+                % {"n": len(divisions)}
+                if divisions
+                else _("Add several at once")
+            ),
+            f"{edit}#divisions-tab",
+        ),
+        _step(
+            "teams",
+            _("Enter the teams"),
+            bool(divisions) and not without_teams,
+            (
+                _("%(division)s needs teams") % {"division": without_teams[0].title}
+                if without_teams
+                else ngettext("%(n)d team", "%(n)d teams", teams) % {"n": teams}
+            ),
+            (
+                division_link(without_teams[0], "teams")
+                if without_teams
+                else f"{edit}#divisions-tab"
+            ),
+        ),
+        _step(
+            "draw",
+            _("Build the draw"),
+            bool(divisions) and not without_draw,
+            (
+                _("%(division)s has no draw yet") % {"division": without_draw[0].title}
+                if without_draw
+                else ngettext("%(n)d match", "%(n)d matches", total) % {"n": total}
+            ),
+            (
+                division_link(without_draw[0], "stages")
+                if without_draw
+                else f"{edit}#schedule-tab"
+            ),
+        ),
+        _step(
+            "schedule",
+            _("Give every match a time and a ground"),
+            total > 0 and unscheduled == 0,
+            (
+                ngettext(
+                    "%(n)d match to schedule", "%(n)d matches to schedule", unscheduled
+                )
+                % {"n": unscheduled}
+                if unscheduled
+                else (_("All scheduled") if total else _("Once the draw is built"))
+            ),
+            f"{edit}#schedule-tab",
+        ),
+    ]
+    return Setup(_("Season set-up"), steps)
+
+
+def division_ladders(division):
+    """
+    The ladder of each stage of ``division`` that has one, a table per pool:
+    a list of ``(stage, [(pool or None, rows)])``.
+    """
+    ladders = []
+    for stage in division.stages.all():
+        rows = list(
+            stage.ladder_summary.select_related("team", "stage_group").order_by(
+                "stage_group__order",
+                "-points",
+                "-difference",
+                "-percentage",
+                "team__title",
+            )
+        )
+        if not rows:
+            continue
+        pools = []
+        for row in rows:
+            if not pools or pools[-1][0] != row.stage_group:
+                pools.append((row.stage_group, []))
+            pools[-1][1].append(row)
+        ladders.append((stage, pools))
+    return ladders
+
+
+def division_setup(division):
+    """The jobs that make ``division`` ready to play, in order."""
+    edit = str(division.urls["edit"])
+    teams = division.teams.count()
+    stages = list(division.stages.annotate(match_count=Count("matches")))
+    undrawn = [stage for stage in stages if not stage.match_count]
+    steps = [
+        _step(
+            "points",
+            _("Say how many points a win, draw and loss earn"),
+            bool(division.points_formula),
+            (
+                _("Needed before results can be saved")
+                if not division.points_formula
+                else _("Points are set")
+            ),
+            f"{edit}#division-tab",
+        ),
+        _step(
+            "teams",
+            _("Enter the teams"),
+            teams >= 2,
+            (
+                ngettext("%(n)d team", "%(n)d teams", teams) % {"n": teams}
+                if teams
+                else _("Add several at once")
+            ),
+            f"{edit}#teams-tab",
+        ),
+        _step(
+            "stages",
+            _("Add the stages"),
+            bool(stages),
+            (
+                ngettext("%(n)d stage", "%(n)d stages", len(stages))
+                % {"n": len(stages)}
+                if stages
+                else _("The rounds, then the finals")
+            ),
+            f"{edit}#stages-tab",
+        ),
+        _step(
+            "draw",
+            _("Build the draw of each stage"),
+            bool(stages) and not undrawn,
+            (
+                _("%(stage)s has no draw yet") % {"stage": undrawn[0].title}
+                if undrawn
+                else (
+                    _("Every stage is drawn")
+                    if stages
+                    else _("Once the stages are added")
+                )
+            ),
+            str(undrawn[0].urls["build"]) if undrawn else f"{edit}#stages-tab",
+        ),
+    ]
+    return Setup(_("Division set-up"), steps)
+
+
+def bulk_create_count(request, default=5):
+    """
+    The number of blank rows a bulk create view shows, from the ``count``
+    query parameter.
+    """
+    try:
+        return int(request.GET.get("count", default))
+    except ValueError:
+        return default
 
 
 def next_related_factory(model, parent=None, fk_name=None):
@@ -152,12 +468,351 @@ def next_related_factory(model, parent=None, fk_name=None):
     return model(order=last + 1, **kw)
 
 
-class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
+def _count(n, singular, plural):
+    return ngettext(singular, plural, n) % {"n": n}
+
+
+def season_setup(season, here=True):
+    """What ``season`` still needs before its matches can be played."""
+    edit = str(season.urls["edit"])
+    timeslots = season.timeslots.count()
+    venues = list(season.venues.annotate(ground_count=Count("grounds")))
+    grounds = sum(v.ground_count for v in venues)
+    bare_venue = next((v for v in venues if not v.ground_count), None)
+    exclusions = season.exclusions.count()
+    referees = season.referees.count()
+    divisions = list(
+        season.divisions.annotate(
+            team_count=Count("teams", distinct=True),
+            stage_count=Count("stages", distinct=True),
+            match_count=Count("stages__matches", distinct=True),
+        ).select_related("season")
+    )
+    short_of_teams = next((d for d in divisions if d.team_count < 2), None)
+    without_stage = next((d for d in divisions if not d.stage_count), None)
+    without_draw = next((d for d in divisions if not d.match_count), None)
+    matches = sum(d.match_count for d in divisions)
+    unscheduled = list(
+        Match.objects.filter(stage__division__season=season, is_bye=False)
+        .filter(Q(date__isnull=True) | Q(time__isnull=True) | Q(play_at__isnull=True))
+        .values_list("date", flat=True)
+        .order_by("date")
+    )
+    first_day = next((d for d in unscheduled if d is not None), None)
+
+    def tab(obj, name):
+        return f"{obj.urls['edit']}#{name}-tab"
+
+    steps = [
+        Step(
+            _("Set the dates"),
+            bool(season.start_date),
+            (
+                _("Starts %(date)s")
+                % {"date": formats.date_format(season.start_date, "j F Y")}
+                if season.start_date
+                else _("The draw needs a first day")
+            ),
+            f"{edit}#{slugify(season._meta.verbose_name)}-tab",
+        ),
+        Step(
+            _("Add the kick-off times"),
+            timeslots > 0,
+            (
+                _count(timeslots, "%(n)d time slot", "%(n)d time slots")
+                if timeslots
+                else _("No time slots yet")
+            ),
+            f"{edit}#timeslots-tab",
+        ),
+        Step(
+            _("Add venues and their grounds"),
+            bool(venues) and bare_venue is None,
+            (
+                _("%(venue)s has no grounds") % {"venue": bare_venue.title}
+                if bare_venue
+                else (
+                    _("%(venues)s, %(grounds)s")
+                    % {
+                        "venues": _count(len(venues), "%(n)d venue", "%(n)d venues"),
+                        "grounds": _count(grounds, "%(n)d ground", "%(n)d grounds"),
+                    }
+                    if venues
+                    else _("No venues yet")
+                )
+            ),
+            tab(bare_venue, "grounds") if bare_venue else f"{edit}#venues-tab",
+        ),
+        Step(
+            _("Set aside the days with no matches"),
+            exclusions > 0,
+            (
+                _count(exclusions, "%(n)d day set aside", "%(n)d days set aside")
+                if exclusions
+                else _("Holidays and breaks, if there are any")
+            ),
+            f"{edit}#exclusions-tab",
+            optional=True,
+        ),
+        Step(
+            _("Add the divisions"),
+            bool(divisions),
+            (
+                _count(len(divisions), "%(n)d division", "%(n)d divisions")
+                if divisions
+                else _("No divisions yet; add several at once")
+            ),
+            f"{edit}#divisions-tab",
+        ),
+        Step(
+            _("Enter the teams"),
+            bool(divisions) and short_of_teams is None,
+            (
+                _("%(division)s has fewer than two teams")
+                % {"division": short_of_teams.title}
+                if short_of_teams
+                else (
+                    _count(
+                        sum(d.team_count for d in divisions),
+                        "%(n)d team",
+                        "%(n)d teams",
+                    )
+                    if divisions
+                    else _("Once there are divisions")
+                )
+            ),
+            tab(short_of_teams, "teams") if short_of_teams else f"{edit}#divisions-tab",
+        ),
+        Step(
+            _("Add the stages"),
+            bool(divisions) and without_stage is None,
+            (
+                _("%(division)s has no stage") % {"division": without_stage.title}
+                if without_stage
+                else (
+                    _count(
+                        sum(d.stage_count for d in divisions),
+                        "%(n)d stage",
+                        "%(n)d stages",
+                    )
+                    if divisions
+                    else _("Once there are divisions")
+                )
+            ),
+            tab(without_stage, "stages") if without_stage else f"{edit}#divisions-tab",
+        ),
+        Step(
+            _("Build the draw"),
+            bool(divisions) and without_draw is None,
+            (
+                _("%(division)s has no matches yet") % {"division": without_draw.title}
+                if without_draw
+                else (
+                    _count(matches, "%(n)d match", "%(n)d matches")
+                    if divisions
+                    else _("Once there are stages")
+                )
+            ),
+            tab(without_draw, "stages") if without_draw else f"{edit}#schedule-tab",
+        ),
+        Step(
+            _("Give every match a time and a ground"),
+            matches > 0 and not unscheduled,
+            (
+                _count(
+                    len(unscheduled),
+                    "%(n)d match to allocate",
+                    "%(n)d matches to allocate",
+                )
+                if unscheduled
+                else _("All allocated")
+                if matches
+                else _("Once the draw is built")
+            ),
+            (
+                reverse(
+                    "admin:fixja:match-schedule",
+                    args=(
+                        season.competition_id,
+                        season.pk,
+                        first_day.strftime("%Y%m%d"),
+                    ),
+                )
+                if first_day
+                else f"{edit}#schedule-tab"
+            ),
+        ),
+        Step(
+            _("Name the referees"),
+            referees > 0,
+            (
+                _count(referees, "%(n)d referee", "%(n)d referees")
+                if referees
+                else _("The officials who can take a match")
+            ),
+            f"{edit}#referees-tab",
+            optional=True,
+        ),
+    ]
+    if here:
+        return Setup(_("Season set-up"), steps)
+    return Setup(_("Season set-up"), steps, url=f"{edit}#setup-tab", here=False)
+
+
+def competition_setup(competition):
+    """What ``competition`` needs before its seasons can be run."""
+    edit = str(competition.urls["edit"])
+    seasons = competition.seasons.count()
+    clubs = competition.clubs.count()
+    club_roles = competition.club_roles.count()
+    team_roles = competition.team_roles.count()
+    steps = [
+        Step(
+            _("Take in the clubs"),
+            clubs > 0,
+            (
+                _count(clubs, "%(n)d club", "%(n)d clubs")
+                if clubs
+                else _("Choose them on the details")
+            ),
+            f"{edit}#{slugify(competition._meta.verbose_name)}-tab",
+        ),
+        Step(
+            _("Add a season"),
+            seasons > 0,
+            (
+                _count(seasons, "%(n)d season", "%(n)d seasons")
+                if seasons
+                else _("No seasons yet")
+            ),
+            f"{edit}#seasons-tab",
+        ),
+        Step(
+            _("Name the club roles"),
+            club_roles > 0,
+            (
+                _count(club_roles, "%(n)d role", "%(n)d roles")
+                if club_roles
+                else _("President, secretary and the like")
+            ),
+            f"{edit}#club_roles-tab",
+            optional=True,
+        ),
+        Step(
+            _("Name the team roles"),
+            team_roles > 0,
+            (
+                _count(team_roles, "%(n)d role", "%(n)d roles")
+                if team_roles
+                else _("Captain, coach and the like")
+            ),
+            f"{edit}#team_roles-tab",
+            optional=True,
+        ),
+    ]
+    return Setup(_("Competition set-up"), steps)
+
+
+def season_days(explorer, request, season):
+    """The season's match days, each opening on its results."""
+    return [
+        Node(
+            key=explorer.key(f"x:day:{season.pk}:{day:%Y%m%d}"),
+            label=date_format(day, "D j M"),
+            url=reverse(
+                "admin:fixja:match-results",
+                args=(season.competition_id, season.pk, day.strftime("%Y%m%d")),
+            ),
+            icon=explorer.shell.icon("day"),
+        )
+        for day in season.matches.dates("date", "day")
+    ]
+
+
+class CompetitionExplorer(Explorer):
+    """
+    Competition, season, division, stage and pool, as the URLs nest them,
+    with a season's venues and match days and a division's teams in folders
+    of their own. A club holds its people. (After the Explorer entry.)
+    """
+
+    branches = {
+        Competition: (Rel("seasons", flat=True),),
+        Season: (
+            Rel("divisions", flat=True),
+            Rel("venues", label=_("Venues"), icon="venues"),
+            Folder("days", _("Match days"), children=season_days, icon="days"),
+        ),
+        Division: (
+            Rel("stages", flat=True),
+            Rel("teams", label=_("Teams"), icon="teams"),
+        ),
+        Stage: (Rel("pools", flat=True),),
+        StageGroup: (),
+        Venue: (Rel("grounds", flat=True),),
+        Ground: (),
+        Team: (),
+        UndecidedTeam: (),
+        Match: (),
+        Club: (Rel("members", flat=True),),
+        Person: (),
+        DrawFormat: (),
+    }
+
+    def trail(self, request, context):
+        keys = super().trail(request, context)
+        season, day = context.get("season"), context.get("date")
+        if isinstance(season, Season) and isinstance(day, datetime.date):
+            keys += [
+                self.key(f"g:competition.season:{season.pk}:days"),
+                self.key(f"x:day:{season.pk}:{day:%Y%m%d}"),
+            ]
+        return keys
+
+    def group_node(self, obj, rel, value=None, label=None):
+        node = super().group_node(obj, rel, value, label)
+        if isinstance(obj, Season) and rel.name == "days":
+            node.url = f"{obj.urls['edit']}#schedule-tab"
+        return node
+
+
+class CompetitionAdminComponent(AdminComponent):
     verbose_name = _("Tournament Control")
+    explorer_class = CompetitionExplorer
     unprotected = False
 
     def __init__(self, app, name="fixja", app_name="competition"):
-        super(CompetitionAdminComponent, self).__init__(app, name, app_name)
+        super().__init__(app, name, app_name)
+
+    def season_progress(self, season, here=True):
+        """
+        How far ``season``'s set-up has got, as the shell guides it: Workbook
+        lists the jobs of a season and its match days, Explorer the steps to
+        the first match (see ``season_checklist`` and ``season_setup``).
+        ``here`` is false on pages of something inside the season, which show
+        only the progress bar (Explorer) or nothing (Workbook).
+        """
+        if self.shell.name == "workbook":
+            return season_checklist(season) if here else None
+        return season_setup(season, here)
+
+    def generic_edit(self, request, *args, extra_context=None, **kwargs):
+        # Every page inside a season shows how far the season's set-up has got.
+        extra_context = {} if extra_context is None else extra_context
+        season = extra_context.get("season")
+        if (
+            request.method == "GET"
+            and "_htmx_tab" not in request.GET
+            and "setup" not in extra_context
+            and isinstance(season, Season)
+            and season.pk
+        ):
+            setup = self.season_progress(season, here=False)
+            if setup is not None:
+                extra_context["setup"] = setup
+        return super().generic_edit(
+            request, *args, extra_context=extra_context, **kwargs
+        )
 
     def dropdowns(self):
         dl = (
@@ -182,12 +837,10 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     def render(self, request, templates, context, *args, **kwargs):
         context.update(
             {
-                "base": "tournamentcontrol/rego/admin/base.html",
+                "base": f"tournamentcontrol/rego/admin/{self.shell.name}/base.html",
             }
         )
-        return super(CompetitionAdminComponent, self).render(
-            request, templates, context, *args, **kwargs
-        )
+        return super().render(request, templates, context, *args, **kwargs)
 
     def get_urls(self):
         stub_urls = (
@@ -202,8 +855,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         matchscoresheet_urls = (
             [
                 path("add/", self.edit_matchscoresheet, name="add"),
-                path("<int:pk>/", self.edit_matchscoresheet, name="edit"),
-                path("<int:pk>/delete/", self.delete_matchscoresheet, name="delete"),
+                path("<uuid:pk>/", self.edit_matchscoresheet, name="edit"),
+                path("<uuid:pk>/delete/", self.delete_matchscoresheet, name="delete"),
             ],
             self.app_name,
         )
@@ -392,9 +1045,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         team_urls = (
             [
                 path("add/", self.edit_team, name="add"),
+                path("bulk/", self.bulk_create_team, name="bulk"),
                 path("<int:team_id>/", self.edit_team, name="edit"),
                 path("<int:team_id>/delete/", self.delete_team, name="delete"),
                 path("<int:team_id>/permissions/", self.perms_team, name="perms"),
+                path("<int:team_id>/club/", self.team_club, name="club"),
                 path("<int:team_id>/match/", include(match_urls, namespace="match")),
                 path(
                     "<int:team_id>/association/",
@@ -407,6 +1062,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         division_urls = (
             [
                 path(r"add/", self.edit_division, name="add"),
+                path("bulk/", self.bulk_create_division, name="bulk"),
                 path("<int:division_id>/", self.edit_division, name="edit"),
                 path("<int:division_id>/delete/", self.delete_division, name="delete"),
                 path(
@@ -437,6 +1093,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 path("<int:season_id>/", self.edit_season, name="edit"),
                 path(
                     "<int:season_id>/authorize", self.oauth_authorize, name="authorize"
+                ),
+                path(
+                    "<int:season_id>/upstream/",
+                    self.upstream_sync,
+                    name="upstream-sync",
                 ),
                 path("<int:season_id>/delete/", self.delete_season, name="delete"),
                 path(
@@ -681,71 +1342,170 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         return urlpatterns
 
     @staff_login_required_m
+    @require_POST_m
     def reorder(self, request, model, pk, direction, parent=None, **kwargs):
-        # Determine where to redirect back to following the reordering
-        redirect_to = request.META.get("HTTP_REFERER", None)
-        if redirect_to is None:
+        # Reconstruct the object from the keyword arguments: a model that is
+        # kept in an order, the parent (a foreign key of it) whose rows are
+        # listed together, and one of those rows. Any other address is stale
+        # or hand-made, and is not found.
+        try:
+            cls = apps.get_model("competition", model)
+            field = cls._meta.get_field(parent) if parent is not None else None
+        except (LookupError, FieldDoesNotExist):
             raise Http404
-
-        # Reconstruct the object from the keyword arguments
-        cls = apps.get_model("competition", model)
-        obj = cls.objects.get(pk=pk)
-
-        # Determine the neighbouring order values based on direction
-        if direction == "up":
-            orders = obj.order, obj.order - 1
-        elif direction == "down":
-            orders = obj.order, obj.order + 1
-        else:
+        if not issubclass(cls, OrderedSitemapNode):
             raise Http404
-
-        # Get our OrderedSitemapNode queryset for the given model
-        queryset = cls.objects.filter(order__in=orders)
-        if parent is not None:
-            queryset = queryset.filter(**{str(parent): getattr(obj, parent)})
-
-        # We can't reorder the first item up or the last item down; throw
-        # a 404 when trying to do so.
-        if queryset.count() != 2:
+        if field is not None and not isinstance(field, models.ForeignKey):
             raise Http404
+        obj = get_object_or_404(cls, pk=pk)
 
-        # Swap the order value of the two neighbours and write to db.
-        # 1) Hang onto the original ordering of a and b
-        a, b = queryset
-        ao, bo = a.order, b.order
-
-        # 2) Set a.order to 0 to allow b.order to assume that value
-        a.order = 0
-        a.save()
-
-        # 3) Assign the new value to b.order
-        b.order = ao
-        b.save()
-
-        # 4) Assign the new value to a.order
-        a.order = bo
-        a.save()
-
-        fmt = _('The %(model)s "%(title)s" has been reordered %(direction)s the list.')
-        messages.info(
+        # Only a person who may change the object may move it, as with the
+        # Edit item beside its arrows.
+        has_permission = get_40x_or_None(
             request,
-            fmt
-            % dict(model=cls._meta.verbose_name, title=obj.title, direction=direction),
+            get_perms_for_model(cls, change=True),
+            obj=obj,
+            return_403=True,
+            accept_global_perms=True,
         )
+        if has_permission is not None:
+            return has_permission
 
-        return self.redirect(redirect_to)
+        if direction not in ("up", "down"):
+            raise Http404
+
+        # The model knows which rows it is listed with and swaps places with
+        # its real neighbour; a move off either end of the list changes
+        # nothing and goes back to the list.
+        if getattr(obj, f"move_{direction}")():
+            fmt = _(
+                'The %(model)s "%(title)s" has been reordered %(direction)s the list.'
+            )
+            messages.info(
+                request,
+                fmt
+                % dict(
+                    model=cls._meta.verbose_name, title=obj.title, direction=direction
+                ),
+            )
+
+        # Return to the list the arrows are in: the tab of the parent's page
+        # that lists the object, or the object's own page without a parent.
+        if parent is None:
+            return self.redirect(obj.urls["edit"])
+        owner = getattr(obj, parent)
+        return self.redirect(f"{owner.urls['edit']}{tab_of(type(owner), cls)}")
 
     @staff_login_required_m
     def index(self, request, **kwargs):
-        messages.warning(
-            request,
-            _(
-                "We're moving a few things around, please "
-                "update any bookmarks you may find that "
-                "have broken."
-            ),
+        """
+        Tournament Control's own page (its jobs, and the seasons in progress
+        with how far each has come) where the shell has landing pages; the
+        list of competitions where it does not.
+        """
+        if not self.shell.index_landing:
+            return self.redirect(self.reverse("competition:list"))
+        context = dict(kwargs)
+        context.update(
+            {
+                "tasks": self.tasks(request),
+                "sections": self.sections(request),
+                "seasons": self.seasons_in_progress(),
+            }
         )
-        return self.redirect(self.reverse("competition:list"))
+        return self.render(request, self.template_path("index.html"), context)
+
+    def seasons_in_progress(self):
+        """The seasons that are not complete, each with its set-up checklist."""
+        seasons = (
+            Season.objects.filter(complete=False, competition__enabled=True)
+            .select_related("competition")
+            .order_by("-start_date")
+        )
+        return [(season, season_checklist(season)) for season in seasons[:6]]
+
+    def tasks(self, request):
+        """
+        The jobs of a match day and of a season, pointing at the day or the
+        season they are about: results waiting, the next day to schedule, the
+        season still being set up, and the clubs.
+        """
+        tasks = []
+        # One query each: the latest day with a result to enter, and the next
+        # day still to come, each with its season.
+        awaiting = (
+            awaiting_results(
+                Match.objects.filter(stage__division__season__complete=False)
+            )
+            .select_related(None)
+            .select_related("stage__division__season")
+            .order_by("-date")
+            .first()
+        )
+        if awaiting is not None:
+            season = awaiting.stage.division.season
+            tasks.append(
+                {
+                    "label": _("Enter results"),
+                    "url": reverse(
+                        "admin:fixja:match-results",
+                        args=(
+                            season.competition_id,
+                            season.pk,
+                            awaiting.date.strftime("%Y%m%d"),
+                        ),
+                    ),
+                    "note": f"{date_format(awaiting.date, 'D j M')} · {season.title}",
+                    "icon": "list-checks",
+                    "priority": 10,
+                }
+            )
+        upcoming = (
+            Match.objects.filter(
+                stage__division__season__complete=False,
+                date__gte=timezone.localdate(),
+            )
+            .select_related("stage__division__season")
+            .order_by("date")
+            .first()
+        )
+        if upcoming is not None:
+            season = upcoming.stage.division.season
+            tasks.append(
+                {
+                    "label": _("Schedule the next match day"),
+                    "url": reverse(
+                        "admin:fixja:match-schedule",
+                        args=(
+                            season.competition_id,
+                            season.pk,
+                            upcoming.date.strftime("%Y%m%d"),
+                        ),
+                    ),
+                    "note": f"{date_format(upcoming.date, 'D j M')} · {season.title}",
+                    "icon": "clock",
+                    "priority": 11,
+                }
+            )
+        tasks.append(
+            {
+                "label": _("Set up a season"),
+                "url": self.reverse("competition:list"),
+                "note": _("Divisions, teams, venues and the draw"),
+                "icon": "trophy",
+                "priority": 12,
+            }
+        )
+        tasks.append(
+            {
+                "label": _("Keep clubs and people current"),
+                "url": self.reverse("club:list"),
+                "note": _("Clubs, their people and officials"),
+                "icon": "shield",
+                "priority": 13,
+            }
+        )
+        return tasks
 
     @competition_by_pk_m
     @staff_login_required_m
@@ -786,7 +1546,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         competition = extra_context.get("competition")
         queryset = model.objects.filter(competition=competition)
         post_delete_redirect = self.redirect(
-            competition.urls["edit"] + "#%s_roles-tab" % cls
+            f"{competition.urls['edit']}#{cls}_roles-tab"
         )
         return self.generic_delete(
             request,
@@ -819,8 +1579,13 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def delete_matchscoresheet(self, request, pk, **extra_context):
+        match = extra_context.get("match")
         return self.generic_delete(
-            request, MatchScoreSheet, pk=pk, permission_required=True
+            request,
+            match.scoresheets.all(),
+            pk=pk,
+            permission_required=True,
+            post_delete_redirect=self.redirect(f"{match.urls['edit']}#scoresheets-tab"),
         )
 
     @staff_login_required_m
@@ -872,6 +1637,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     def edit_competition(self, request, extra_context, competition=None, **kwargs):
         if competition is None:
             competition = next_related_factory(Competition)
+        elif request.method == "GET" and "_htmx_tab" not in request.GET:
+            extra_context["setup"] = competition_setup(competition)
         return self.generic_edit(
             request,
             Competition,
@@ -903,12 +1670,25 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             dates = season.matches.dates("date", "day")
 
         extra_context.setdefault("dates", dates)
+        if season.pk:
+            extra_context.setdefault("match_days", match_days(season))
+            if request.method == "GET" and "_htmx_tab" not in request.GET:
+                extra_context.setdefault("setup", self.season_progress(season))
+                # The first day with a result to enter, for the page's button.
+                extra_context.setdefault(
+                    "results_day",
+                    awaiting_results(season.matches)
+                    .order_by("date")
+                    .values_list("date", flat=True)
+                    .first(),
+                )
 
+        # In the order a season is set up: divisions, then when and where.
         related = (
-            "exclusions",
             "divisions",
-            "venues",
             "timeslots",
+            "venues",
+            "exclusions",
             "referees",
         )
         # Adhoc live stream events and their managed stream keys are only
@@ -931,6 +1711,53 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @competition_by_pk_m
     @staff_login_required_m
+    def upstream_sync(self, request, competition, season, extra_context, **kwargs):
+        """
+        Queue a synchronisation of the season with its upstream provider.
+
+        The work happens in a background task so that a slow or unavailable
+        remote does not tie up the request; the outcome is written to the
+        task log.
+        """
+        backend = season.upstream_backend
+        if not season.upstream_enabled or backend is None:
+            raise Http404(
+                "Competition.upstream_url and Season.upstream_url must be set."
+            )
+
+        redirect_url = request.GET.get("next") or season.urls["edit"]
+
+        if request.method == "GET":
+            # Divisions and teams whose names have been changed locally are
+            # not overwritten, so an upstream rename of one needs a human to
+            # decide between the two names; show them the outstanding ones.
+            context = dict(
+                extra_context or {},
+                competition=competition,
+                season=season,
+                backend=backend,
+                cancel_url=redirect_url,
+                renamed_divisions=upstream_renamed(season.divisions),
+                renamed_teams=upstream_renamed(
+                    Team.objects.filter(division__season=season)
+                ).select_related("division"),
+            )
+            return self.render(
+                request,
+                self.template_path("season/upstream_sync.html"),
+                context,
+            )
+
+        synchronise_upstream_season.delay(season.pk)
+        messages.info(
+            request,
+            _("Synchronisation with %(provider)s has been queued.")
+            % {"provider": backend.name},
+        )
+        return self.redirect(redirect_url)
+
+    @competition_by_pk_m
+    @staff_login_required_m
     def oauth_authorize(self, request, competition, season, **kwargs):
         if not (
             season.live_stream_client_id
@@ -940,9 +1767,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             messages.error(request, "OAuth2 application is not configured.")
             return self.redirect(season.urls["edit"])
         flow = season.flow()
-        flow.redirect_uri = request.build_absolute_uri(
-            self.reverse("youtube-callback")
-        )
+        flow.redirect_uri = request.build_absolute_uri(self.reverse("youtube-callback"))
         authorization_url, state = flow.authorization_url(
             # Enable offline access so that you can refresh an access token without
             # re-prompting the user for permission.
@@ -963,9 +1788,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         season_id = request.session.pop("oauth_season_id")
         season = get_object_or_404(Season, pk=season_id)
         flow = season.flow(state=state)
-        flow.redirect_uri = request.build_absolute_uri(
-            self.reverse("youtube-callback")
-        )
+        flow.redirect_uri = request.build_absolute_uri(self.reverse("youtube-callback"))
         authorization_response = (
             f"{request.build_absolute_uri(request.path)}?{request.META['QUERY_STRING']}"
         )
@@ -989,11 +1812,15 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def delete_season(self, request, extra_context, season, **kwargs):
+        post_delete_redirect = self.redirect(
+            f"{season.competition.urls['edit']}#seasons-tab"
+        )
         return self.generic_delete(
             request,
             Season,
             pk=season.pk,
             permission_required=True,
+            post_delete_redirect=post_delete_redirect,
             extra_context=extra_context,
         )
 
@@ -1083,7 +1910,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def delete_timeslot(self, request, season, pk, **kwargs):
-        post_delete_redirect = self.redirect(season.urls["edit"] + "#timeslots-tab")
+        post_delete_redirect = self.redirect(f"{season.urls['edit']}#timeslots-tab")
         return self.generic_delete(
             request,
             SeasonMatchTime,
@@ -1112,27 +1939,13 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def delete_seasonexclusiondate(self, request, season, pk, **kwargs):
-        post_delete_redirect = self.redirect(season.urls["edit"] + "#exclusions-tab")
+        post_delete_redirect = self.redirect(f"{season.urls['edit']}#exclusions-tab")
         return self.generic_delete(
             request,
             season.exclusions,
             pk=pk,
             permission_required=True,
             post_delete_redirect=post_delete_redirect,
-        )
-
-    @competition_by_pk_m
-    @staff_login_required_m
-    def timeslots(self, request, competition, season, extra_context, **kwargs):
-        return self.generic_edit_multiple(
-            request,
-            SeasonMatchTime,
-            formset_class=SeasonMatchTimeFormSet,
-            formset_kwargs={"instance": season},
-            post_save_redirect_args=(competition.pk, season.pk),
-            post_save_redirect="competition:season:edit",
-            templates=self.template_path("timeslots.html", "season"),
-            extra_context=extra_context,
         )
 
     @competition_by_pk_m
@@ -1159,7 +1972,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def delete_venue(self, request, season, venue, extra_context=None, **kwargs):
-        post_delete_redirect = self.redirect(season.urls["edit"] + "#venues-tab")
+        post_delete_redirect = self.redirect(f"{season.urls['edit']}#venues-tab")
         return self.generic_delete(
             request,
             Venue,
@@ -1179,6 +1992,20 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             ground.latlng = venue.latlng
 
         def pre_save_callback(obj: Ground):
+            # A ground newly streamed needs its stream made on YouTube up
+            # front, so it cannot be saved before the season can reach
+            # YouTube. A stream that already exists is only brought up to
+            # date, or removed, so the ground is saved with a warning and
+            # keeps its identifier for when YouTube can be reached.
+            if not (obj.external_identifier or obj.live_stream):
+                return
+            if not season.youtube_ready:
+                if not obj.external_identifier:
+                    messages.error(request, YOUTUBE_NOT_AUTHORISED_MESSAGE)
+                    return self.redirect(".")
+                messages.warning(request, YOUTUBE_NOT_UPDATED_MESSAGE)
+                return
+
             body = {
                 "snippet": {
                     "title": f"{venue.season.competition} {venue.season} ({obj.title})",
@@ -1223,6 +2050,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 if stream is not None:
                     obj.stream_key = stream["cdn"]["ingestionInfo"]["streamName"]
 
+            except RefreshError:
+                messages.error(request, YOUTUBE_AUTH_EXPIRED_MESSAGE)
+                return self.redirect(".")
             except HttpError as exc:
                 messages.error(request, exc.reason)
                 return self.redirect(".")
@@ -1244,7 +2074,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def delete_ground(self, request, venue, ground, extra_context=None, **kwargs):
-        post_delete_redirect = self.redirect(venue.urls["edit"] + "#grounds-tab")
+        post_delete_redirect = self.redirect(f"{venue.urls['edit']}#grounds-tab")
         return self.generic_delete(
             request,
             Ground,
@@ -1259,6 +2089,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     def edit_division(self, request, season, extra_context, division=None, **kwargs):
         if division is None:
             division = next_related_factory(Division, season)
+        else:
+            extra_context.setdefault("division_setup", division_setup(division))
+            extra_context.setdefault("ladders", division_ladders(division))
 
         return self.generic_edit(
             request,
@@ -1278,8 +2111,28 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @competition_by_pk_m
     @staff_login_required_m
+    def bulk_create_division(self, request, season, extra_context, **kwargs):
+        return self.generic_bulk_create(
+            request,
+            Division,
+            form_class=DivisionBulkCreateForm,
+            formset_class=bulk_create_formset_factory(
+                DivisionBulkCreateForm, bulk_create_count(request)
+            ),
+            formset_kwargs={"parent": season},
+            post_save_redirect=self.redirect(f"{season.urls['edit']}#divisions-tab"),
+            templates=self.template_path("bulk_create.html", "division"),
+            permission_required=True,
+            extra_context={
+                "cancel_url": f"{season.urls['edit']}#divisions-tab",
+                **extra_context,
+            },
+        )
+
+    @competition_by_pk_m
+    @staff_login_required_m
     def delete_division(self, request, season, division, **kwargs):
-        post_delete_redirect = self.redirect(season.urls["edit"] + "#divisions-tab")
+        post_delete_redirect = self.redirect(f"{season.urls['edit']}#divisions-tab")
         return self.generic_delete(
             request,
             Division,
@@ -1332,7 +2185,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def delete_divisionexclusiondate(self, request, division, pk, **kwargs):
-        post_delete_redirect = self.redirect(division.urls["edit"] + "#exclusions-tab")
+        post_delete_redirect = self.redirect(f"{division.urls['edit']}#exclusions-tab")
         return self.generic_delete(
             request,
             division.exclusions,
@@ -1352,10 +2205,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
         return self.generic_edit(
             request,
-            division.stages.select_related(
-                "matches__home_team",
-                "matches__away_team",
-            ),
+            division.stages,
             pk=stage.pk,
             instance=stage,
             related=(
@@ -1374,7 +2224,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def delete_stage(self, request, division, stage, **kwargs):
-        post_delete_redirect = self.redirect(division.urls["edit"] + "#stages-tab")
+        post_delete_redirect = self.redirect(f"{division.urls['edit']}#stages-tab")
         return self.generic_delete(
             request,
             division.stages,
@@ -1409,7 +2259,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def delete_pool(self, request, stage, pool, **kwargs):
-        post_delete_redirect = self.redirect(stage.urls["edit"] + "#pools-tab")
+        post_delete_redirect = self.redirect(f"{stage.urls['edit']}#pools-tab")
         return self.generic_delete(
             request,
             stage.pools,
@@ -1469,20 +2319,31 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @competition_by_pk_m
     @staff_login_required_m
+    def bulk_create_team(self, request, division, extra_context, **kwargs):
+        division_url = f"{division.urls['edit']}#teams-tab"
+        return self.generic_bulk_create(
+            request,
+            Team,
+            form_class=TeamBulkCreateForm,
+            formset_class=bulk_create_formset_factory(
+                TeamBulkCreateForm, bulk_create_count(request)
+            ),
+            formset_kwargs={"parent": division},
+            post_save_redirect=self.redirect(division_url),
+            templates=self.template_path("bulk_create.html", "team"),
+            permission_required=True,
+            extra_context={"cancel_url": division_url, **extra_context},
+        )
+
+    @competition_by_pk_m
+    @staff_login_required_m
     def perms_team(self, request, team, **kwargs):
-        competition = kwargs.get("competition")
-        season = kwargs.get("season")
         division = kwargs.get("division")
         return self.generic_permissions(
             request,
             Team,
             instance=team,
-            post_save_redirect="admin:fixja:competition:season:division:team:list",
-            post_save_redirect_args=(
-                competition.pk,
-                season.pk,
-                division.pk,
-            ),
+            post_save_redirect=self.redirect(f"{division.urls['edit']}#teams-tab"),
             permission_required=True,
             **kwargs,
         )
@@ -1527,7 +2388,58 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @competition_by_pk_m
     @staff_login_required_m
+    def team_club(self, request, competition, team, extra_context, **kwargs):
+        """
+        Give a team that has no club one of its own (``Team.ensure_club``),
+        so that it can have people.
+        """
+        if team.club is not None:
+            return self.redirect(f"{team.urls['edit']}#people-tab")
+
+        for action, model, obj in team.ensure_club_permissions():
+            has_permission = get_40x_or_None(
+                request,
+                get_perms_for_model(model, **{action: True}),
+                obj=obj,
+                return_403=True,
+                accept_global_perms=True,
+            )
+            if has_permission is not None:
+                return has_permission
+
+        club = team.matching_club()
+        if request.method == "POST":
+            try:
+                club = team.ensure_club()
+            except ValidationError as exc:
+                messages.error(request, " ".join(exc.messages))
+            else:
+                messages.success(
+                    request,
+                    _(
+                        "%(team)s is now in the club %(club)s. Add its people "
+                        "to the club, then link them to the team."
+                    )
+                    % {"team": team.title, "club": club.title},
+                )
+                return self.redirect(club.urls["edit"])
+
+        context = dict(
+            extra_context,
+            team=team,
+            club=club,
+            cancel_url=f"{team.urls['edit']}#people-tab",
+        )
+        return self.render(request, self.template_path("team/club.html"), context)
+
+    @competition_by_pk_m
+    @staff_login_required_m
     def edit_teamassociation(self, request, team, extra_context, pk=None, **kwargs):
+        if team.club is None:
+            # A team's people come from its club, so there is nobody to
+            # choose until the team has one.
+            return self.redirect(team.urls["club"])
+
         if pk is None:
             instance = TeamAssociation(team=team)
         else:
@@ -1549,10 +2461,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def delete_teamassociation(self, request, team, pk, **kwargs):
-        post_delete_redirect = self.redirect(team.urls["edit"] + "#people-tab")
+        post_delete_redirect = self.redirect(f"{team.urls['edit']}#people-tab")
         return self.generic_delete(
             request,
-            team.people,
+            # A person with statistics for the team stays in it.
+            team.people.removable(),
             pk=pk,
             permission_required=True,
             post_delete_redirect=post_delete_redirect,
@@ -1583,7 +2496,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def delete_seasonreferee(self, request, season, pk, **kwargs):
-        post_delete_redirect = self.redirect(season.urls["edit"] + "#officials-tab")
+        post_delete_redirect = self.redirect(f"{season.urls['edit']}#officials-tab")
         return self.generic_delete(
             request,
             season.referees,
@@ -1606,14 +2519,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             if obj.pk:
                 return
 
-            if not (season.live_stream_client_id and season.live_stream_client_secret):
-                messages.error(
-                    request,
-                    _(
-                        "YouTube credentials must be configured for this "
-                        "season before live stream events can be created."
-                    ),
-                )
+            if not season.youtube_ready:
+                messages.error(request, YOUTUBE_NOT_AUTHORISED_MESSAGE)
                 return self.redirect(".")
 
             try:
@@ -1636,9 +2543,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             log.info("YouTube video %(id)r inserted", broadcast)
 
         def post_save_callback(obj: LiveStreamEvent):
-            # Check if YouTube credentials are configured before queuing
-            # anything, we can't interact with the YouTube API without them.
-            if not (season.live_stream_client_id and season.live_stream_client_secret):
+            # Queue nothing unless the season can reach YouTube: the task
+            # could do nothing for it.
+            if not season.youtube_ready:
                 return None
             sync_live_stream_event.s(obj.pk).apply_async()
             return None
@@ -1653,7 +2560,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             pre_save_callback=pre_save_callback,
             post_save_callback=post_save_callback,
             post_save_redirect=self.redirect(
-                season.urls["edit"] + "#live_stream_events-tab"
+                f"{season.urls['edit']}#live_stream_events-tab"
             ),
             permission_required=True,
             extra_context=extra_context,
@@ -1688,11 +2595,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
         verbose_name = instance._meta.verbose_name
 
-        if not (season.live_stream_client_id and season.live_stream_client_secret):
+        if not season.youtube_ready:
             messages.error(
                 request,
                 _(
-                    "YouTube credentials are not configured for this season; "
+                    "YouTube access has not been authorised for this season; "
                     "unable to confirm the %s has been removed from the "
                     "platform."
                 )
@@ -1701,9 +2608,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             return redirect_response
 
         try:
-            getattr(season.youtube, collection_name)().delete(
-                id=instance.pk
-            ).execute()
+            getattr(season.youtube, collection_name)().delete(id=instance.pk).execute()
             log.info("YouTube resource %r deleted", instance.pk)
         except RefreshError:
             # Destruction cannot be confirmed without authorisation, so the
@@ -1723,7 +2628,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @staff_login_required_m
     def delete_livestreamevent(self, request, season, pk, **kwargs):
         post_delete_redirect = self.redirect(
-            season.urls["edit"] + "#live_stream_events-tab"
+            f"{season.urls['edit']}#live_stream_events-tab"
         )
         if request.method == "POST":
             event = get_object_or_404(season.live_stream_events, pk=pk)
@@ -1753,24 +2658,11 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             # must generate its stream on the YouTube platform up front. For
             # an existing record the platform update is cosmetic, so missing
             # credentials only warrant a warning.
-            if not (season.live_stream_client_id and season.live_stream_client_secret):
+            if not season.youtube_ready:
                 if not obj.pk:
-                    messages.error(
-                        request,
-                        _(
-                            "YouTube credentials must be configured for this "
-                            "season before stream keys can be generated."
-                        ),
-                    )
+                    messages.error(request, YOUTUBE_NOT_AUTHORISED_MESSAGE)
                     return self.redirect(".")
-                messages.warning(
-                    request,
-                    _(
-                        "YouTube credentials are not configured for this "
-                        "season; the stream title was not updated on the "
-                        "platform."
-                    ),
-                )
+                messages.warning(request, YOUTUBE_NOT_UPDATED_MESSAGE)
                 return
 
             body = {
@@ -1822,7 +2714,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             always_save=season.live_stream,
             pre_save_callback=pre_save_callback,
             post_save_redirect=self.redirect(
-                season.urls["edit"] + "#live_stream_keys-tab"
+                f"{season.urls['edit']}#live_stream_keys-tab"
             ),
             permission_required=True,
             extra_context=extra_context,
@@ -1832,7 +2724,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @staff_login_required_m
     def delete_livestreamkey(self, request, season, pk, **kwargs):
         post_delete_redirect = self.redirect(
-            season.urls["edit"] + "#live_stream_keys-tab"
+            f"{season.urls['edit']}#live_stream_keys-tab"
         )
         if request.method == "POST":
             stream_key = get_object_or_404(season.live_stream_keys, pk=pk)
@@ -1867,6 +2759,15 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             args=(competition.pk, season.pk, division.pk),
         )
 
+        # The wizard renders itself, so it is given what the admin's own
+        # pages are: where Cancel goes, and the admin's field template.
+        extra_context = {
+            "cancel_url": f"{redirect_to}#stages-tab",
+            "field_template": self.shell.field_template,
+            "shell": self.shell,
+            "stage": stage,
+            **extra_context,
+        }
         view = DrawGenerationWizard.as_view(
             form_list, extra_context=extra_context, redirect_to=redirect_to, stage=stage
         )
@@ -1920,7 +2821,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 stage.matches.all().delete()
 
         messages.success(request, _("Your draw has been undone."))
-        return self.redirect(division.urls["edit"])
+        return self.redirect(f"{division.urls['edit']}#stages-tab")
 
     @competition_by_pk_m
     @staff_login_required_m
@@ -1941,9 +2842,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         base_url = request.build_absolute_uri("/").rstrip("/")
 
         def post_save_callback(obj: Match):
-            # Check if YouTube credentials are configured before queuing anything,
-            # we can't interact with the YouTube API without them.
-            if not (season.live_stream_client_id and season.live_stream_client_secret):
+            # Queue nothing unless the season can reach YouTube: the task
+            # could do nothing for it.
+            if not season.youtube_ready:
                 return None
             # An existing broadcast always needs syncing (update or delete). For
             # insert/update we additionally need a scheduled datetime, otherwise
@@ -1965,7 +2866,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             post_save_redirect=self.redirect(
                 request.GET.get("next") or stage.urls["edit"]
             ),
-            post_save_callback=post_save_callback if season.live_stream else lambda o: None,
+            post_save_callback=(
+                post_save_callback if season.live_stream else lambda o: None
+            ),
             permission_required=True,
             extra_context=extra_context,
         )
@@ -1988,6 +2891,18 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         Useful when a match's title, teams, or timing have changed since the broadcast
         was created and the public YouTube URL must be kept stable.
         """
+        # Only a person who may change the match may re-push its broadcast,
+        # as the match's own page asks.
+        has_permission = get_40x_or_None(
+            request,
+            get_perms_for_model(Match, change=True),
+            obj=match,
+            return_403=True,
+            accept_global_perms=True,
+        )
+        if has_permission is not None:
+            return has_permission
+
         redirect_url = request.GET.get("next") or stage.urls["edit"]
 
         if request.method == "GET":
@@ -2006,10 +2921,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 context,
             )
 
-        if not (season.live_stream_client_id and season.live_stream_client_secret):
-            messages.error(
-                request, _("Live streaming is not configured for this season.")
-            )
+        if not season.youtube_ready:
+            messages.error(request, YOUTUBE_NOT_AUTHORISED_MESSAGE)
             return self.redirect(redirect_url)
 
         if not match.live_stream or not match.external_identifier:
@@ -2065,7 +2978,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def delete_match(self, request, stage, match, **kwargs):
-        post_delete_redirect = self.redirect(stage.urls["edit"] + "#matches-tab")
+        post_delete_redirect = self.redirect(f"{stage.urls['edit']}#matches-tab")
         return self.generic_delete(
             request,
             stage.matches,
@@ -2077,37 +2990,227 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def edit_match_detail(self, request, stage, match, extra_context, **kwargs):
-        redirect_to = reverse("admin:index")
-        return super(CompetitionAdminComponent, self).edit_match_detail(
+        # The page is not a generic_edit, so make the check it would: the
+        # person may change this match, or every match.
+        has_permission = get_40x_or_None(
             request,
-            stage=stage,
-            match=match,
-            extra_context=extra_context,
-            redirect_to=redirect_to,
-            **kwargs,
+            get_perms_for_model(Match, change=True),
+            obj=match,
+            return_403=not request.user.is_anonymous,
+            accept_global_perms=True,
         )
+        if has_permission is not None:
+            return has_permission
+
+        if not match.statistics_ready:
+            messages.warning(
+                request,
+                _(
+                    "Player statistics can be entered once both teams are "
+                    "known and the result is in."
+                ),
+            )
+            return self.redirect(match.urls["edit"])
+
+        redirect_to = reverse("admin:index")
+
+        def team_faux_queryset(team):
+            # The team's players and their statistics for the match, in two
+            # queries rather than two for every player.
+            stats = FauxQueryset(SimpleScoreMatchStatistic, team=team)
+            players = list(team.people.filter(is_player=True).select_related("person"))
+            entered = {
+                statistic.player_id: statistic
+                for statistic in SimpleScoreMatchStatistic.objects.filter(
+                    match=match, player__in=[player.person_id for player in players]
+                )
+            }
+            for player in players:
+                statistic = entered.get(player.person_id)
+                if statistic is None:
+                    statistic = SimpleScoreMatchStatistic(
+                        match=match,
+                        player=player.person,
+                        number=player.number,
+                        played=1,
+                    )
+                else:
+                    statistic.player = player.person
+                stats.append(statistic)
+            return stats
+
+        home_queryset = team_faux_queryset(match.home_team)
+        away_queryset = team_faux_queryset(match.away_team)
+
+        if request.method == "POST":
+            home = MatchStatisticFormset(
+                data=request.POST,
+                score=match.home_team_score,
+                prefix="home",
+                queryset=home_queryset,
+            )
+
+            away = MatchStatisticFormset(
+                data=request.POST,
+                score=match.away_team_score,
+                prefix="away",
+                queryset=away_queryset,
+            )
+
+            if home.is_valid() and away.is_valid():
+                home.save()
+                away.save()
+                messages.success(request, _("Your changes have been saved."))
+                return self.redirect(redirect_to)
+
+        else:
+            home = MatchStatisticFormset(
+                prefix="home", score=match.home_team_score, queryset=home_queryset
+            )
+            away = MatchStatisticFormset(
+                prefix="away", score=match.away_team_score, queryset=away_queryset
+            )
+
+        context = {
+            "object": match,
+            "formsets": (home, away),
+        }
+        context.update(extra_context)
+
+        templates = self.template_path("match_detail.html")
+        return self.render(request, templates, context)
 
     @competition_by_pk_m
     @staff_login_required_m
     def progression_list(self, request, competition, season, extra_context, **kwargs):
-        return super().progression_list(
-            request, competition, season, extra_context, **kwargs
+        stages = (
+            Stage.objects.filter(division__season=season, order__gt=1)
+            .select_related("division")
+            .order_by("division__order", "order")
+            .annotate(
+                awaiting_progression=Count(
+                    Case(
+                        When(
+                            Q(matches__home_team__isnull=True)
+                            | Q(matches__away_team__isnull=True),
+                            then=1,
+                        )
+                    )
+                ),
+            )
         )
+        context = {
+            "competition": competition,
+            "season": season,
+            "stages": stages,
+        }
+        context.update(extra_context)
+        templates = self.template_path("progression_list.html")
+        return self.render(request, templates, context)
 
     @competition_by_pk_m
     @staff_login_required_m
     def progress_teams(
         self, request, competition, season, division, stage, extra_context, **kwargs
     ):
-        return super().progress_teams(
-            request, competition, season, division, stage, extra_context, **kwargs
+        matches = (
+            stage.matches.filter(team_needs_progressing)
+            .exclude(legitimate_bye_match)
+            .exclude(team_awaits_upstream)
+            .exclude(team_awaits_own_ladder())
+        )
+        teams = stage.undecided_teams.fillable()
+
+        if not matches:
+            return HttpResponseGone()
+
+        undecided = matches.filter(
+            Q(home_team_undecided__isnull=False, home_team__isnull=True)
+            | Q(away_team_undecided__isnull=False, away_team__isnull=True)
+        )
+
+        # Positional (P1, G1P2) and winner/loser references can be resolved
+        # mechanically from results, whereas an undecided team may depend on
+        # the outcome of matches in this very stage (eg. "Lower placed
+        # qualifier" of two qualifying finals). Always progress the matches
+        # which can be resolved before asking for undecided teams.
+        def resolvable(match):
+            home_team, away_team = match.eval(lazy=True)
+            return (match.home_team is None and isinstance(home_team, Team)) or (
+                match.away_team is None and isinstance(away_team, Team)
+            )
+
+        if undecided.exists() and not any(resolvable(match) for match in matches):
+            try:
+                follows = stage.comes_after
+            except Stage.DoesNotExist:
+                # The first stage of its division has no ladder to choose from.
+                follows = None
+
+            ladders = collections.OrderedDict()
+            if follows is not None:
+                if follows.pools.exists():
+                    for pool in follows.pools.all():
+                        ladders.setdefault(
+                            pool, pool.ladder_summary.select_related("team__club")
+                        )
+                else:
+                    ladders.setdefault(
+                        None, follows.ladder_summary.select_related("team__club")
+                    )
+
+            extra_context["ladders"] = ladders
+
+            generic_edit_kwargs = {
+                "formset_class": ProgressTeamsFormSet,
+                "formset_kwargs": {
+                    "queryset": teams,
+                    "stage": stage,
+                },
+                "model_or_manager": teams.model,
+                "templates": self.template_path("progress_teams.html"),
+            }
+        else:
+            generic_edit_kwargs = {
+                "formset_class": ProgressMatchesFormSet,
+                "formset_kwargs": {
+                    "queryset": matches,
+                },
+                "model_or_manager": matches.model,
+                "templates": self.template_path("progress_matches.html"),
+            }
+
+        return self.generic_edit_multiple(
+            request,
+            post_save_redirect=self.redirect(season.urls["edit"]),
+            permission_required=False,
+            extra_context=extra_context,
+            **generic_edit_kwargs,
         )
 
     @competition_by_pk_m
     @staff_login_required_m
     def day_runsheet(self, request, season, date, extra_context, **kwargs):
-        return super(CompetitionAdminComponent, self).day_runsheet(
-            request, season, date, extra_context, **kwargs
+        # A row of the sheet walks to its competition for its links' URLs,
+        # names its place (and under Workbook asks whether that place is a
+        # ground with a camera), and lists its referees by name: select and
+        # prefetch them so the sheet costs the same however long it is.
+        matches = (
+            season.matches.filter(date=date)
+            .select_related("stage__division__season__competition", "play_at__ground")
+            .prefetch_related("referees__person")
+            .order_by("is_bye", "datetime", "play_at")
+        )
+        templates = self.template_path(
+            "runsheet.html", season.slug, season.competition.slug
+        )
+        return self.generic_list(
+            request,
+            matches,
+            templates=templates,
+            paginate_by=0,
+            permission_required=False,
+            extra_context=extra_context,
         )
 
     @competition_by_pk_m
@@ -2122,7 +3225,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             getattr(settings, "TOURNAMENTCONTROL_ASYNC_PDF_GRID", False)
             and mode == "pdf"
         ):
-            result = generate_pdf_grid.delay(season, extra_context)
+            result = generate_pdf_grid.delay(
+                season, extra_context, templates=self.template_path("grid.html")
+            )
             redirect_to = self.reverse(
                 "competition:season:grid-async",
                 kwargs={
@@ -2133,7 +3238,16 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             )
             return self.redirect(redirect_to)
 
-        return generate_fixture_grid(season, format=mode, extra_context=extra_context)
+        try:
+            return generate_fixture_grid(
+                season,
+                templates=self.template_path("grid.html"),
+                format=mode,
+                extra_context=extra_context,
+            )
+        except PrinceError as exc:
+            log.exception("PDF for %s was not generated.", request.path)
+            return self.pdf_failed(request, season.urls["edit"], extra_context, exc)
 
     @competition_by_pk_m
     @csrf_exempt_m
@@ -2145,7 +3259,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         ):
             extra_context.pop("admin", None)
             extra_context.pop("component", None)
-            result = generate_pdf_grid.delay(season, extra_context, date)
+            result = generate_pdf_grid.delay(
+                season, extra_context, date, templates=self.template_path("grid.html")
+            )
             redirect_to = self.reverse(
                 "competition:season:grid-async",
                 kwargs={
@@ -2156,20 +3272,51 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             )
             return self.redirect(redirect_to)
 
-        return generate_fixture_grid(
-            season,
-            format=mode,
-            extra_context=extra_context,
-            dates=[date],
-        )
+        try:
+            return generate_fixture_grid(
+                season,
+                templates=self.template_path("grid.html"),
+                format=mode,
+                extra_context=extra_context,
+                dates=[date],
+            )
+        except PrinceError as exc:
+            log.exception("PDF for %s was not generated.", request.path)
+            return self.pdf_failed(request, season.urls["edit"], extra_context, exc)
+
+    def pdf_failed(self, request, start_again, extra_context, error):
+        """
+        The PDF render failed for good with ``error``, in the background task
+        or in this request. The error has already been reported, by the task
+        or by the view that caught the ``PrinceError``, so explain it plainly
+        instead of re-raising. A ``PrinceUnavailable`` will fail again, so the
+        message does not ask the person to try again.
+        """
+        if isinstance(error, PrinceUnavailable):
+            messages.error(request, PDF_UNAVAILABLE_MESSAGE)
+        else:
+            messages.error(request, PDF_FAILED_MESSAGE)
+        context = dict(extra_context, start_again=start_again)
+        templates = self.template_path("pdf_failed.html")
+        return self.render(request, templates, context)
 
     @competition_by_pk_m
     @staff_login_required_m
     def grid_async(self, request, result_id, extra_context, **kwargs):
-        result = generate_pdf_grid.AsyncResult(result_id)
+        # Read the state straight from the result backend: an AsyncResult
+        # unsubscribes from the Redis result channel when it is ready or
+        # garbage collected, which can deadlock the request (PdfResultTask).
+        meta = generate_pdf_grid.backend.get_task_meta(result_id)
 
-        if result.ready():
-            data = result.wait()
+        if meta["status"] == states.FAILURE:
+            start_again = kwargs["season"].urls["edit"]
+            return self.pdf_failed(request, start_again, extra_context, meta["result"])
+
+        if meta["status"] in states.PROPAGATE_STATES:
+            raise meta["result"]
+
+        if meta["status"] == states.SUCCESS:
+            data = meta["result"]
             return HttpResponse(base64.b64decode(data), content_type="application/pdf")
 
         templates = self.template_path("wait.html", "scorecards")
@@ -2440,7 +3587,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                     "places": places,
                     "timeslots": timeslots,
                 },
-                post_save_redirect=self.redirect(season.urls["edit"]),
+                post_save_redirect=self.redirect(f"{season.urls['edit']}#schedule-tab"),
                 templates=self.template_path("match/schedule.html"),
                 extra_context=extra_context,
             )
@@ -2482,18 +3629,87 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         time=None,
         **kwargs,
     ):
-        redirect_to = reverse("admin:index", current_app=self.app)
-        return super(CompetitionAdminComponent, self).match_results(
-            request,
-            competition,
-            season,
-            date,
-            extra_context,
-            division=division,
-            time=time,
-            redirect_to=redirect_to,
-            **kwargs,
+        # Back to the season's match days, where this day now shows its results.
+        redirect_to = f"{season.urls['edit']}#schedule-tab"
+
+        matches = (
+            Match.objects.filter(
+                stage__division__season=season,
+                stage__division__season__competition=competition,
+                date=date,
+            )
+            # everything each match's form and row reads, in the one query
+            .select_related(
+                "home_team",
+                "away_team",
+                "home_team_undecided",
+                "away_team_undecided",
+                "home_team_eval_related",
+                "away_team_eval_related",
+                "play_at",
+                "stage__division",
+            )
+            .defer(
+                "live_stream_thumbnail_image",
+                "home_team_eval_related__live_stream_thumbnail_image",
+                "away_team_eval_related__live_stream_thumbnail_image",
+            )
         )
+
+        if division is not None:
+            matches = matches.filter(stage__division=division)
+
+        # ensure only matches with progressed teams are able to be updated
+        matches = matches.exclude(team_needs_progressing, is_bye=False)
+        matches = matches.exclude(home_team__isnull=True, away_team__isnull=True)
+
+        # FIXME too complex, be verbose so we can all read and understand it
+        if time is not None:
+            base = Q(time=time)
+            bye_kwargs = matches.filter(time=time).values("stage", "round")
+            time_or_byes = functools.reduce(
+                operator.or_, [Q(time__isnull=True, **kw) for kw in bye_kwargs], base
+            )
+            matches = matches.filter(time_or_byes)
+        else:
+            matches = matches.order_by("date", "time", "play_at")
+
+        match_queryset = matches.filter(is_bye=False)
+        bye_queryset = matches.filter(is_bye=True)
+
+        if request.method == "POST":
+            match_formset = MatchResultFormSet(
+                data=request.POST, queryset=match_queryset, prefix="matches"
+            )
+            bye_formset = MatchResultFormSet(
+                data=request.POST, queryset=bye_queryset, prefix="byes"
+            )
+
+            if match_formset.is_valid() and bye_formset.is_valid():
+                match_formset.save()
+                bye_formset.save()
+                messages.success(request, _("Your changes have been saved."))
+                return self.redirect(redirect_to)
+        else:
+            match_formset = MatchResultFormSet(
+                queryset=match_queryset, prefix="matches"
+            )
+            bye_formset = MatchResultFormSet(queryset=bye_queryset, prefix="byes")
+
+        context = {
+            "competition": competition,
+            "season": season,
+            "date": date,
+            "division": division,
+            "match_formset": match_formset,
+            "bye_formset": bye_formset,
+            "matches": matches,
+            "cancel_url": redirect_to,
+        }
+        context.update(extra_context)
+
+        templates = self.template_path("match_results.html")
+        return self.render(request, templates, context)
 
     # FIXME
     @competition_by_pk_m
@@ -2543,9 +3759,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         base_url = request.build_absolute_uri("/").rstrip("/")
 
         def post_save_callback(obj: Match):
-            # Check if YouTube credentials are configured before queuing anything,
-            # we can't interact with the YouTube API without them.
-            if not (season.live_stream_client_id and season.live_stream_client_secret):
+            # Queue nothing unless the season can reach YouTube: the task
+            # could do nothing for it.
+            if not season.youtube_ready:
                 return None
             # An existing broadcast always needs syncing (update or delete). For
             # insert/update we additionally need a scheduled datetime, otherwise
@@ -2588,10 +3804,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         if request.method != "POST":
             return self.redirect(redirect_url)
 
-        if not (season.live_stream_client_id and season.live_stream_client_secret):
-            messages.error(
-                request, _("Live streaming is not configured for this season.")
-            )
+        if not season.youtube_ready:
+            messages.error(request, YOUTUBE_NOT_AUTHORISED_MESSAGE)
             return self.redirect(redirect_url)
 
         matches = Match.objects.filter(
@@ -2607,7 +3821,10 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         for match in matches:
             # A new broadcast needs a scheduled datetime to insert; an existing
             # one always needs syncing, to push updated title/thumbnail/schedule.
-            if not match.external_identifier and match.get_datetime(ZoneInfo("UTC")) is None:
+            if (
+                not match.external_identifier
+                and match.get_datetime(ZoneInfo("UTC")) is None
+            ):
                 continue
             sync_live_stream.s(match.pk, base_url=base_url).apply_async()
             count += 1
@@ -2670,7 +3887,7 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         **kwargs,
     ):
         if stage is not None:
-            if stage.matches_needing_printing.count():
+            if stage.matches_needing_printing.exists():
                 matches = stage.matches_needing_printing.all()
             else:
                 matches = stage.matches.all()
@@ -2695,17 +3912,18 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             "date": date,
             "time": time,
             "stage": stage,
-            "filtered": round is not None,
-            "round": round,
         }
 
         templates = self.template_path("scorecards.html", competition.slug, season.slug)
 
         if mode == "pdf":
+            # The task arguments must be serializable by celery, so model
+            # instances are passed by primary key and reloaded by the task.
             kw = {
                 "match_pks": [pk for pk in matches.values_list("pk", flat=True)],
                 "templates": templates,
-                "extra_context": extra_context,
+                "extra_context": {"date": date, "time": time},
+                "season_pk": season.pk,
             }
             if stage is not None:
                 kw["stage_pk"] = stage.pk
@@ -2734,10 +3952,20 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @competition_by_pk_m
     @staff_login_required_m
     def scorecards_async(self, request, result_id, extra_context, **kwargs):
-        result = generate_pdf_scorecards.AsyncResult(result_id)
+        # Read the state straight from the result backend: an AsyncResult
+        # unsubscribes from the Redis result channel when it is ready or
+        # garbage collected, which can deadlock the request (PdfResultTask).
+        meta = generate_pdf_scorecards.backend.get_task_meta(result_id)
 
-        if result.ready():
-            data = result.wait()
+        if meta["status"] == states.FAILURE:
+            start_again = self.reverse("scorecard-report")
+            return self.pdf_failed(request, start_again, extra_context, meta["result"])
+
+        if meta["status"] in states.PROPAGATE_STATES:
+            raise meta["result"]
+
+        if meta["status"] == states.SUCCESS:
+            data = meta["result"]
             return HttpResponse(base64.b64decode(data), content_type="application/pdf")
 
         templates = self.template_path("wait.html", "scorecards")
@@ -2751,8 +3979,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         # Get the statistics directly and group by person
         # This approach avoids GROUP BY issues by working with the statistics model directly
         statistics = (
-            SimpleScoreMatchStatistic.objects.filter(match__stage__division=division)
-            .values(
+            SimpleScoreMatchStatistic.objects.for_division(division)
+            .totals(
                 "player__uuid",
                 "player__first_name",
                 "player__last_name",
@@ -2763,9 +3991,6 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 first_name=F("player__first_name"),
                 last_name=F("player__last_name"),
                 club__title=F("player__club__title"),
-                played=Sum("played"),
-                points=Sum("points"),
-                mvp=Sum("mvp"),
             )
             .exclude(played__isnull=True)
             .exclude(played=0)
@@ -2809,30 +4034,21 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @registration
     def edit_club(self, request, extra_context, club=None, **kwargs):
         templates = {
-            Team: "tournamentcontrol/competition/admin/club/team.inc.html",
+            Team: select_template(
+                self.shell.names(
+                    "tournamentcontrol/competition/admin/club/team.inc.html"
+                )
+            ).template.name,
         }
         extra_context.setdefault("templates", templates)
         return self.generic_edit(
             request,
             Club,
             instance=club,
-            form_fields=(
-                "title",
-                "short_title",
-                "abbreviation",
-                "email",
-                "website",
-                "twitter",
-                "facebook",
-                "youtube",
-                "primary",
-                "primary_position",
-                "status",
-                "slug",
-                "slug_locked",
-            ),
+            form_class=ClubEditForm,
             related=(
                 "members",
+                "staff",
                 "teams",
             ),
             permission_required=True,
@@ -2904,19 +4120,10 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     @registration
     @staff_login_required_m
     def delete_person(self, request, club, person, extra_context, **kwargs):
-        now = timezone.now().replace(second=0, microsecond=0)
-        queryset = Person.objects.filter(club=club)
-
-        # Ensure the person does not have any statistical data recorded and
-        # that we're not attempting to delete someone mid-season.
-        queryset = queryset.exclude(statistics__isnull=False)
-        queryset = queryset.exclude(
-            teamassociation__team__division__season__start_date__lt=now
-        )
-
         return self.generic_delete(
             request,
-            queryset,
+            # Nobody with statistics recorded, or part way through a season.
+            club.members.deletable(),
             pk=person.pk,
             post_delete_redirect=self.redirect(club.urls["edit"]),
             permission_required=True,
@@ -2927,10 +4134,15 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     def edit_clubassociation(
         self, request, club, extra_context, clubassociation_id=None, **kwargs
     ):
+        # A new official belongs to the club whose page added it, and saving
+        # returns to that club's officials.
+        instance = ClubAssociation(club=club) if clubassociation_id is None else None
         return self.generic_edit(
             request,
             ClubAssociation,
             pk=clubassociation_id,
+            instance=instance,
+            post_save_redirect=self.redirect(f"{club.urls['edit']}#staff-tab"),
             form_class=ClubAssociationForm,
             form_kwargs={
                 "user": request.user,
@@ -2942,10 +4154,9 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
 
     @registration
     def officials(self, request, club, season, extra_context, **kwargs):
-        # Read only is presently applied to the entire application, but we
-        # really need to be able to provide granular control for specific
-        # seasons.  FIXME
-        read_only, scheduled_read_only = self.read_only
+        # Read only is no longer a switch for the entire application, it is
+        # decided by the season below.  FIXME
+        read_only, scheduled_read_only = False, None
         if season.complete:
             if not request.user.is_superuser:
                 read_only = True
@@ -2986,8 +4197,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
                 "club": club,
                 "season": season,
             },
-            post_save_redirect="club-teams",
-            post_save_redirect_kwargs={"club_id": club.pk},
+            post_save_redirect="club:edit",
+            post_save_redirect_args=(club.pk,),
             templates=templates,
             extra_context=extra_context,
         )
@@ -3034,8 +4245,8 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
             TeamAssociation,
             formset_class=TeamAssociationFormSet,
             formset_kwargs={"user": request.user, "instance": team},
-            post_save_redirect="club-teams",
-            post_save_redirect_kwargs={"club_id": club.pk},
+            post_save_redirect="club:edit",
+            post_save_redirect_args=(club.pk,),
             permission_required=True,
             extra_context=extra_context,
         )
@@ -3047,30 +4258,51 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
     ):
         data = collections.OrderedDict()
 
+        # Each team's players and staff, loaded for all the teams at once:
+        # the same filters and ordering as a query for each team (#470).
+        teams = teams.select_related("division").prefetch_related(
+            Prefetch(
+                "people",
+                queryset=TeamAssociation.objects.filter(
+                    is_player=True, person__isnull=False
+                ).select_related("person"),
+                to_attr="players",
+            ),
+            Prefetch(
+                "people",
+                queryset=TeamAssociation.objects.filter(
+                    roles__isnull=False, person__isnull=False
+                )
+                .order_by("roles__id", "person__last_name", "person__first_name")
+                .select_related("person")
+                .prefetch_related("roles"),
+                to_attr="staff",
+            ),
+        )
+
         for team in teams:
-            for pa in team.people.filter(is_player=True, person__isnull=False):
+            for pa in team.players:
                 data.setdefault(team, collections.OrderedDict()).setdefault(
                     "players", []
                 ).append(
                     (
-                        pa.number or "",
-                        pa.person.first_name.encode("utf-8").strip(),
-                        pa.person.last_name.encode("utf-8").strip(),
+                        # Zero is a shirt number; only none at all is blank.
+                        "" if pa.number is None else pa.number,
+                        pa.person.first_name.strip(),
+                        pa.person.last_name.strip(),
                         pa.person.date_of_birth,
                         pa.person.email,
                     )
                 )
 
-            for pa in team.people.filter(
-                roles__isnull=False, person__isnull=False
-            ).order_by("roles__id", "person__last_name", "person__first_name"):
+            for pa in team.staff:
                 for role in pa.roles.all():
                     data.setdefault(team, collections.OrderedDict()).setdefault(
                         "staff", collections.OrderedDict()
                     ).setdefault(role.name, set()).add(
                         (
-                            pa.person.first_name.encode("utf-8").strip(),
-                            pa.person.last_name.encode("utf-8").strip(),
+                            pa.person.first_name.strip(),
+                            pa.person.last_name.strip(),
                             pa.person.date_of_birth,
                             pa.person.email,
                         )
@@ -3079,16 +4311,21 @@ class CompetitionAdminComponent(CompetitionAdminMixin, AdminComponent):
         extra_context["data"] = data
 
         templates = [
-            "tournamentcontrol/rego/%s/%s/registration_form.html"
-            % (competition.slug, season.slug),
-            "tournamentcontrol/rego/%s/registration_form.html" % (competition.slug,),
+            f"tournamentcontrol/rego/{competition.slug}/{season.slug}/"
+            "registration_form.html",
+            f"tournamentcontrol/rego/{competition.slug}/registration_form.html",
             "tournamentcontrol/rego/registration_form.html",
+            f"tournamentcontrol/rego/{self.shell.name}/registration_form.html",
         ]
 
         res = TemplateResponse(request, templates, extra_context)
 
         if mode == "pdf":
-            pdf = prince(res.render().content)
+            try:
+                pdf = prince(res.render().content)
+            except PrinceError as exc:
+                log.exception("PDF for %s was not generated.", request.path)
+                return self.pdf_failed(request, club.urls["edit"], extra_context, exc)
             return HttpResponse(pdf, content_type="application/pdf")
 
         return res

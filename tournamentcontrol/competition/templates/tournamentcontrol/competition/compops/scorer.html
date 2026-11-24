@@ -1,0 +1,46 @@
+{% extends "tournamentcontrol/competition/compops/base.html" %}
+{% load static tz %}
+{% block title %}Scorer · {{ ground.title }}{% endblock %}
+{% block extracss %}<link rel="stylesheet" href="{% static 'tournamentcontrol/competition/compops/scoreboard.css' %}">{% endblock %}
+{% block body_attrs %}class="scorer" data-signals__ifmissing="{board: 'scorer'}" data-indicator="connected" data-effect="@get('{{ events_url }}', {retryMaxCount: 1000})"{% endblock %}
+{% block body %}{% timezone tzinfo %}
+<header class="topbar">
+	<span class="brand">SCORER</span>
+	<span class="season">{{ ground.title }}</span>
+	<span class="spacer"></span>
+	<span class="sse" data-class:down="!$connected"><i></i> <span data-text="$connected ? 'live updates' : 'reconnecting'">live updates</span></span>
+</header>
+{% partialdef scorer inline %}
+{# The scorer's copy of the board: the same ids, so scoreboard.js counts its clock too. #}
+<main id="scorer" class="sc-main" data-on-interval__duration.20s="@get('{{ board_url }}')">
+	{% if match %}
+		<p class="sc-meta">{{ match.stage.division.title }} · {{ match.time|time:"H:i" }}</p>
+		{% for side, team in sides %}
+			<section class="sc-side">
+				<h2 class="sc-name">{{ team.name }}</h2>
+				<div class="sc-row">
+					{% url 'compops:scorer-score' competition=season.competition.slug season=season.slug ground=ground.slug match_pk=match.pk side=side step='down' as down_url %}
+					<form method="post" action="{{ down_url }}" data-on:submit="@post('{{ down_url }}', {contentType: 'form'})">{% csrf_token %}<button class="sc-btn" type="submit" aria-label="Take one off {{ team.name }}"{% if not team.score %} disabled{% endif %}>−</button></form>
+					<output class="sc-score" id="sc-{{ side }}-score">{{ team.score }}</output>
+					{% url 'compops:scorer-score' competition=season.competition.slug season=season.slug ground=ground.slug match_pk=match.pk side=side step='up' as up_url %}
+					<form method="post" action="{{ up_url }}" data-on:submit="@post('{{ up_url }}', {contentType: 'form'})">{% csrf_token %}<button class="sc-btn sc-up" type="submit" aria-label="Add one to {{ team.name }}">+</button></form>
+				</div>
+			</section>
+		{% endfor %}
+		{% if clock %}
+			<section id="sb-clock" class="sb-clock sc-clock {{ moment.kind }}" data-match="{{ match.pk }}" data-now="{{ now_ms }}" data-start="{{ clock.start_ms|default_if_none:'' }}" data-periods="{{ clock.periods }}" data-period="{{ clock.period }}" data-pause="{{ clock.pause }}" data-names="{{ clock.names_json }}" data-phases="{{ clock.phases_json }}">
+				<div class="sb-label" id="sb-label">{{ moment.label }}</div>
+				<div class="sb-time" id="sb-time">{{ moment.display }}</div>
+			</section>
+			{% if can_start %}
+				{% url 'compops:scorer-start' competition=season.competition.slug season=season.slug ground=ground.slug match_pk=match.pk as start_url %}
+				<form class="sc-start" method="post" action="{{ start_url }}" data-on:submit="@post('{{ start_url }}', {contentType: 'form'})">{% csrf_token %}<button class="sc-btn sc-go" type="submit">Start the clock</button></form>
+			{% endif %}
+		{% endif %}
+	{% else %}
+		<p class="sb-empty">No matches on {{ ground.title }} today.</p>
+	{% endif %}
+</main>
+{% endpartialdef %}
+{% endtimezone %}{% endblock %}
+{% block extrajs %}<script src="{% static 'tournamentcontrol/competition/compops/scoreboard.js' %}"></script>{% endblock %}

@@ -1,5 +1,3 @@
-import unittest
-from datetime import datetime, timedelta
 from unittest import mock
 
 from google.auth.exceptions import RefreshError
@@ -40,7 +38,7 @@ class YouTubeTokenRefreshTests(TestCase):
     def test_youtube_property_creates_service_with_credentials(self, mock_build):
         """Test that the youtube property creates a service with proper credentials."""
         # Access the youtube property
-        youtube_service = self.season.youtube
+        self.season.youtube
 
         # Verify build was called with correct parameters
         mock_build.assert_called_once_with("youtube", "v3", credentials=mock.ANY)
@@ -83,7 +81,7 @@ class YouTubeTokenRefreshTests(TestCase):
             return_value=mock_credentials,
         ):
             # Access the youtube property
-            youtube_service = self.season.youtube
+            self.season.youtube
 
             # Verify refresh was called
             mock_credentials.refresh.assert_called_once_with(
@@ -121,7 +119,7 @@ class YouTubeTokenRefreshTests(TestCase):
         ):
             # Accessing the youtube property should raise RefreshError
             with self.assertRaises(RefreshError):
-                youtube_service = self.season.youtube
+                self.season.youtube
 
             # Verify the error was logged
             mock_logger.error.assert_called_once()
@@ -144,7 +142,7 @@ class YouTubeTokenRefreshTests(TestCase):
             return_value=mock_credentials,
         ):
             # Access the youtube property
-            youtube_service = self.season.youtube
+            self.season.youtube
 
             # Verify refresh was NOT called
             mock_credentials.refresh.assert_not_called()
@@ -168,7 +166,7 @@ class YouTubeTokenRefreshTests(TestCase):
             return_value=mock_credentials,
         ):
             # Access the youtube property
-            youtube_service = self.season.youtube
+            self.season.youtube
 
             # Verify refresh was NOT called (no refresh token available)
             mock_credentials.refresh.assert_not_called()

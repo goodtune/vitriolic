@@ -1,0 +1,44 @@
+{% extends "tournamentcontrol/competition/admin/workbook/base.html" %}
+{% load i18n common admin_workbook %}
+
+{% block page_title %}{% trans "Wet weather" %}{% if date %} · {{ date|date:"j M Y" }}{% endif %}{% endblock %}
+
+{% block content %}
+	<header class="wb-head">
+		<div class="wb-head-text">
+			<p class="wb-eyebrow">{% icon "umbrella" %}{% trans "Wet weather" %}</p>
+			<h1>{% if date %}{{ date|date:"l j F Y" }}{% else %}{% trans "Washout" %}{% endif %}</h1>
+			<p class="wb-lede">{% blocktrans %}Mark all matches that have been cancelled due to ground closures.{% endblocktrans %}</p>
+		</div>
+	</header>
+
+	<form class="wb-sheet wb-form" action="" method="post">
+		{% csrf_token %}
+		{{ formset.management_form }}
+		<div class="wb-formbar">
+			<h2 class="wb-formbar-title">{% trans "Matches" %}</h2>
+			<div class="wb-formbar-actions">
+				<a class="wb-button wb-button-quiet" href="{{ season.urls.edit }}#schedule-tab">{% trans "Cancel" %}</a>
+				<button type="submit" class="wb-button wb-button-primary">{% trans "Save" %}</button>
+			</div>
+		</div>
+		{% include "touchtechnology/admin/workbook/_problems.html" with form=None %}
+		{% regroup formset.forms by instance.stage.division as grouped %}
+		{% for group in grouped %}
+			<section class="wb-time">
+				<h3 class="wb-time-title">{{ group.grouper }}</h3>
+				<div class="wb-checks wb-washouts">
+					{% for form in group.list %}
+						{% with match=form.instance %}
+							{{ form.id }}
+							<label for="{{ form.is_washout.id_for_label }}">{{ form.is_washout|control }}<span>{% if match.time %}<strong>{{ match.time|time:"H:i" }}</strong> {% endif %}{{ match|safe }}</span></label>
+						{% endwith %}
+					{% endfor %}
+				</div>
+			</section>
+		{% empty %}
+			<p class="wb-empty">{% trans "There are no matches on this day." %}</p>
+		{% endfor %}
+		<div class="wb-formfoot"><button type="submit" class="wb-button wb-button-primary">{% trans "Save" %}</button></div>
+	</form>
+{% endblock %}

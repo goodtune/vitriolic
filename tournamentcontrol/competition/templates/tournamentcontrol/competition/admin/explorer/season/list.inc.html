@@ -1,0 +1,29 @@
+{% extends "touchtechnology/admin/explorer/list.inc.html" %}
+{% load i18n admin admin_explorer %}
+
+{% block table-headings %}
+	<th>{% trans "Season" %}</th>
+	<th class="wide-only">{% trans "Mode" %}</th>
+	<th>{% trans "Starts" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	{{ block.super }}
+	<td class="wide-only">{{ obj.get_mode_display }}</td>
+	<td class="nowrap">{{ obj.start_date|date:"j M Y"|default:"&ndash;" }}</td>
+{% endblock %}
+
+{% block empty-row-colspan %}4{% endblock %}
+
+{% block row-buttons-extra %}
+	<a class="button compact" href="{{ obj.urls.edit }}#schedule-tab">{% icon "results" %}<span>{% trans "Schedule" %}</span></a>
+{% endblock %}
+
+{% block row-buttons-items %}
+	<a href="{% url 'admin:fixja:competition:season:report' obj.competition.pk obj.pk %}">{% icon "report" %}{% trans "Season report" %}</a>
+	<a href="{% url 'admin:fixja:competition:season:summary' obj.competition.pk obj.pk %}">{% icon "team" %}{% trans "Registrations" %}</a>
+	{% if obj.live_stream %}<a href="{% url 'admin:fixja:competition:season:authorize' obj.competition.pk obj.pk %}">{% icon "video" %}{% trans "Authorise YouTube" %}</a>{% endif %}
+	{% if obj.upstream_enabled and obj.upstream_backend %}<a href="{% url 'admin:fixja:competition:season:upstream-sync' obj.competition.pk obj.pk %}">{% icon "refresh" %}{% blocktrans with name=obj.upstream_backend.name %}Synchronise from {{ name }}{% endblocktrans %}</a>{% endif %}
+	<hr>
+	{{ block.super }}
+{% endblock %}

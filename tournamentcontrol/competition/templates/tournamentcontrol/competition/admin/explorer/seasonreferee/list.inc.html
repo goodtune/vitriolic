@@ -1,0 +1,22 @@
+{% extends "touchtechnology/admin/explorer/list.inc.html" %}
+{% load i18n admin admin_explorer %}
+
+{% block table-headings %}
+	<th>{% trans "Referee" %}</th>
+	<th class="num">{% trans "Age" %}</th>
+	<th class="wide-only">{% trans "Club" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	<td class="title-cell"><a href="{{ obj.urls.edit }}">{% icon "referee" %}<span>{{ obj.person }}</span></a></td>
+	<td class="num">{{ obj.person.age|default_if_none:"&ndash;" }}</td>
+	<td class="wide-only">{{ obj.club }}</td>
+{% endblock %}
+
+{% block row-buttons-extra %}
+	{% if obj.person.user %}
+		<a class="button quiet icon-only compact" href="{% url 'admin:auth:users:edit' obj.person.user.pk %}" title="{% trans "Their account" %}">{% icon "user" %}<span class="visually-hidden">{% blocktrans with person=obj.person %}The account of {{ person }}{% endblocktrans %}</span></a>
+	{% endif %}
+{% endblock %}
+
+{% block empty-row-colspan %}4{% endblock %}

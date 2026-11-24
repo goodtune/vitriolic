@@ -1,7 +1,7 @@
 from django.utils.functional import cached_property
 
 
-class AppRouter(object):
+class AppRouter:
     """
     Allow application level routing to distinct databases. Be careful not to
     attempt foreign-key relationships across physical boundaries!

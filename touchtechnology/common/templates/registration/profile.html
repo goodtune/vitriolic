@@ -1,6 +1,7 @@
 {% extends "registration/base.html" %}
 {% load i18n %}
 {% load common %}
+{% load static %}
 
 {% block content %}
 	{% block heading %}
@@ -10,9 +11,7 @@
 	{% block before %}{% endblock %}
 
 	{% block profile_content %}
-		{% blocktrans %}
-			<p>Welcome back {{ user.first_name }} &ndash; this is your personal page.</p>
-		{% endblocktrans %}
+		<p>{% blocktrans with name=user.get_short_name %}Welcome back {{ name }} &ndash; this is your personal page.{% endblocktrans %}</p>
 
 		{% block profile_form %}
 			<form class="fields" action="" method="post">
@@ -37,7 +36,8 @@
 						</a>
 
 						{% block logout-button %}
-							<a class="btn btn-default" role="button" href="{% url 'accounts:logout' %}">
+							{# LogoutView only accepts POST since Django 5.0; logout.js posts this link. #}
+							<a class="btn btn-default" role="button" href="{% url 'accounts:logout' %}" data-logout="{{ csrf_token }}">
 								<i class="fa fa-sign-out"></i>
 								{% trans "Logout" %}
 							</a>
@@ -45,6 +45,8 @@
 					{% endblock %}
 				</div>
 			</form>
+
+			<script src="{% static 'touchtechnology/common/js/logout.js' %}"></script>
 		{% endblock %}
 	{% endblock %}
 

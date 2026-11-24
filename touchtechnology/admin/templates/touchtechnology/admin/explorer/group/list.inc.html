@@ -1,0 +1,27 @@
+{% extends "touchtechnology/admin/explorer/list.inc.html" %}
+{% load i18n common admin admin_explorer %}
+
+{% block table-columns %}
+	<td class="title-cell">
+		{% if change_perm in object_perms %}
+			<a href="{% url 'admin:auth:groups:edit' obj.pk %}">{% icon "group" %}<span>{{ obj }}</span></a>
+		{% else %}
+			{{ obj }}
+		{% endif %}
+	</td>
+{% endblock %}
+
+{% block row-buttons-items %}
+	{% if change_perm in object_perms %}
+		<a href="{% url 'admin:auth:groups:edit' obj.pk %}">{% icon "edit" %}{% trans "Edit" %}</a>
+	{% endif %}
+	{% if add_perm in object_perms %}
+		<a href="{% url 'admin:auth:groups:perms' obj.pk %}">{% icon "lock" %}{% trans "Permissions" %}</a>
+	{% endif %}
+	{% if delete_perm in object_perms %}
+		<form method="post" action="{% url 'admin:auth:groups:delete' obj.pk %}" data-confirm="{% blocktrans %}The group “{{ obj }}” will be removed for good.{% endblocktrans %}" data-confirm-label="{% trans "Delete" %}">
+			{% csrf_token %}
+			<button type="submit" class="destructive-item">{% icon "trash" %}{% trans "Delete" %}</button>
+		</form>
+	{% endif %}
+{% endblock %}

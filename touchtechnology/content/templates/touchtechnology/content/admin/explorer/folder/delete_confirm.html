@@ -1,0 +1,3 @@
+{% extends "touchtechnology/content/admin/explorer/delete_confirm.html" %}
+
+{% block cancel_url %}{% if parentdir %}{% url 'admin:content:media:edit' parentdir %}{% else %}{% url 'admin:content:media:list' %}{% endif %}{% endblock %}

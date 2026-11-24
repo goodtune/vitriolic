@@ -1,0 +1,10 @@
+{% extends "touchtechnology/admin/explorer/40x.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Forbidden" %}{% endblock %}
+{% block error-code %}403{% endblock %}
+
+{% block error-details %}
+	<h1>{% trans "You are not permitted to see this" %}</h1>
+	<p>{% trans "Your account does not have the permissions this page needs. Someone who manages your access can give them to you." %}</p>
+{% endblock %}

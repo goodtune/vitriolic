@@ -18,9 +18,7 @@ class HTMLWidget(forms.Textarea):
 
     class Media:
         css = {
-            "all": (
-                "touchtechnology/common/css/jodit.min.css",
-            ),
+            "all": ("touchtechnology/common/css/jodit.min.css",),
         }
         js = (
             "touchtechnology/common/js/jodit.min.js",
@@ -28,13 +26,56 @@ class HTMLWidget(forms.Textarea):
         )
 
 
-class GoogleMapsWidget(MultiWidget):
-    def __init__(self, height, width, zoom, attrs=None):
+class SignatureWidget(forms.Widget):
+    """
+    A box to sign in. Signature Pad draws on a canvas, and a hidden input
+    carries what was drawn as a PNG data URL (see ``signature-field.js``).
+
+    It is not a ``HiddenInput``: a form shows a hidden field with no label
+    and no row of its own. The browser cannot require a hidden input either,
+    so the form field is what asks for the signature.
+    """
+
+    template_name = "touchtechnology/common/widgets/signature.html"
+
+    def use_required_attribute(self, initial):
+        return False
+
+    class Media:
+        css = {
+            "all": ("touchtechnology/common/css/signature-field.css",),
+        }
+        js = (
+            "touchtechnology/common/js/signature_pad.umd.min.js",
+            "touchtechnology/common/js/signature-field.js",
+        )
+
+
+class LocationWidget(MultiWidget):
+    """
+    Latitude, longitude and zoom inputs beneath an OpenStreetMap map.
+
+    Clicking the map or dragging the marker fills in the inputs. The inputs
+    are locked (read only) until the "Edit" toggle is pressed, after which
+    typing into them moves the marker. The value is stored as
+    "latitude,longitude,zoom".
+    """
+
+    template_name = "touchtechnology/common/widgets/location_widget.html"
+
+    class Media:
+        css = {
+            "all": ("https://unpkg.com/leaflet@1.9.4/dist/leaflet.css",),
+        }
+        js = (
+            "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js",
+            "touchtechnology/common/js/location-widget.js",
+        )
+
+    def __init__(self, height, zoom, attrs=None):
         if attrs is None:
             attrs = {}
-        self.attrs = attrs
         self.height = height
-        self.width = width
         self.zoom = zoom
         widgets = (
             forms.TextInput(attrs=dict(placeholder="Latitude", **attrs)),
@@ -47,6 +88,11 @@ class GoogleMapsWidget(MultiWidget):
         if value:
             return value.split(",")
         return ("", "", "")
+
+    def get_context(self, name, value, attrs):
+        context = super().get_context(name, value, attrs)
+        context["widget"].update({"height": self.height, "zoom": self.zoom})
+        return context
 
 
 class SelectDateTimeWidget(MultiWidget):

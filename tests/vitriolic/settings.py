@@ -5,8 +5,11 @@ Django settings for vitriolic project.
 import os
 import time
 
+import django
 import environ
+from django.core.exceptions import ImproperlyConfigured
 from django.urls import reverse_lazy
+from vitriolic.brands import BRANDS
 
 env = environ.Env()
 
@@ -48,19 +51,34 @@ INSTALLED_APPS = [
     "mptt",
     "cloudinary",
     "guardian",
-    "bootstrap3",
-    "django_gravatar",
     "embed_video",
+    "mathfilters",
     "django_htmx",
     "rest_framework",
-    "mcp_server",
+    "oauth2_provider",
     "touchtechnology.common",
     "touchtechnology.admin",
     "touchtechnology.content",
     "touchtechnology.news",
     "tournamentcontrol.competition",
     "example_app",
+    "enrolment",
 ]
+
+# Template partials are part of Django from 6.0; before that they come from
+# django-template-partials. Its tags are made builtins, so the templates are
+# the same on every version and never {% load partials %}.
+TEMPLATE_BUILTINS = []
+TEMPLATE_LOADERS = [
+    "django.template.loaders.filesystem.Loader",
+    "django.template.loaders.app_directories.Loader",
+]
+if django.VERSION < (6, 0):
+    INSTALLED_APPS.append("template_partials")
+    TEMPLATE_BUILTINS.append("template_partials.templatetags.partials")
+    # Wrapped already, so the app keeps these loaders instead of replacing
+    # them with its own cached ones.
+    TEMPLATE_LOADERS = [("template_partials.loader.Loader", TEMPLATE_LOADERS)]
 
 MIDDLEWARE = [
     "django.contrib.sites.middleware.CurrentSiteMiddleware",
@@ -73,12 +91,16 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django_htmx.middleware.HtmxMiddleware",
+    "touchtechnology.common.middleware.DatastarMiddleware",
     "touchtechnology.common.middleware.served_by_middleware",
     "touchtechnology.content.middleware.SitemapNodeMiddleware",
     "touchtechnology.content.middleware.redirect_middleware",
 ]
 
 ROOT_URLCONF = "vitriolic.urls"
+
+# Reports a failing subTest from the parallel workers (#484).
+TEST_RUNNER = "vitriolic.runner.TestRunner"
 
 TEMPLATES = [
     {
@@ -96,20 +118,45 @@ TEMPLATES = [
                 # in entirety.
                 "touchtechnology.common.context_processors.env",
                 "touchtechnology.common.context_processors.query_string",
-                "touchtechnology.common.context_processors.site",
+                "vitriolic.context_processors.site",
                 "touchtechnology.common.context_processors.tz",
+                "touchtechnology.common.context_processors.htmx_admin_tabs",
+                "touchtechnology.admin.context_processors.brand",
                 # Static files context processor
                 "django.template.context_processors.static",
             ],
-            "loaders": [
-                "django.template.loaders.filesystem.Loader",
-                "django.template.loaders.app_directories.Loader",
-            ],
+            "builtins": TEMPLATE_BUILTINS,
+            "loaders": TEMPLATE_LOADERS,
         },
     },
 ]
 
 WSGI_APPLICATION = "vitriolic.wsgi.application"
+ASGI_APPLICATION = "vitriolic.asgi.application"
+
+# Tournament Ops event bus. COMPOPS_EVENTS_BACKEND in the environment may be a
+# dotted path or one of the short names below. tox-docker exposes the redis
+# service through REDIS_HOST and REDIS_6379_TCP_PORT, the same way it does
+# for postgres.
+COMPOPS_EVENTS_BACKEND = (
+    "tournamentcontrol.competition.compops.events.memory.MemoryBackend"
+)
+COMPOPS_EVENTS_OPTIONS = {}
+if env("COMPOPS_EVENTS_BACKEND", default="memory") == "redis":
+    REDIS_HOST = env("REDIS_HOST", default="localhost")
+    REDIS_PORT = env.int("REDIS_6379_TCP_PORT", default=6379)
+    COMPOPS_EVENTS_BACKEND = (
+        "tournamentcontrol.competition.compops.events.redis.RedisBackend"
+    )
+    COMPOPS_EVENTS_OPTIONS = {"url": f"redis://{REDIS_HOST}:{REDIS_PORT}/0"}
+
+# Admin brand. ADMIN_BRAND in the environment names one of the demo brands.
+brand_name = env("ADMIN_BRAND", default="default")
+if brand_name not in BRANDS:
+    raise ImproperlyConfigured(
+        f"ADMIN_BRAND must be one of {', '.join(BRANDS)}, got {brand_name!r}"
+    )
+TOUCHTECHNOLOGY_ADMIN_BRAND = BRANDS[brand_name]
 
 
 # Database
@@ -122,7 +169,8 @@ DATABASES = {
 if DATABASES["default"]["ENGINE"].startswith("django.db.backends.postgresql"):
     DATABASES["default"]["PORT"] = env.int("DB_5432_TCP_PORT", default=5432)
     # delay long enough to let the postgresql container startup
-    time.sleep(4)
+    if env.bool("DJANGO_DB_WAIT", default=True):
+        time.sleep(4)
 
 
 # Password validation
@@ -137,22 +185,23 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
-# Use modern, secure password hashers. MD5PasswordHasher was used previously for
-# test speed but using production-grade hashers ensures compatibility with Django 4.0+
-# and prevents ImportError with deprecated hashers like SHA1PasswordHasher.
-# PBKDF2PasswordHasher is Django's default and provides good security.
-# PBKDF2SHA1PasswordHasher is included for backward compatibility with older passwords.
+# The test suite hashes a password for every user a factory creates and
+# verifies one on every login. Django's default PBKDF2 hasher runs over a
+# million iterations per hash, which was about 60% of the suite's run time
+# in CI. MD5PasswordHasher is what the Django documentation recommends for
+# tests and is still shipped in Django 5.2 and 6.x.
 PASSWORD_HASHERS = [
-    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
-    "django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher",
+    "django.contrib.auth.hashers.MD5PasswordHasher",
 ]
 
 AUTHENTICATION_BACKENDS = (
     "django.contrib.auth.backends.ModelBackend",  # this is default
     "guardian.backends.ObjectPermissionBackend",
+    # Bearer tokens issued by the OAuth 2.0 provider identify MCP clients.
+    "oauth2_provider.backends.OAuth2Backend",
 )
 
-LOGIN_URL = reverse_lazy("accounts:login")
+LOGIN_URL = reverse_lazy("admin:login")
 
 ANONYMOUS_USER_NAME = "anonymous"
 
@@ -166,8 +215,6 @@ TIME_ZONE = "UTC"
 
 USE_I18N = True
 
-USE_L10N = True
-
 USE_TZ = True
 
 
@@ -175,6 +222,9 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/1.10/howto/static-files/
 
 STATIC_URL = "/static/"
+
+MEDIA_URL = "/media/"
+MEDIA_ROOT = env("MEDIA_ROOT", default=os.path.join(BASE_DIR, "media"))
 
 
 # OAuth2
@@ -207,13 +257,43 @@ LOGGING = {
 
 TOUCHTECHNOLOGY_SITEMAP_ROOT = "home"
 
+# The admin loads each edit tab on first show when this is on. The harness sets
+# HTMX_ADMIN_TABS in the environment.
+TOUCHTECHNOLOGY_HTMX_ADMIN_TABS = env.bool("HTMX_ADMIN_TABS", default=False)
 
-# Django MCP Server settings
 
-DJANGO_MCP_GLOBAL_SERVER_CONFIG = {
-    "name": "vitriolic-mcp-server",
-    "instructions": "MCP Server for Tournament Control Competition Management System. Provides access to clubs, competitions, seasons, divisions, stages, teams, matches, and players data.",
+# MCP server settings
+
+TOURNAMENTCONTROL_MCP_NAME = "vitriolic"
+TOURNAMENTCONTROL_MCP_INSTRUCTIONS = (
+    "MCP server for the Tournament Control competition management system."
+)
+TOURNAMENTCONTROL_MCP_ADMIN_NAME = "vitriolic-admin"
+
+
+# OAuth 2.1 authorization server for MCP clients (django-oauth-toolkit).
+# See docs/mcp-admin.md.
+
+OAUTH2_PROVIDER = {
+    "PKCE_REQUIRED": True,
+    "COMPLIANT_BCP_RFC9700_PKCE_METHOD": True,
+    "ALLOWED_REDIRECT_URI_SCHEMES": ["https", "http"],
+    "SCOPES": {
+        "competition": "Read and administer competitions on your behalf",
+    },
+    "DEFAULT_SCOPES": ["competition"],
+    "ACCESS_TOKEN_EXPIRE_SECONDS": 3600,
+    "REFRESH_TOKEN_EXPIRE_SECONDS": 60 * 60 * 24 * 30,
+    "ROTATE_REFRESH_TOKEN": True,
+    # Public clients (Claude Code, Claude.ai) authenticate with PKCE alone.
+    "OAUTH2_TOKEN_ENDPOINT_AUTH_METHODS_SUPPORTED": [
+        "none",
+        "client_secret_post",
+        "client_secret_basic",
+    ],
+    "DCR_ENABLED": True,
+    "DCR_REGISTRATION_PERMISSION_CLASSES": (
+        "oauth2_provider.dcr.AllowAllDCRPermission",
+    ),
+    "OAUTH2_PROTECTED_RESOURCE_NAME": "Tournament Control",
 }
-
-# Optional: Configure authentication for MCP endpoints
-# DJANGO_MCP_AUTHENTICATION_CLASSES = ["rest_framework.authentication.SessionAuthentication"]

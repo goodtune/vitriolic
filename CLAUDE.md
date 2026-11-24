@@ -1,18 +1,18 @@
-# Claude Code Instructions
+# Claude Code instructions
 
-## Primary Context Source
+## Primary context source
 
-**Always read and follow the comprehensive project instructions in `.github/copilot-instructions.md`** which contains:
+**Always read and follow the project instructions in `.github/copilot-instructions.md`** which contains:
 
 - Repository structure overview (Django reusable apps for sporting clubs)
 - Development workflow and testing guidelines (`tox`)
 - Detailed Django best practices and patterns
-- Comprehensive test writing guidelines using `django-test-plus`
+- Test writing guidelines using `django-test-plus`
 - Security and permission testing requirements
 - Model field and admin view testing patterns
 - Import organization and positive assertion requirements
 
-## Key Project Context
+## Key project context
 
 This is a Django-based repository providing reusable applications for sporting club websites, including:
 
@@ -21,32 +21,45 @@ This is a Django-based repository providing reusable applications for sporting c
 - Content management (`touchtechnology/content`)
 - News system (`touchtechnology/news`)
 - Competition management (`tournamentcontrol/competition`)
+- Tournament Ops site (`tournamentcontrol/competition/compops`, see `docs/compops.md`)
 
-## Test Structure
+## Test structure
 
 - **Unit tests**: Use Django test framework with `django-test-plus`, located within each module
 - **E2E tests**: Use Playwright with `pytest-django`, located in `tests/e2e/`
+- **E2E in CI**: runs on pushes to `main`, and on a pull request only while it carries the `e2e` label; add the label for changes a browser would notice
 - **Execution**: Run via `tox` for full suite or specific environments
 
-### Running Tests
+### Running tests
 
-- Run `tox -l` to list the environments. Pick the latest Django/Python combination.
+- Run `tox -l` to list the environments.
+  Pick the latest Django/Python combination.
 - Run `tox -e <env>` to run all tests for the environment.
-- Run `tox -e <env> -- tournamentcontrol.competition` to run all the tests for that module. You can add more modules.
+- Run `tox -e <env> -- tournamentcontrol.competition` to run all the tests for that module.
+  You can add more modules.
 - Run `tox -e <env> -- tournamentcontrol.competition.tests.test_competition_admin.GoodViewTests.test_competition` to run a specific test.
-- You can combine various fragments, but always used full dotted address (ie. `package.module.Class.test_method`) and never path (ie. `package/module.py::Class::test_method`).
+- You can combine various fragments, but always use the full dotted address (for example `package.module.Class.test_method`) and never a path (such as `package/module.py::Class::test_method`).
 
-## Important Reminders
+## Important reminders
 
 - Follow existing code patterns and Django idioms
 - Always use named URLs and proper template path methods
 - Test both positive outcomes and security/permission scenarios
+- Assert the expected value with `assertEqual`; never `assertNotEqual`, `assertIsNotNone` or `assertTrue`/`assertFalse`
+- Use the `django-test-plus` idioms: no `html=` argument to `assertResponseContains` (give it the whole element), no assigned response (`response = self.get(...)`), `self.assert_http_###_name()` rather than `.status_code`, with `assert_http_302_found(url=...)` rather than `assertRedirects`, plus `assertLoginRequired`, `assertResponseHeaders` and `get_check_200`. For a query string pass `data=` on the request; `self.reverse()` cannot take `query=`, so use `django.urls.reverse(..., query=...)` only when the URL string itself is needed
+- Build class-level test data in `setUpTestData`; never override `setUpClass` without calling `super()`
+- Before opening a PR, run the environment with no selector (`tox -e <env>` alone) as CI does; module order changes what leaks between tests
+- A new admin delete route needs a case in `tests/e2e/admin_delete.py`; `test_every_delete_route_has_a_case` enforces it
+- Build strings with f-strings, except logger calls (printf-style lazy arguments), SQL placeholders and `_()` strings; modernise `%`, `.format()` and `super(Class, self)` only in files the PR already modifies
 - Use ORM relations instead of manual queries
 - Never perform `git add .` - always be explicit about the files you add
 - Never make up ways to run the tests, follow the instructions
-- Python `import` statements must ALWAYS appear at the head of a file. The ONLY exception is if doing so would create a cycle, but you should try to remove the cycle first
+- Python `import` statements must ALWAYS appear at the head of a file.
+  The ONLY exception is if doing so would create a cycle, but you should try to remove the cycle first
 - Never run Python scripts directly using `python script.py` - always use the proper Django management command interface or test framework
 - Never try to run Django management commands, this is a library, not a Django project
+- Write Markdown files one sentence per line, in Australian English, with headings in sentence case; run `tox -e vale` on any Markdown you change (see `docs/style.md`)
+- In pull request descriptions, issues and comments keep each paragraph on one line: GitHub shows every line break there as a break
 
 ## Continuous Improvement
 

@@ -76,7 +76,7 @@ class ListMatchSerializer(serializers.ModelSerializer):
         )
 
     def get_round(self, obj):
-        return obj.label or "Round {}".format(obj.round)
+        return obj.label or f"Round {obj.round}"
 
     def _get_team(self, obj, home_or_away):
         team = getattr(obj, f"get_{home_or_away}_team_plain")()

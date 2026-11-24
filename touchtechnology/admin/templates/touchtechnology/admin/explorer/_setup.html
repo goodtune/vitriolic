@@ -1,0 +1,17 @@
+{% load i18n admin admin_explorer %}
+<div class="list-head">
+	<h2>{{ setup.title }}</h2>
+	<p class="muted">{% blocktrans with done=setup.done total=setup.total %}{{ done }} of {{ total }} steps done{% endblocktrans %}</p>
+</div>
+<ol class="setup-steps">
+	{% for step in setup.steps %}
+		<li class="setup-step{% if step.done %} is-done{% elif step.next %} is-next{% endif %}{% if step.optional %} is-optional{% endif %}">
+			<span class="setup-mark" aria-hidden="true">{% if step.done %}{% icon "check" %}{% else %}{{ forloop.counter }}{% endif %}</span>
+			<div class="setup-text">
+				<p class="setup-label">{% if step.url %}<a href="{{ step.url }}">{{ step.label }}</a>{% else %}{{ step.label }}{% endif %}{% if step.optional %} <span class="muted">{% trans "optional" %}</span>{% endif %}</p>
+				<p class="setup-detail"><span class="visually-hidden">{% if step.done %}{% trans "Done:" %}{% else %}{% trans "Still to do:" %}{% endif %}</span> {{ step.detail }}</p>
+			</div>
+			{% if step.url and not step.done %}<a class="button compact{% if step.next %} primary{% endif %}" href="{{ step.url }}">{% if step.next %}{% trans "Do this next" %}{% else %}{% trans "Go" %}{% endif %}<span class="visually-hidden">: {{ step.label }}</span></a>{% endif %}
+		</li>
+	{% endfor %}
+</ol>

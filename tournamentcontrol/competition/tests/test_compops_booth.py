@@ -1,0 +1,1261 @@
+import datetime
+import json
+from unittest import mock
+from zoneinfo import ZoneInfo
+
+from django.contrib.auth.models import Group
+from django.urls import reverse
+from django.utils import timezone
+from freezegun import freeze_time
+from guardian.shortcuts import assign_perm
+from test_plus import TestCase
+
+from tournamentcontrol.competition.compops import events
+from tournamentcontrol.competition.tests import factories
+from tournamentcontrol.competition.tests.test_compops_results import (
+    DATASTAR,
+    HELD,
+    element_patches,
+)
+from tournamentcontrol.competition.tests.test_live_stream_transition import (
+    YOUTUBE_SEASON,
+    youtube_mock,
+)
+
+TZ = ZoneInfo("Australia/Brisbane")
+
+
+@freeze_time("2026-10-08 10:50 +10:00")
+class BoothFixture(TestCase):
+    def setUp(self):
+        super().setUp()
+        events.reset_backend()
+        self.season = factories.SeasonFactory.create(
+            slug="pc26",
+            slug_locked=True,
+            competition__slug="pacific-cup",
+            competition__slug_locked=True,
+            timezone="Australia/Brisbane",
+            statistics=True,
+            **YOUTUBE_SEASON,
+        )
+        self.commentator = factories.UserFactory.create()
+        assign_perm("competition.stream_season", self.commentator, self.season)
+        # The comms team: no staff flag, and the right to watch but not to act.
+        self.watcher = factories.UserFactory.create()
+        assign_perm("competition.commentate_season", self.watcher, self.season)
+        self.outsider = factories.UserFactory.create()
+        venue = factories.VenueFactory.create(season=self.season)
+        self.field1 = factories.GroundFactory.create(
+            venue=venue,
+            title="Field 1",
+            slug="field-1",
+            slug_locked=True,
+            live_stream=True,
+        )
+        self.division = factories.DivisionFactory.create(
+            season=self.season, title="Men's Open"
+        )
+        self.stage = factories.StageFactory.create(division=self.division)
+        self.pool_a = factories.StageGroupFactory.create(
+            stage=self.stage, title="Pool A"
+        )
+        self.pool_b = factories.StageGroupFactory.create(
+            stage=self.stage, title="Pool B"
+        )
+        self.aus = factories.TeamFactory.create(
+            division=self.division, title="Australia", stage_group=self.pool_a
+        )
+        self.nzl = factories.TeamFactory.create(
+            division=self.division, title="New Zealand", stage_group=self.pool_a
+        )
+        self.fji = factories.TeamFactory.create(
+            division=self.division, title="Fiji", stage_group=self.pool_b
+        )
+        self.previous = self.make(
+            9,
+            20,
+            self.fji,
+            self.aus,
+            home_team_score=3,
+            away_team_score=7,
+            live_stream=True,
+            external_identifier="yt-prev",
+            live_stream_status="complete",
+        )
+        self.current = self.make(
+            10,
+            40,
+            self.aus,
+            self.nzl,
+            live_stream=True,
+            external_identifier="yt-now",
+            live_stream_status="live",
+        )
+        self.following = self.make(
+            11, 20, self.fji, self.nzl, live_stream=True, external_identifier="yt-next"
+        )
+        self.kw = {"competition": "pacific-cup", "season": "pc26", "ground": "field-1"}
+
+    def make(self, hour, minute, home, away, ground=None, **kwargs):
+        when = timezone.make_aware(datetime.datetime(2026, 10, 8, hour, minute), TZ)
+        return factories.MatchFactory.create(
+            stage=self.stage,
+            stage_group=self.pool_a,
+            home_team=home,
+            away_team=away,
+            datetime=when,
+            date=when.date(),
+            time=when.time(),
+            play_at=ground or self.field1,
+            **kwargs,
+        )
+
+    def url(self, name, **extra):
+        return reverse(f"compops:{name}", kwargs={**self.kw, **extra})
+
+    def datastar(self, method, name, **extra):
+        """Send a Datastar request; return the streamed body."""
+        getattr(self, method)(f"compops:{name}", extra=DATASTAR, **self.kw, **extra)
+        return b"".join(self.last_response.streaming_content).decode()
+
+
+class BoothAccessTests(BoothFixture):
+    def test_login_required(self):
+        self.assertLoginRequired("compops:booth", **self.kw)
+
+    def test_stream_permission_required(self):
+        with self.login(self.outsider):
+            self.get("compops:booth", **self.kw)
+        self.assert_http_403_forbidden()
+
+    def test_commentator_without_staff_flag_can_open_the_booth(self):
+        with self.login(self.commentator):
+            self.get("compops:booth", **self.kw)
+        self.assert_http_200_ok()
+        self.assertResponseContains('<div id="lamp" class="lamp live">ON AIR</div>')
+
+    def test_page_subscribes_to_the_booth_stream(self):
+        with self.login(self.commentator):
+            self.get("compops:booth", **self.kw)
+        url = self.url("booth-events")
+        self.assertIn(
+            f"data-effect=\"$pane; $match; @get('{url}', {{retryMaxCount: 1000}})\"",
+            self.last_response.content.decode(),
+        )
+
+    def test_clock_keeps_the_time_at_the_ground(self):
+        with self.login(self.commentator):
+            self.get("compops:booth", **self.kw)
+        self.assertResponseContains(
+            '<span class="clock" data-on-interval="el.textContent = '
+            "new Intl.DateTimeFormat('en-GB', {hour: '2-digit', minute: '2-digit', "
+            "hourCycle: 'h23', timeZone: 'Australia/Brisbane'}).format(new Date())\">"
+            "10:50</span>"
+        )
+
+    def test_index_lists_streamed_grounds(self):
+        with self.login(self.commentator):
+            self.get("compops:booth-index", competition="pacific-cup", season="pc26")
+        self.assertResponseContains(f'<a href="{self.url("booth")}">Field 1</a>')
+
+    def test_unknown_ground_is_404(self):
+        with self.login(self.commentator):
+            self.get(
+                "compops:booth",
+                competition="pacific-cup",
+                season="pc26",
+                ground="field-9",
+            )
+        self.assert_http_404_not_found()
+
+
+class WatchOnlyTests(BoothFixture):
+    """``commentate_season`` on the season opens its booths, and nothing else."""
+
+    def test_every_booth_page_opens(self):
+        season = {"competition": "pacific-cup", "season": "pc26"}
+        views = {
+            "booth-index": season,
+            "booth": self.kw,
+            "booth-lamp": self.kw,
+            "booth-strip": self.kw,
+            "booth-runsheet": self.kw,
+            "booth-pane": {**self.kw, "match_pk": self.current.pk, "pane": "ladder"},
+            "booth-teams": {**self.kw, "match_pk": self.current.pk},
+            "booth-team": {**self.kw, "team_pk": self.aus.pk},
+        }
+        with self.login(self.watcher):
+            for name, kwargs in views.items():
+                with self.subTest(name):
+                    self.get(f"compops:{name}", **kwargs)
+                    self.assert_http_200_ok()
+
+    def test_lamp_is_shown_without_its_controls(self):
+        with self.login(self.watcher):
+            self.get("compops:booth", **self.kw)
+        self.assertResponseContains('<div id="lamp" class="lamp live">ON AIR</div>')
+        # What is next is said; what to do about it is not theirs to do.
+        self.assertResponseContains("Next on Field 1 today: 11:20 Fiji v New Zealand")
+        self.assertEqual(
+            self.last_response.content.count(b"End the current broadcast first."), 0
+        )
+        self.assertEqual(self.last_response.content.count(b"HOLD TO END BROADCAST"), 0)
+        self.assertEqual(self.last_response.content.count(b"<form"), 0)
+
+    def test_lamp_offers_no_arm_between_broadcasts(self):
+        self.current.live_stream_status = "complete"
+        self.current.save()
+        with self.login(self.watcher):
+            self.get("compops:booth-lamp", **self.kw)
+        self.assertResponseContains('<div id="lamp" class="lamp">OFF AIR</div>')
+        self.assertEqual(self.last_response.content.count(b"arm now"), 0)
+        self.assertEqual(self.last_response.content.count(b"<form"), 0)
+
+    def test_broadcast_cannot_be_ended_or_armed(self):
+        with self.login(self.watcher):
+            for name, kwargs in (
+                ("booth-onair", {"status": "complete"}),
+                ("booth-arm", {}),
+            ):
+                with self.subTest(name):
+                    self.post(f"compops:{name}", **self.kw, **kwargs)
+                    self.assert_http_403_forbidden()
+        self.current.refresh_from_db()
+        self.assertEqual(self.current.live_stream_status, "live")
+
+    def test_rest_of_the_site_stays_closed(self):
+        season = {"competition": "pacific-cup", "season": "pc26"}
+        with self.login(self.watcher):
+            for name, kwargs in (
+                ("season", season),
+                ("day", {**season, "datestr": "20261008"}),
+                ("events", {**season, "datestr": "20261008"}),
+            ):
+                with self.subTest(name):
+                    self.get(f"compops:{name}", **kwargs)
+                    self.assert_http_403_forbidden()
+
+    def front_door_row(self, season):
+        url = reverse(
+            "compops:booth-index",
+            kwargs={"competition": season.competition.slug, "season": season.slug},
+        )
+        return (
+            f'<a class="item" href="{url}">'
+            f'<span class="title">{season.title}</span>'
+            f'<span class="comp">{season.competition.title}</span>'
+            '<span class="when">8 Oct 2026</span></a>'
+        )
+
+    def test_front_door_lists_the_seasons_they_may_watch(self):
+        # Played the same day, with no permission on it for either of them.
+        closed = factories.MatchFactory.create(
+            date=self.current.date
+        ).stage.division.season
+        for user in (self.watcher, self.commentator):
+            with self.subTest(user=user), self.login(user):
+                self.get("compops:index")
+                self.assert_http_200_ok()
+                self.assertResponseContains("<h1>Commentary booths</h1>")
+                self.assertResponseContains("<h2>On now</h2>")
+                self.assertResponseContains(self.front_door_row(self.season))
+                content = self.last_response.content.decode()
+                self.assertEqual(
+                    (
+                        content.count(self.front_door_row(closed)),
+                        content.count("Open today"),
+                        content.count("All events"),
+                    ),
+                    (0, 0, 0),
+                )
+
+    def test_front_door_lists_a_season_with_no_matches_yet(self):
+        coming = factories.SeasonFactory.create(timezone="Australia/Brisbane")
+        assign_perm("competition.commentate_season", self.watcher, coming)
+        url = reverse(
+            "compops:booth-index",
+            kwargs={"competition": coming.competition.slug, "season": coming.slug},
+        )
+        with self.login(self.watcher):
+            self.get("compops:index")
+        self.assertResponseContains("<h2>Not yet scheduled</h2>")
+        self.assertResponseContains(
+            f'<a class="item" href="{url}">'
+            f'<span class="title">{coming.title}</span>'
+            f'<span class="comp">{coming.competition.title}</span>'
+            '<span class="when">No matches scheduled</span></a>'
+        )
+
+    def test_front_door_is_closed_to_someone_with_no_season(self):
+        with self.login(self.outsider):
+            self.get("compops:index")
+        self.assert_http_403_forbidden()
+
+    def test_front_door_opens_for_a_group_member(self):
+        comms = Group.objects.create(name="Comms team")
+        assign_perm("competition.commentate_season", comms, self.season)
+        self.outsider.groups.add(comms)
+        with self.login(self.outsider):
+            self.get("compops:index")
+        self.assertResponseContains(self.front_door_row(self.season))
+
+    def test_list_of_booths_leads_back_to_the_front_door(self):
+        with self.login(self.watcher):
+            self.get("compops:booth-index", competition="pacific-cup", season="pc26")
+        home = reverse("compops:index")
+        self.assertResponseContains(
+            f'<a class="brand" href="{home}">TOURNAMENT OPS</a>'
+        )
+
+    def test_another_season_stays_closed(self):
+        other = factories.GroundFactory.create(live_stream=True)
+        kwargs = {
+            "competition": other.venue.season.competition.slug,
+            "season": other.venue.season.slug,
+        }
+        with self.login(self.watcher):
+            self.get("compops:booth", ground=other.slug, **kwargs)
+            self.assert_http_403_forbidden()
+            self.get("compops:booth-index", **kwargs)
+            self.assert_http_403_forbidden()
+
+    def test_group_holding_the_permission_lets_its_members_in(self):
+        comms = Group.objects.create(name="Comms team")
+        assign_perm("competition.commentate_season", comms, self.season)
+        self.outsider.groups.add(comms)
+        with self.login(self.outsider):
+            self.get("compops:booth", **self.kw)
+        self.assert_http_200_ok()
+        self.assertEqual(self.last_response.content.count(b"HOLD TO END BROADCAST"), 0)
+
+    def test_permission_on_every_season_opens_this_one(self):
+        assign_perm("competition.commentate_season", self.outsider)
+        with self.login(self.outsider):
+            self.get("compops:booth", **self.kw)
+        self.assert_http_200_ok()
+
+    def test_stream_permission_keeps_the_controls(self):
+        with self.login(self.commentator):
+            self.get("compops:booth", **self.kw)
+        self.assertResponseContains(
+            '<button class="bigbtn end" type="submit" data-hold="1500">HOLD TO END BROADCAST</button>'
+        )
+
+
+class OtherDayTests(BoothFixture):
+    """The booth of another day: a look ahead, or back, with nothing to press."""
+
+    SATURDAY = {"day": "20261010"}
+
+    def setUp(self):
+        super().setUp()
+        when = timezone.make_aware(datetime.datetime(2026, 10, 10, 19, 0), TZ)
+        self.saturday = factories.MatchFactory.create(
+            stage=self.stage,
+            stage_group=self.pool_a,
+            home_team=self.fji,
+            away_team=self.aus,
+            datetime=when,
+            date=when.date(),
+            time=when.time(),
+            play_at=self.field1,
+            live_stream=True,
+            external_identifier="yt-sat",
+        )
+
+    def test_today_steps_to_the_next_day_with_matches_on_the_ground(self):
+        # A nearer day, on another ground, is not this booth's.
+        other = factories.GroundFactory.create(
+            venue=self.field1.venue, live_stream=True
+        )
+        factories.MatchFactory.create(
+            stage=self.stage, play_at=other, date=datetime.date(2026, 10, 9)
+        )
+        with self.login(self.commentator):
+            self.get("compops:booth", **self.kw)
+        self.assertResponseContains(
+            '<nav class="days"><span class="step">‹</span>'
+            '<span class="day">Thursday 8 October</span>'
+            '<a href="?day=20261010" rel="next" title="Saturday 10 October">›</a>'
+            "</nav>"
+        )
+
+    def test_another_day_shows_its_matches_and_the_way_back(self):
+        with self.login(self.commentator):
+            self.get("compops:booth", data=self.SATURDAY, **self.kw)
+        self.assert_http_200_ok()
+        self.assertResponseContains(
+            '<nav class="days">'
+            '<a href="?day=20261008" rel="prev" title="Thursday 8 October">‹</a>'
+            '<span class="day">Saturday 10 October</span>'
+            '<span class="step">›</span>'
+            f'<a class="today" href="{self.url("booth")}">Today</a>'
+            "</nav>"
+        )
+        self.assertResponseContains("<b>Looking at Saturday 10 October</b>")
+        match = self.url("booth-match", match_pk=self.saturday.pk)
+        self.assertResponseContains(
+            f'<a class="teams" href="{match}">Fiji <small>v</small> Australia</a>'
+        )
+        content = self.last_response.content.decode()
+        # The panes open on the day's first match, there being none on now.
+        self.assertIn('<div id="pane" class="pane sheets">', content)
+        self.assertIn("day: '20261010'", content)
+        # Nothing to press: the broadcast is run from today's booth.
+        self.assertEqual(content.count("<form"), 0)
+
+    def test_today_named_in_the_address_keeps_its_controls(self):
+        with self.login(self.commentator):
+            self.get("compops:booth", data={"day": "20261008"}, **self.kw)
+        self.assertResponseContains(
+            '<button class="bigbtn end" type="submit" data-hold="1500">HOLD TO END BROADCAST</button>'
+        )
+        self.assertIn("day: ''", self.last_response.content.decode())
+
+    def test_day_that_is_no_date_is_404(self):
+        with self.login(self.commentator):
+            self.get("compops:booth", data={"day": "20261340"}, **self.kw)
+        self.assert_http_404_not_found()
+
+    def test_panes_follow_the_day_the_page_is_on(self):
+        # The page's signals carry its day on every request it makes.
+        signals = {"datastar": json.dumps(self.SATURDAY)}
+        with self.login(self.commentator):
+            self.get(
+                "compops:booth-pane",
+                data=signals,
+                extra=DATASTAR,
+                match_pk=self.saturday.pk,
+                pane="results",
+                **self.kw,
+            )
+            self.assert_http_200_ok()
+            self.get("compops:booth-runsheet", data=signals, extra=DATASTAR, **self.kw)
+            runsheet = b"".join(self.last_response.streaming_content).decode()
+            self.assertIn("<h4>Field 1 · Sat 10 Oct</h4>", runsheet)
+            # Without it the match is not one of today's.
+            self.get(
+                "compops:booth-pane",
+                match_pk=self.saturday.pk,
+                pane="results",
+                **self.kw,
+            )
+            self.assert_http_404_not_found()
+
+    def test_end_of_the_day_says_so_once(self):
+        for match in (self.current, self.following):
+            match.live_stream_status = "complete"
+            match.save()
+        with self.login(self.commentator):
+            self.get("compops:booth-lamp", **self.kw)
+        self.assertEqual(
+            self.last_response.content.count(b"No more broadcasts on Field 1 today"), 1
+        )
+
+
+class EarlyStartTests(BoothFixture):
+    """
+    A stream usually starts before its match does, to introduce it. Before
+    the next match kicks off the lamp is that match's, so it can be put on
+    air early and the booth shows that it is armed or live.
+    """
+
+    GO_ON_AIR = '<button class="bigbtn" type="submit" data-hold="1500">HOLD TO GO ON AIR</button>'
+
+    def lamp(self):
+        with self.login(self.commentator):
+            self.get("compops:booth-lamp", **self.kw)
+        return self.last_response.content.decode()
+
+    def end_current(self):
+        self.current.live_stream_status = "complete"
+        self.current.save()
+
+    def test_between_matches_the_lamp_is_the_next_match(self):
+        self.end_current()
+        self.lamp()
+        self.assertResponseContains('<div id="lamp" class="lamp">OFF AIR</div>')
+        self.assertResponseContains("<b>Next · Fiji v New Zealand</b>")
+        self.assertResponseContains(self.GO_ON_AIR)
+
+    def test_before_the_first_match_the_lamp_is_that_match(self):
+        self.previous.delete()
+        self.current.delete()
+        self.lamp()
+        self.assertResponseContains("<b>Next · Fiji v New Zealand</b>")
+        self.assertResponseContains(self.GO_ON_AIR)
+
+    def test_armed_next_match_shows_standby(self):
+        self.end_current()
+        self.following.live_stream_status = "testing"
+        self.following.save()
+        self.lamp()
+        self.assertResponseContains('<div id="lamp" class="lamp testing">STANDBY</div>')
+        self.assertResponseContains("<b>Standby · Fiji v New Zealand</b>")
+        self.assertResponseContains(self.GO_ON_AIR)
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_next_match_goes_on_air_before_it_kicks_off(self, build):
+        build.return_value = youtube_mock("testing")
+        self.end_current()
+        self.following.live_stream_status = "testing"
+        self.following.save()
+        with self.login(self.commentator):
+            self.post("compops:booth-onair", status="live", **self.kw)
+        self.following.refresh_from_db()
+        self.assertEqual(self.following.live_stream_status, "live")
+        self.lamp()
+        self.assertResponseContains('<div id="lamp" class="lamp live">ON AIR</div>')
+        self.assertResponseContains("<b>Broadcasting · Fiji v New Zealand</b>")
+
+    def test_next_match_cannot_be_ended_before_it_is_on_air(self):
+        self.end_current()
+        with self.login(self.commentator):
+            body = self.datastar("post", "booth-onair", status="complete")
+        self.assertIn(
+            '<span class="warn">Nothing is on this ground right now.</span>', body
+        )
+        self.following.refresh_from_db()
+        self.assertEqual(self.following.live_stream_status, None)
+
+    def test_panes_open_on_the_next_match(self):
+        self.end_current()
+        with self.login(self.commentator):
+            self.get("compops:booth", **self.kw)
+        self.assertIn(
+            self.url("booth-pane", match_pk=self.following.pk, pane="ladder"),
+            self.last_response.content.decode(),
+        )
+
+    def test_match_being_played_keeps_the_lamp(self):
+        # It has kicked off and has not been ended: the lamp is still its.
+        self.current.live_stream_status = "testing"
+        self.current.save()
+        self.lamp()
+        self.assertResponseContains("<b>Standby · Australia v New Zealand</b>")
+
+    def test_after_the_last_match_the_lamp_stays_with_it(self):
+        self.end_current()
+        self.following.delete()
+        self.lamp()
+        self.assertResponseContains("<b>Off air · Australia v New Zealand</b>")
+        self.assertResponseContains(
+            '<button class="bigbtn end" type="button" disabled>ENDED</button>'
+        )
+
+    def test_watcher_sees_the_next_match_without_the_button(self):
+        self.end_current()
+        with self.login(self.watcher):
+            self.get("compops:booth-lamp", **self.kw)
+        self.assertResponseContains("<b>Next · Fiji v New Zealand</b>")
+        self.assertEqual(self.last_response.content.count(b"<form"), 0)
+
+    def test_another_day_has_nothing_to_press(self):
+        self.end_current()
+        with self.login(self.commentator):
+            self.get("compops:booth", data={"day": "20261009"}, **self.kw)
+        self.assertEqual(self.last_response.content.count(b"<form"), 0)
+
+
+class MatchViewTests(BoothFixture):
+    """
+    A booth opened on one match: its lamp, its controls and its panes are that
+    match's, whatever the clock says is on. It has an address of its own, so
+    a commentator can be sent to it and get set before the match starts.
+    """
+
+    GO_ON_AIR = "HOLD TO GO ON AIR"
+    END = "HOLD TO END BROADCAST"
+
+    def view(self, match, user=None, **kwargs):
+        with self.login(user or self.commentator):
+            self.get("compops:booth-match", match_pk=match.pk, **self.kw, **kwargs)
+        return self.last_response.content.decode()
+
+    def act(self, name, match, **kwargs):
+        """Press a button of the view; return what the page is sent back."""
+        with self.login(self.commentator):
+            return self.datastar("post", name, match_pk=match.pk, **kwargs)
+
+    def end_current(self):
+        self.current.live_stream_status = "complete"
+        self.current.save()
+
+    def test_view_is_about_its_match_not_the_one_on_air(self):
+        content = self.view(self.following)
+        self.assert_http_200_ok()
+        self.assertResponseContains('<div id="lamp" class="lamp">OFF AIR</div>')
+        self.assertResponseContains("<b>Next · Fiji v New Zealand</b>")
+        self.assertIn(f"view: {self.following.pk}}}", content)
+        self.assertIn(
+            self.url("booth-pane", match_pk=self.following.pk, pane="ladder"), content
+        )
+
+    def test_match_on_air_elsewhere_is_said_and_blocks_going_on_air(self):
+        content = self.view(self.following)
+        on_air = self.url("booth-match", match_pk=self.current.pk)
+        self.assertResponseContains(
+            f'<a href="{on_air}">Australia v New Zealand is on air</a>'
+        )
+        self.assertEqual(
+            (content.count(self.GO_ON_AIR), content.count("<form")), (0, 0)
+        )
+        body = self.act("booth-match-onair", self.following, status="live")
+        self.assertIn(
+            '<span class="warn">Australia v New Zealand is on air. '
+            "End that broadcast first.</span>",
+            body,
+        )
+        self.following.refresh_from_db()
+        self.assertEqual(self.following.live_stream_status, None)
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_view_of_the_match_on_air_ends_it(self, build):
+        build.return_value = youtube_mock("live")
+        end = self.url("booth-match-onair", match_pk=self.current.pk, status="complete")
+        content = self.view(self.current)
+        self.assertIn(f'<form method="post" action="{end}"', content)
+        self.assertEqual(content.count(self.END), 1)
+        self.act("booth-match-onair", self.current, status="complete")
+        self.current.refresh_from_db()
+        self.assertEqual(self.current.live_stream_status, "complete")
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_match_is_armed_and_put_on_air_from_its_view(self, build):
+        build.return_value = youtube_mock("ready")
+        self.end_current()
+        live = self.url("booth-match-onair", match_pk=self.following.pk, status="live")
+        arm = self.url("booth-match-arm", match_pk=self.following.pk)
+        content = self.view(self.following)
+        self.assertIn(f'<form method="post" action="{live}"', content)
+        self.assertIn(f'<form class="inline" method="post" action="{arm}"', content)
+        self.act("booth-match-arm", self.following)
+        self.following.refresh_from_db()
+        self.assertEqual(self.following.live_stream_status, "testing")
+        self.view(self.following)
+        self.assertResponseContains('<div id="lamp" class="lamp testing">STANDBY</div>')
+        build.return_value = youtube_mock("testing")
+        self.act("booth-match-onair", self.following, status="live")
+        self.following.refresh_from_db()
+        self.assertEqual(self.following.live_stream_status, "live")
+
+    def test_match_not_on_air_cannot_be_ended(self):
+        self.end_current()
+        body = self.act("booth-match-onair", self.following, status="complete")
+        self.assertIn(
+            '<span class="warn">Fiji v New Zealand is not on air.</span>', body
+        )
+
+    def test_match_that_has_ended_says_so(self):
+        content = self.view(self.previous)
+        self.assertResponseContains("<b>Off air · Fiji v Australia</b>")
+        self.assertResponseContains(
+            '<button class="bigbtn end" type="button" disabled>ENDED</button>'
+        )
+        self.assertEqual(content.count(self.GO_ON_AIR), 0)
+
+    def test_strip_is_the_matches_either_side_each_a_link(self):
+        content = self.view(self.current)
+        before = self.url("booth-match", match_pk=self.previous.pk)
+        after = self.url("booth-match", match_pk=self.following.pk)
+        self.assertIn(
+            f'<a class="teams" href="{before}">Fiji <small>v</small> Australia</a>',
+            content,
+        )
+        self.assertIn(
+            f'<a class="teams" href="{after}">Fiji <small>v</small> New Zealand</a>',
+            content,
+        )
+        # The last match of the day has nothing after it.
+        self.view(self.following)
+        self.assertResponseContains('<div class="sub">No more today</div>')
+
+    def test_booth_that_follows_the_ground_links_to_each_match(self):
+        with self.login(self.commentator):
+            self.get("compops:booth", **self.kw)
+        content = self.last_response.content.decode()
+        for match, teams in (
+            (self.previous, "Fiji <small>v</small> Australia"),
+            (self.current, "Australia <small>v</small> New Zealand"),
+            (self.following, "Fiji <small>v</small> New Zealand"),
+        ):
+            with self.subTest(teams):
+                url = self.url("booth-match", match_pk=match.pk)
+                self.assertIn(f'<a class="teams" href="{url}">{teams}</a>', content)
+        self.assertIn("view: null}", content)
+
+    def test_view_leads_back_to_the_booth_that_follows_the_ground(self):
+        self.view(self.following)
+        self.assertResponseContains(
+            f'<a class="today" href="{self.url("booth")}">Follow the ground</a>'
+        )
+
+    def test_page_keeps_its_match_in_the_requests_it_makes(self):
+        # The signal goes with every request, the event stream among them.
+        signals = {"datastar": json.dumps({"view": self.following.pk})}
+        with self.login(self.commentator):
+            self.get("compops:booth-lamp", data=signals, extra=DATASTAR, **self.kw)
+        lamp = b"".join(self.last_response.streaming_content).decode()
+        self.assertIn("<b>Next · Fiji v New Zealand</b>", lamp)
+
+    def test_refused_form_post_without_scripts_shows_the_view_again(self):
+        with self.login(self.commentator):
+            self.post("compops:booth-match-arm", match_pk=self.previous.pk, **self.kw)
+        self.assert_http_200_ok()
+        self.assertResponseContains(
+            '<span class="warn">This broadcast has ended.</span>'
+        )
+        self.assertIn(
+            f"view: {self.previous.pk}}}", self.last_response.content.decode()
+        )
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_form_post_without_scripts_returns_to_the_view(self, build):
+        build.return_value = youtube_mock("ready")
+        self.end_current()
+        with self.login(self.commentator):
+            self.post("compops:booth-match-arm", match_pk=self.following.pk, **self.kw)
+        self.assert_http_302_found(
+            url=self.url("booth-match", match_pk=self.following.pk)
+        )
+
+    def test_match_of_another_day_is_looked_over_not_run(self):
+        when = timezone.make_aware(datetime.datetime(2026, 10, 10, 19, 0), TZ)
+        saturday = factories.MatchFactory.create(
+            stage=self.stage,
+            home_team=self.fji,
+            away_team=self.aus,
+            datetime=when,
+            date=when.date(),
+            time=when.time(),
+            play_at=self.field1,
+            live_stream=True,
+            external_identifier="yt-sat",
+        )
+        content = self.view(saturday)
+        self.assertResponseContains('<span class="day">Saturday 10 October</span>')
+        self.assertResponseContains("<b>Next · Fiji v Australia</b>")
+        self.assertEqual(content.count("<form"), 0)
+
+    def test_watcher_sees_the_view_with_nothing_to_press(self):
+        self.end_current()
+        content = self.view(self.following, user=self.watcher)
+        self.assert_http_200_ok()
+        self.assertEqual(content.count("<form"), 0)
+
+    def test_match_that_is_not_this_grounds_is_404(self):
+        other = factories.GroundFactory.create(
+            venue=self.field1.venue, live_stream=True
+        )
+        elsewhere = self.make(12, 0, self.aus, self.fji, ground=other)
+        self.view(elsewhere)
+        self.assert_http_404_not_found()
+        with self.login(self.commentator):
+            self.get("compops:booth-match", match_pk=0, **self.kw)
+        self.assert_http_404_not_found()
+
+    def test_view_needs_the_right_to_watch(self):
+        self.assertLoginRequired(
+            "compops:booth-match", match_pk=self.following.pk, **self.kw
+        )
+        self.view(self.following, user=self.outsider)
+        self.assert_http_403_forbidden()
+
+
+class StripAndLampTests(BoothFixture):
+    def test_strip_shows_previous_current_next(self):
+        with self.login(self.commentator):
+            self.get("compops:booth-strip", **self.kw)
+        self.assertResponseContains('<div class="res">3 – 7</div>')
+        now = self.url("booth-match", match_pk=self.current.pk)
+        after = self.url("booth-match", match_pk=self.following.pk)
+        self.assertResponseContains(
+            f'<a class="teams" href="{now}">Australia <small>v</small> New Zealand</a>'
+        )
+        self.assertResponseContains(
+            f'<a class="teams" href="{after}">Fiji <small>v</small> New Zealand</a>'
+        )
+
+    def test_live_starting_lights_the_lamp(self):
+        self.current.live_stream_status = "liveStarting"
+        self.current.save()
+        with self.login(self.commentator):
+            self.get("compops:booth-lamp", **self.kw)
+        self.assertResponseContains('<div id="lamp" class="lamp live">ON AIR</div>')
+        self.assertResponseContains(
+            '<button class="bigbtn end" type="submit" data-hold="1500">HOLD TO END BROADCAST</button>'
+        )
+
+    def test_test_starting_is_standby(self):
+        self.current.live_stream_status = "testStarting"
+        self.current.save()
+        with self.login(self.commentator):
+            self.get("compops:booth-lamp", **self.kw)
+        self.assertResponseContains('<div id="lamp" class="lamp testing">STANDBY</div>')
+
+    def test_lamp_offers_end_while_live(self):
+        with self.login(self.commentator):
+            self.get("compops:booth-lamp", **self.kw)
+        self.assertResponseContains(
+            '<button class="bigbtn end" type="submit" data-hold="1500">HOLD TO END BROADCAST</button>'
+        )
+
+
+class OnAirTests(BoothFixture):
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_end_broadcast(self, build):
+        build.return_value = youtube_mock("live")
+        with self.login(self.commentator), self.captureOnCommitCallbacks(execute=True):
+            body = self.datastar("post", "booth-onair", status="complete")
+        self.assert_http_200_ok()
+        self.assertIn('data: elements <section id="onair" class="onair">', body)
+        self.assertIn('<div id="lamp" class="lamp">OFF AIR</div>', body)
+        self.current.refresh_from_db()
+        self.assertEqual(self.current.live_stream_status, "complete")
+        (event,) = events.recent(self.season.pk)
+        self.assertEqual(event["status"], "complete")
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_lamp_follows_the_live_match_when_it_overruns(self, build):
+        build.return_value = youtube_mock("live")
+        untouched = self.following.live_stream_status
+        with freeze_time("2026-10-08 11:30 +10:00"):
+            with self.login(self.commentator):
+                self.get("compops:booth-lamp", **self.kw)
+                self.assert_http_200_ok()
+                self.assertResponseContains(
+                    '<div id="lamp" class="lamp live">ON AIR</div>'
+                )
+                end_url = self.url("booth-onair", status="complete")
+                self.assertIn(
+                    f'action="{end_url}"', self.last_response.content.decode()
+                )
+                self.assertResponseContains(
+                    '<button class="bigbtn end" type="submit" data-hold="1500">HOLD TO END BROADCAST</button>'
+                )
+            with (
+                self.login(self.commentator),
+                self.captureOnCommitCallbacks(execute=True),
+            ):
+                self.datastar("post", "booth-onair", status="complete")
+        self.assert_http_200_ok()
+        self.current.refresh_from_db()
+        self.following.refresh_from_db()
+        self.assertEqual(self.current.live_stream_status, "complete")
+        self.assertEqual(self.following.live_stream_status, untouched)
+
+    def test_nothing_on_the_ground_is_a_refusal_not_an_error(self):
+        self.current.delete()
+        self.previous.delete()
+        with self.login(self.commentator):
+            body = self.datastar("post", "booth-onair", status="complete")
+        self.assert_http_200_ok()
+        self.assertIn(
+            '<span class="warn">Nothing is on this ground right now.</span>', body
+        )
+
+    def test_times_follow_the_ground_zone(self):
+        auckland = factories.GroundFactory.create(
+            venue=self.field1.venue,
+            title="Field 3",
+            slug="field-3",
+            slug_locked=True,
+            live_stream=True,
+            timezone="Pacific/Auckland",
+        )
+        self.make(
+            10,
+            40,
+            self.aus,
+            self.nzl,
+            ground=auckland,
+            live_stream=True,
+            external_identifier="yt-akl",
+            live_stream_status="live",
+            live_stream_status_at=datetime.datetime(
+                2026, 10, 8, 0, 30, tzinfo=datetime.timezone.utc
+            ),
+        )
+        with self.login(self.commentator):
+            self.get("compops:booth-lamp", **{**self.kw, "ground": "field-3"})
+        self.assert_http_200_ok()
+        self.assertResponseContains(
+            "<span>Men's Open · kick-off 10:40 · live since 13:30</span>"
+        )
+        self.assertResponseNotContains(
+            "<span>Men's Open · kick-off 10:40 · live since 10:30</span>"
+        )
+
+    def test_only_live_and_complete_are_accepted(self):
+        with self.login(self.commentator):
+            self.post("compops:booth-onair", status="testing", **self.kw)
+        self.assert_http_404_not_found()
+
+    def test_outsider_is_403(self):
+        with self.login(self.outsider):
+            self.post("compops:booth-onair", status="complete", **self.kw)
+        self.assert_http_403_forbidden()
+
+
+class ArmTests(BoothFixture):
+    def test_cannot_arm_while_live(self):
+        with self.login(self.commentator):
+            body = self.datastar("post", "booth-arm")
+        self.assert_http_200_ok()
+        self.assertIn(
+            '<span class="warn">End the current broadcast first.</span>', body
+        )
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_arm_moves_next_to_testing(self, build):
+        build.return_value = youtube_mock("ready")
+        self.current.live_stream_status = "complete"
+        self.current.save()
+        with self.login(self.commentator), self.captureOnCommitCallbacks(execute=True):
+            self.datastar("post", "booth-arm")
+        self.assert_http_200_ok()
+        self.following.refresh_from_db()
+        self.assertEqual(self.following.live_stream_status, "testing")
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_arm_after_ending_an_overrun_arms_the_scheduled_match(self, build):
+        build.return_value = youtube_mock()
+        with (
+            freeze_time("2026-10-08 11:30 +10:00"),
+            self.login(self.commentator),
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            self.datastar("post", "booth-onair", status="complete")
+            self.get("compops:booth-lamp", **self.kw)
+            self.assertIn(
+                "Next on Field 1 today: 11:20 Fiji v New Zealand",
+                self.last_response.content.decode(),
+            )
+            self.datastar("post", "booth-arm")
+        self.assert_http_200_ok()
+        self.current.refresh_from_db()
+        self.following.refresh_from_db()
+        self.assertEqual(self.current.live_stream_status, "complete")
+        self.assertEqual(self.following.live_stream_status, "testing")
+
+    def test_a_match_already_testing_is_not_armed_past(self):
+        self.current.live_stream_status = "complete"
+        self.current.save()
+        self.following.live_stream_status = "testing"
+        self.following.save()
+        later = self.make(
+            12, 0, self.aus, self.fji, live_stream=True, external_identifier="yt-later"
+        )
+        with self.login(self.commentator):
+            body = self.datastar("post", "booth-arm")
+        self.assert_http_200_ok()
+        self.assertIn("Already armed.", body)
+        later.refresh_from_db()
+        self.assertIsNone(later.live_stream_status)
+
+    def test_arm_without_broadcast_is_a_refusal_not_an_error(self):
+        self.current.live_stream_status = "complete"
+        self.current.save()
+        self.following.external_identifier = None
+        self.following.save()
+        with self.login(self.commentator):
+            body = self.datastar("post", "booth-arm")
+        self.assert_http_200_ok()
+        self.assertIn("has no YouTube broadcast", body)
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_arm_skips_a_match_not_streamed(self, build):
+        service = youtube_mock("ready")
+        build.return_value = service
+        self.current.live_stream_status = "complete"
+        self.current.save()
+        # A stale identifier outlives the opt-in until the broadcast is gone.
+        self.following.live_stream = False
+        self.following.save()
+        later = self.make(
+            12, 0, self.aus, self.fji, live_stream=True, external_identifier="yt-later"
+        )
+        with self.login(self.commentator), self.captureOnCommitCallbacks(execute=True):
+            # The lamp and the strip agree on what comes next.
+            self.get("compops:booth", **self.kw)
+            body = self.last_response.content.decode()
+            self.assertIn("Next on Field 1 today: 12:00 Australia v Fiji", body)
+            self.datastar("post", "booth-arm")
+        self.assert_http_200_ok()
+        service.liveBroadcasts.return_value.transition.assert_called_once_with(
+            broadcastStatus="testing", id="yt-later", part="snippet,status"
+        )
+        later.refresh_from_db()
+        self.following.refresh_from_db()
+        self.assertEqual(later.live_stream_status, "testing")
+        self.assertIsNone(self.following.live_stream_status)
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_arm_with_only_matches_not_streamed_left_is_a_refusal(self, build):
+        build.return_value = youtube_mock("ready")
+        self.current.live_stream_status = "complete"
+        self.current.save()
+        self.following.live_stream = False
+        self.following.save()
+        with self.login(self.commentator):
+            body = self.datastar("post", "booth-arm")
+            self.assert_http_200_ok()
+            self.assertIn(
+                '<span class="warn">No more broadcasts on Field 1 today.</span>', body
+            )
+            # Without JavaScript the booth page carries the same refusal.
+            self.post("compops:booth-arm", **self.kw)
+        self.assert_http_200_ok()
+        self.assertResponseContains(
+            '<span class="warn">No more broadcasts on Field 1 today.</span>'
+        )
+        self.assertEqual(build.call_count, 0)
+        self.following.refresh_from_db()
+        self.assertIsNone(self.following.live_stream_status)
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_on_air_ignores_a_stale_live_match_not_streamed(self, build):
+        service = youtube_mock("live")
+        build.return_value = service
+        # Marked live before it was turned off, and after the current match.
+        stale = self.make(
+            10,
+            45,
+            self.fji,
+            self.aus,
+            external_identifier="yt-stale",
+            live_stream_status="live",
+        )
+        with self.login(self.commentator), self.captureOnCommitCallbacks(execute=True):
+            self.datastar("post", "booth-onair", status="complete")
+        self.assert_http_200_ok()
+        service.liveBroadcasts.return_value.transition.assert_called_once_with(
+            broadcastStatus="complete", id="yt-now", part="snippet,status"
+        )
+        stale.refresh_from_db()
+        self.assertEqual(stale.live_stream_status, "live")
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_on_air_without_broadcast_is_a_refusal(self, build):
+        build.return_value = youtube_mock("live")
+        self.current.external_identifier = None
+        self.current.save()
+        with self.login(self.commentator):
+            body = self.datastar("post", "booth-onair", status="complete")
+            self.assert_http_200_ok()
+            self.assertIn(
+                '<span class="warn">Australia v New Zealand has no YouTube'
+                " broadcast.</span>",
+                body,
+            )
+            # Without JavaScript the booth page carries the same refusal.
+            self.post("compops:booth-onair", status="complete", **self.kw)
+        self.assert_http_200_ok()
+        self.assertResponseContains(
+            '<span class="warn">Australia v New Zealand has no YouTube'
+            " broadcast.</span>"
+        )
+        self.assertEqual(build.call_count, 0)
+        self.current.refresh_from_db()
+        self.assertEqual(self.current.live_stream_status, "live")
+
+    def test_no_next_match_today_is_a_refusal(self):
+        self.current.live_stream_status = "complete"
+        self.current.save()
+        self.following.delete()
+        with self.login(self.commentator):
+            body = self.datastar("post", "booth-arm")
+        self.assert_http_200_ok()
+        self.assertIn(
+            '<span class="warn">No more broadcasts on Field 1 today.</span>', body
+        )
+
+
+class HeldLampTests(BoothFixture):
+    """
+    A lamp that shows why an action was refused is held: a re-render of the
+    whole booth (the event stream's snapshot, a push about another ground)
+    leaves it as it is. A refusal sends the lamp alone and whole, in replace
+    mode; an action that goes through sends the lamp and the strip with no
+    mark, which releases the lamp.
+    """
+
+    def test_a_refused_arm_holds_the_lamp_with_the_reason(self):
+        with self.login(self.commentator):
+            self.post("compops:booth-arm", extra=DATASTAR, **self.kw)
+        self.assert_http_200_ok()
+        ((mode, html),) = element_patches(self.last_response)
+        self.assertEqual(mode, "replace")
+        self.assertEqual(
+            html.splitlines()[0], f'<section id="onair" class="onair" {HELD}>'
+        )
+        self.assertInHTML(
+            '<span class="warn">End the current broadcast first.</span>',
+            html,
+            count=1,
+        )
+
+    def test_a_refused_on_air_action_holds_the_lamp_with_the_reason(self):
+        self.current.external_identifier = None
+        self.current.save()
+        with self.login(self.commentator):
+            self.post(
+                "compops:booth-onair", status="complete", extra=DATASTAR, **self.kw
+            )
+        self.assert_http_200_ok()
+        ((mode, html),) = element_patches(self.last_response)
+        self.assertEqual(mode, "replace")
+        self.assertEqual(
+            html.splitlines()[0], f'<section id="onair" class="onair" {HELD}>'
+        )
+        self.assertInHTML(
+            '<span class="warn">Australia v New Zealand has no YouTube broadcast.'
+            "</span>",
+            html,
+            count=1,
+        )
+
+    @mock.patch("tournamentcontrol.competition.models.build")
+    def test_an_action_that_goes_through_releases_the_lamp(self, build):
+        build.return_value = youtube_mock("live")
+        with self.login(self.commentator), self.captureOnCommitCallbacks(execute=True):
+            self.post(
+                "compops:booth-onair", status="complete", extra=DATASTAR, **self.kw
+            )
+        self.assertEqual(
+            [
+                (mode, html.splitlines()[0])
+                for mode, html in element_patches(self.last_response)
+            ],
+            [
+                ("outer", '<section id="onair" class="onair">'),
+                ("outer", '<section id="strip" class="strip">'),
+            ],
+        )
+
+
+class PaneTests(BoothFixture):
+    def setUp(self):
+        super().setUp()
+        self.player = factories.PersonFactory.create(
+            first_name="Liam", last_name="Thompson"
+        )
+        factories.TeamAssociationFactory.create(
+            team=self.aus, person=self.player, number=1
+        )
+        factories.SimpleScoreMatchStatisticFactory.create(
+            match=self.previous, player=self.player, number=1, played=1, points=4, mvp=3
+        )
+
+    def test_sheets(self):
+        with self.login(self.commentator):
+            body = self.datastar(
+                "get", "booth-pane", match_pk=self.current.pk, pane="sheets"
+            )
+        self.assert_http_200_ok()
+        self.assertIn('data: elements <div id="pane" class="pane sheets">', body)
+        self.assertIn("Liam Thompson", body)
+        self.assertIn(
+            f'data: signals {{"pane":"sheets","match":{self.current.pk}}}', body
+        )
+
+    def test_results_pane_lists_each_team_this_season(self):
+        with self.login(self.commentator):
+            self.get(
+                "compops:booth-pane",
+                match_pk=self.current.pk,
+                pane="results",
+                **self.kw,
+            )
+        # Australia were the away team in the 3 – 7 match, so their row reads 7 – 3.
+        self.assertResponseContains('<td class="num">7 – 3</td>')
+
+    def test_ladder_pane_uses_the_pool(self):
+        # The result already entered for Australia has produced their row (and
+        # Fiji's); New Zealand have no row yet.
+        factories.LadderSummaryFactory.create(
+            stage=self.stage, stage_group=self.pool_a, team=self.nzl, points=6
+        )
+        with self.login(self.commentator):
+            self.get(
+                "compops:booth-pane", match_pk=self.current.pk, pane="ladder", **self.kw
+            )
+        self.assertResponseContains("<h4>Men's Open · Pool A</h4>")
+
+    def test_leaders(self):
+        with self.login(self.commentator):
+            self.get(
+                "compops:booth-pane",
+                match_pk=self.current.pk,
+                pane="leaders",
+                **self.kw,
+            )
+        self.assertResponseContains('<td class="num">4</td>')
+
+    def test_unknown_pane_is_404(self):
+        with self.login(self.commentator):
+            self.get(
+                "compops:booth-pane",
+                match_pk=self.current.pk,
+                pane="weather",
+                **self.kw,
+            )
+        self.assert_http_404_not_found()
+
+    def test_match_from_another_ground_is_404(self):
+        other = factories.GroundFactory.create(
+            venue=self.field1.venue, live_stream=True
+        )
+        elsewhere = self.make(12, 0, self.aus, self.fji, ground=other)
+        with self.login(self.commentator):
+            self.get(
+                "compops:booth-pane", match_pk=elsewhere.pk, pane="sheets", **self.kw
+            )
+        self.assert_http_404_not_found()
+
+    def test_tabs_follow_the_match_on_air_when_it_overruns(self):
+        with freeze_time("2026-10-08 11:30 +10:00"), self.login(self.commentator):
+            self.get("compops:booth", **self.kw)
+        body = self.last_response.content.decode()
+        for pane in ("sheets", "results", "ladder", "leaders"):
+            self.assertIn(
+                self.url("booth-pane", match_pk=self.current.pk, pane=pane), body
+            )
+            self.assertNotIn(
+                self.url("booth-pane", match_pk=self.following.pk, pane=pane), body
+            )
+        self.assertIn(self.url("booth-teams", match_pk=self.current.pk), body)
+        self.assertIn(
+            f"data-signals__ifmissing=\"{{pane: 'sheets', "
+            f"match: {self.current.pk}, modal: false, day: '', view: null}}\"",
+            body,
+        )
+
+    def test_runsheet(self):
+        with self.login(self.commentator):
+            self.get("compops:booth-runsheet", **self.kw)
+        self.assertResponseContains('<td class="onair">ON AIR</td>')
+
+
+class TeamPickerTests(BoothFixture):
+    def test_picker_groups_the_division_by_pool(self):
+        with self.login(self.commentator):
+            body = self.datastar("get", "booth-teams", match_pk=self.current.pk)
+        self.assert_http_200_ok()
+        self.assertIn('data: elements <div id="modal-body" class="sheet">', body)
+        self.assertIn("Pool A", body)
+        self.assertIn("Pool B", body)
+        self.assertIn('data: signals {"modal":true}', body)
+
+    def test_team_modal_shows_squad_and_results(self):
+        with self.login(self.commentator):
+            self.get("compops:booth-team", team_pk=self.fji.pk, **self.kw)
+        self.assertResponseContains("<h3>Fiji</h3>")
+        self.assertResponseContains('<td class="num">3 – 7</td>')
+
+    def test_team_from_another_season_is_404(self):
+        stranger = factories.TeamFactory.create()
+        with self.login(self.commentator):
+            self.get("compops:booth-team", team_pk=stranger.pk, **self.kw)
+        self.assert_http_404_not_found()

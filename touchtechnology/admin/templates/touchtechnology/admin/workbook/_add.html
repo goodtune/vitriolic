@@ -1,0 +1,4 @@
+{% load i18n common admin_workbook %}{% comment %}
+	The button that adds another object to a list: give it ``url`` and
+	optionally ``add_label`` (default "Add <type>").
+{% endcomment %}<a class="wb-button wb-button-primary wb-button-small" href="{{ url }}">{% icon "plus" %}{% if add_label %}{{ add_label }}{% else %}{% blocktrans with type=model|type %}Add {{ type }}{% endblocktrans %}{% endif %}</a>

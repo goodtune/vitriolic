@@ -1,0 +1,21 @@
+{% load i18n %}{% if is_paginated %}{% with current=page_num|default:page %}
+<nav aria-label="{% trans "Pages" %}">
+	<ol class="pager">
+		<li class="pager-label">{% trans "Page" %}</li>
+		{% for page_number in paginator.page_range %}
+			<li>
+				{% if page_number == current or page_number == current.number %}
+					<span aria-current="page">{{ page_number }}</span>
+				{% else %}
+					{% querystring page=page_number as page_url %}
+					{% if tab_name %}
+						<a href="{{ page_url }}" hx-get="{{ page_url }}" hx-target="#{{ tab_name }}-tab" hx-swap="innerHTML" hx-push-url="false">{{ page_number }}</a>
+					{% else %}
+						<a href="{{ page_url }}">{{ page_number }}</a>
+					{% endif %}
+				{% endif %}
+			</li>
+		{% endfor %}
+	</ol>
+</nav>
+{% endwith %}{% endif %}

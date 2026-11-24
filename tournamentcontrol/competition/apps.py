@@ -13,6 +13,7 @@ class CompetitionConfig(AppConfig):
     """Connects signals and admin components for competitions."""
 
     name = "tournamentcontrol.competition"
+    default_auto_field = "django.db.models.AutoField"
 
     def ready(self):
         """Wire up signal handlers, system checks and admin registration."""
@@ -40,12 +41,13 @@ class CompetitionConfig(AppConfig):
         )
         from tournamentcontrol.competition.signals import (
             capture_timezone_before_save,
-            changed_points_formula,
+            changed_ladder_formula,
+            close_order_gap,
             delete_related,
-            delete_team,
             match_forfeit,
             match_saved_handler,
             notify_match_forfeit_email,
+            refresh_order,
             scale_ladder_entry,
             set_ground_latlng,
             set_ground_timezone,
@@ -86,16 +88,18 @@ class CompetitionConfig(AppConfig):
             update_match_datetimes_on_place_timezone_change, sender=Ground
         )
 
-        post_save.connect(changed_points_formula, sender=Division)
+        post_save.connect(changed_ladder_formula, sender=Division)
 
-        pre_delete.connect(delete_team, sender=Team)
+        # A division's teams and stages are kept numbered 1, 2, 3, ...
+        for model in (Team, Stage):
+            pre_delete.connect(refresh_order, sender=model)
+            post_delete.connect(close_order_gap, sender=model)
 
-        # Anything with a slug should also force the sitemap url cache to be purged
-        post_save.connect(utils.invalidate_sitemapnode_urlpatterns, sender=Competition)
-        post_save.connect(utils.invalidate_sitemapnode_urlpatterns, sender=Season)
-        post_save.connect(utils.invalidate_sitemapnode_urlpatterns, sender=Club)
-        post_save.connect(utils.invalidate_sitemapnode_urlpatterns, sender=Division)
-        post_save.connect(utils.invalidate_sitemapnode_urlpatterns, sender=Team)
+        # Anything with a slug should also force the sitemap url cache to be
+        # purged, when it is saved and when it is deleted
+        for model in (Competition, Season, Club, Division, Team):
+            post_save.connect(utils.invalidate_sitemapnode_urlpatterns, sender=model)
+            post_delete.connect(utils.invalidate_sitemapnode_urlpatterns, sender=model)
 
         # Before deleting a match, delete it's LadderEntry and LadderSummary records
         pre_delete.connect(delete_related, sender=Competition)

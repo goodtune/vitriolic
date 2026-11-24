@@ -2,20 +2,17 @@ import collections
 import datetime
 import json
 import logging
-import warnings
 
 import magic
 from dateutil.parser import parse
 from dateutil.rrule import DAILY, WEEKLY
 from django import forms
 from django.conf import settings
-from django.contrib import messages
 from django.contrib.postgres.fields import ArrayField
 from django.contrib.postgres.forms import array as PGA
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Q
-from django.forms import BooleanField as BooleanChoiceField
+from django.db.models import Max, Q
 from django.forms.formsets import (
     DELETION_FIELD_NAME,
     INITIAL_FORM_COUNT,
@@ -27,6 +24,7 @@ from django.forms.formsets import (
 from django.forms.models import (
     BaseInlineFormSet,
     BaseModelFormSet,
+    _get_foreign_key,
     inlineformset_factory,
     modelformset_factory,
 )
@@ -34,11 +32,10 @@ from django.urls import reverse_lazy
 from django.utils import timezone
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _, ngettext
-from first import first
-from googleapiclient.errors import HttpError
 from modelforms.forms import ModelForm
 from pyparsing import ParseException
 
+from touchtechnology.admin.sites import site as admin_site
 from touchtechnology.common.forms.fields import (
     ModelChoiceField,
     ModelMultipleChoiceField,
@@ -53,13 +50,18 @@ from touchtechnology.common.forms.widgets import (
 )
 from touchtechnology.content.forms import PlaceholderConfigurationBase
 from tournamentcontrol.competition.calc import BonusPointCalculator, Calculator
+from tournamentcontrol.competition.compops.scoreboard import (
+    check_template as check_scoreboard_template,
+)
 from tournamentcontrol.competition.draw.algorithms import seeded_tournament
 from tournamentcontrol.competition.draw.builders import build
 from tournamentcontrol.competition.draw.generators import DrawGenerator
 from tournamentcontrol.competition.draw.schemas import DivisionStructure
-from tournamentcontrol.competition.exceptions import (
-    LiveStreamError,
-    LiveStreamTransitionWarning,
+from tournamentcontrol.competition.draw.services import (
+    draw_generator,
+    draw_target_team_count,
+    generate_stage_draw,
+    suitable_draw_formats,
 )
 from tournamentcontrol.competition.fields import URLField
 from tournamentcontrol.competition.models import (
@@ -81,7 +83,6 @@ from tournamentcontrol.competition.models import (
     Season,
     SeasonAssociation,
     SeasonExclusionDate,
-    SeasonMatchTime,
     SimpleScoreMatchStatistic,
     Stage,
     StageGroup,
@@ -92,14 +93,24 @@ from tournamentcontrol.competition.models import (
     Venue,
     stage_group_position_re,
 )
-from tournamentcontrol.competition.signals.custom import score_updated
+from tournamentcontrol.competition.signals.custom import (
+    score_updated,
+    statistics_updated,
+)
+from tournamentcontrol.competition.upstream import (
+    UpstreamURLError,
+    get_backend_for_url,
+)
 from tournamentcontrol.competition.utils import (
     FauxQueryset,
-    ThumbnailPreview,
     create_thumbnail_preview,
+    first_stage_position_error,
+    first_stage_position_message,
+    fit_youtube_thumbnail,
     legitimate_bye_match,
     match_unplayed,
     time_choice,
+    zero_position_error,
 )
 
 logger = logging.getLogger(__name__)
@@ -119,6 +130,29 @@ valid_ladder_identifiers = collections.OrderedDict(
         # variables for use in generating a ladder formula.
         #
         # 'score_for', 'score_against', 'played'
+    )
+)
+
+# Every identifier that a bonus points formula may refer to. These are the
+# LadderEntry fields set by the match signal handler, plus the ``diff`` and
+# ``margin`` values which are populated there to mirror the annotations in
+# ``LadderEntryQuerySet._all``. The points formula is restricted to
+# ``valid_ladder_identifiers``: its form field is a set of coefficients, one
+# per identifier, and anything else would be dropped when the division is next
+# edited.
+bonus_points_formula_identifiers = frozenset(
+    (
+        "played",
+        "win",
+        "draw",
+        "loss",
+        "bye",
+        "forfeit_for",
+        "forfeit_against",
+        "score_for",
+        "score_against",
+        "diff",
+        "margin",
     )
 )
 
@@ -195,9 +229,9 @@ class LadderPointsField(forms.MultiValueField):
 
     def compress(self, data_list):
         parts = [
-            "{}*{}".format(*each)
-            for each in zip(data_list, valid_ladder_identifiers)
-            if each[0]
+            f"{points}*{identifier}"
+            for points, identifier in zip(data_list, valid_ladder_identifiers)
+            if points
         ]
         return " + ".join(parts)
 
@@ -211,7 +245,7 @@ class SelectDateTimeWidget(SelectDateTimeWidgetBase):
         """
         if value:
             value = parse(value)
-        return super(SelectDateTimeWidget, self).decompress(value)
+        return super().decompress(value)
 
 
 class ThumbnailImageWidget(forms.ClearableFileInput):
@@ -219,7 +253,12 @@ class ThumbnailImageWidget(forms.ClearableFileInput):
     Widget for handling binary image data uploads with integrated preview support.
     """
 
-    template_name = "tournamentcontrol/competition/widgets/thumbnail_image_widget.html"
+    @property
+    def template_name(self):
+        return (
+            f"tournamentcontrol/competition/widgets/{admin_site.shell.name}/"
+            "thumbnail_image_widget.html"
+        )
 
     def format_value(self, value):
         # For binary data, we need to indicate that there's an existing image
@@ -297,7 +336,9 @@ class ThumbnailImageField(forms.FileField):
     def __init__(self, *args, **kwargs):
         kwargs.setdefault(
             "help_text",
-            "Upload an image to use as the thumbnail on YouTube. Supported formats: JPEG, PNG, GIF.",
+            "Upload an image to use as the thumbnail on YouTube. Supported formats: "
+            "JPEG, PNG, GIF. An image over 2 MB is resized to fit 1280×720 and "
+            "saved as a JPEG.",
         )
         kwargs.setdefault("required", False)
         super().__init__(*args, **kwargs)
@@ -323,7 +364,15 @@ class ThumbnailImageField(forms.FileField):
                     f"Image file too large. Maximum size is {max_size // (1024 * 1024)}MB."
                 )
 
-            return binary_data
+            # YouTube takes at most 2 MB, so a larger image is stored already
+            # scaled down and encoded again as JPEG.
+            fitted = fit_youtube_thumbnail(binary_data)
+            if fitted is None:
+                raise forms.ValidationError(
+                    "This file is over the 2 MB that YouTube accepts and could "
+                    "not be resized. Upload a JPEG, PNG or GIF image."
+                )
+            return fitted
 
         return super().to_python(data)
 
@@ -349,9 +398,12 @@ class SeasonTimezoneDateTimeWidget(forms.MultiWidget):
     timezone).
     """
 
-    template_name = (
-        "tournamentcontrol/competition/widgets/season_timezone_datetime_widget.html"
-    )
+    @property
+    def template_name(self):
+        return (
+            f"tournamentcontrol/competition/widgets/{admin_site.shell.name}/"
+            "season_timezone_datetime_widget.html"
+        )
 
     def __init__(self, attrs=None):
         this_year = datetime.date.today().year
@@ -359,12 +411,8 @@ class SeasonTimezoneDateTimeWidget(forms.MultiWidget):
             forms.SelectDateWidget(
                 attrs=attrs, years=range(this_year - 5, this_year + 5)
             ),
-            forms.Select(
-                attrs=attrs, choices=[(h, "%02d" % h) for h in range(24)]
-            ),
-            forms.Select(
-                attrs=attrs, choices=[(m, "%02d" % m) for m in range(60)]
-            ),
+            forms.Select(attrs=attrs, choices=[(h, f"{h:02d}") for h in range(24)]),
+            forms.Select(attrs=attrs, choices=[(m, f"{m:02d}") for m in range(60)]),
         )
         super().__init__(widgets, attrs)
         self.timezone = None
@@ -392,10 +440,10 @@ class SeasonTimezoneDateTimeField(forms.MultiValueField):
         fields = (
             forms.DateField(),
             forms.TypedChoiceField(
-                coerce=int, choices=[(h, "%02d" % h) for h in range(24)]
+                coerce=int, choices=[(h, f"{h:02d}") for h in range(24)]
             ),
             forms.TypedChoiceField(
-                coerce=int, choices=[(m, "%02d" % m) for m in range(60)]
+                coerce=int, choices=[(m, f"{m:02d}") for m in range(60)]
             ),
         )
         super().__init__(fields, **kwargs)
@@ -419,7 +467,7 @@ class SeasonTimezoneDateTimeField(forms.MultiValueField):
         return None
 
 
-class ConstructFormMixin(object):
+class ConstructFormMixin:
     """
     When a custom FormSet requires the ability to pass keyword arguments to a
     child form, we can simply define the ``get_defaults`` method to return a
@@ -432,7 +480,7 @@ class ConstructFormMixin(object):
     def _construct_form(self, i, **kwargs):
         defaults = self.get_defaults()
         defaults.update(kwargs)
-        return super(ConstructFormMixin, self)._construct_form(i, **defaults)
+        return super()._construct_form(i, **defaults)
 
     @property
     def empty_form(self):
@@ -441,6 +489,7 @@ class ConstructFormMixin(object):
             auto_id=self.auto_id,
             prefix=self.add_prefix("__prefix__"),
             empty_permitted=True,
+            use_required_attribute=False,
             **defaults,
         )
         self.add_fields(form, None)
@@ -499,6 +548,40 @@ class MultiConfigurationForm(PlaceholderConfigurationBase):
         )
 
 
+class ClubEditForm(BootstrapFormControlMixin, ModelForm):
+    class Meta:
+        model = Club
+        fields = (
+            "title",
+            "short_title",
+            "abbreviation",
+            "email",
+            "website",
+            "twitter",
+            "facebook",
+            "youtube",
+            "primary",
+            "primary_position",
+            "status",
+            "slug",
+            "slug_locked",
+        )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # The primary contact is one of the club's own people. Left alone the
+        # field offers every person on the site, which is thousands of options
+        # to query, label and render on each visit to a club. The current
+        # primary stays on offer so that the form never rejects a club as it
+        # already stands.
+        queryset = Person.objects.none()
+        if self.instance.pk:
+            queryset = Person.objects.filter(
+                Q(club=self.instance) | Q(pk=self.instance.primary_id)
+            )
+        self.fields["primary"].queryset = queryset
+
+
 class PersonEditForm(BootstrapFormControlMixin, ModelForm):
     class Meta:
         model = Person
@@ -539,13 +622,115 @@ class PersonMergeForm(PersonEditForm):
     def save(self, *args, **kwargs):
         from tournamentcontrol.competition.merge import merge_model_objects
 
-        keep = super(PersonMergeForm, self).save(*args, **kwargs)
+        keep = super().save(*args, **kwargs)
         return merge_model_objects(
             keep, list(self.cleaned_data["merge"]), self.cleaned_data["keep_old"]
         )
 
 
-class CompetitionForm(SuperUserSlugMixin, ModelForm):
+class UpstreamTitleMixin:
+    """
+    Surface the upstream name of a record which mirrors one on a provider,
+    and let an administrator choose between it and a local name.
+
+    The provider is authoritative for the draw and results but its naming is
+    often unwieldy, so the ``title`` of a linked division or team may be
+    changed here; the synchronisation will then leave it alone. See
+    :class:`~tournamentcontrol.competition.models.UpstreamMixin`.
+
+    Saving the form reconciles the record with the name the provider
+    currently publishes, which is shown on the form: an upstream rename is
+    reported by each synchronisation until then, and is not reported again
+    afterwards. Ticking *Use the <provider> name* discards the local name,
+    after which upstream renames are applied automatically again.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Whether the provider has renamed the record since it was last
+        # reconciled, noted before ``_post_clean`` acknowledges it.
+        self.upstream_unacknowledged = self.instance.upstream_title_changed
+        if not self.instance.upstream_reconciled:
+            return
+        backend = self.instance.upstream_backend
+        provider_name = backend.name if backend else _("The upstream provider")
+        remote = self.instance.upstream_title
+        if self.instance.upstream_title_changed:
+            self.fields["title"].help_text = _(
+                "%(provider)s has renamed this from “%(was)s” to “%(now)s”."
+            ) % {
+                "provider": provider_name,
+                "was": self.instance.upstream_title_synced,
+                "now": remote,
+            }
+        else:
+            self.fields["title"].help_text = _("%(provider)s calls this “%(now)s”.") % {
+                "provider": provider_name,
+                "now": remote,
+            }
+        if self.instance.title != remote:
+            self.fields["upstream_title_reset"] = forms.BooleanField(
+                required=False,
+                label=_("Use the %(provider)s name") % {"provider": provider_name},
+                help_text=_(
+                    "Replace the name above with “%(now)s” and follow any "
+                    "future %(provider)s renames."
+                )
+                % {"now": remote, "provider": provider_name},
+            )
+            # Beside the name it replaces, rather than at the end of a long
+            # form where it reads as unrelated.
+            order = list(self.fields)
+            order.remove("upstream_title_reset")
+            order.insert(order.index("title") + 1, "upstream_title_reset")
+            self.order_fields(order)
+
+    def has_changed(self):
+        # Acknowledging an upstream rename is itself a change worth saving,
+        # even when no field on the form was edited -- the admin skips the
+        # save entirely for a form which reports no change.
+        return super().has_changed() or self.upstream_unacknowledged
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if cleaned_data.get("upstream_title_reset"):
+            cleaned_data["title"] = self.instance.upstream_title
+        return cleaned_data
+
+    def _post_clean(self):
+        super()._post_clean()
+        # Whatever name was chosen, it was chosen against the remote name
+        # the form displayed; record that so the synchronisation does not
+        # keep reporting a rename which has been seen and dealt with.
+        if self.instance.upstream_id:
+            self.instance.upstream_title_synced = self.instance.upstream_title
+
+
+class ScoreboardTemplateMixin:
+    """
+    A form with ``scoreboard_template``: a whole page, written here, to draw
+    the scoreboards of a competition, season, division or stage with. It is
+    tried out before it is saved (see ``scoreboard.check_template``), so a
+    template that cannot draw a board never reaches a screen.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        field = self.fields.get("scoreboard_template")
+        if field is not None:
+            field.widget.attrs.update(
+                {"rows": 12, "spellcheck": "false", "class": "scoreboard-template"}
+            )
+
+    def clean_scoreboard_template(self):
+        source = self.cleaned_data.get("scoreboard_template") or ""
+        problem = check_scoreboard_template(source)
+        if problem:
+            raise forms.ValidationError(problem)
+        return source
+
+
+class CompetitionForm(ScoreboardTemplateMixin, SuperUserSlugMixin, ModelForm):
     class Meta:
         model = Competition
         fields = (
@@ -553,16 +738,29 @@ class CompetitionForm(SuperUserSlugMixin, ModelForm):
             "short_title",
             "enabled",
             "copy",
+            "scoreboard_template",
             "slug",
             "slug_locked",
             "clubs",
+            "upstream_url",
         )
         labels = {
             "copy": _("Description"),
         }
 
+    def clean_upstream_url(self):
+        url = self.cleaned_data.get("upstream_url")
+        if not url:
+            return url
+        try:
+            return get_backend_for_url(url).parse_competition_url(url)
+        except UpstreamURLError as exc:
+            raise forms.ValidationError(str(exc))
 
-class SeasonForm(SuperUserSlugMixin, BootstrapFormControlMixin, ModelForm):
+
+class SeasonForm(
+    ScoreboardTemplateMixin, SuperUserSlugMixin, BootstrapFormControlMixin, ModelForm
+):
     class Meta:
         model = Season
         fields = (
@@ -580,11 +778,12 @@ class SeasonForm(SuperUserSlugMixin, BootstrapFormControlMixin, ModelForm):
             "timezone",
             "start_date",
             "mode",
-            "forfeit_notifications",
             "complete",
             "statistics",
             "mvp_results_public",
             "enable_experimental_views",
+            "upstream_url",
+            "scoreboard_template",
             "slug",
             "slug_locked",
         )
@@ -612,6 +811,26 @@ class SeasonForm(SuperUserSlugMixin, BootstrapFormControlMixin, ModelForm):
         self.fields["live_stream_client_secret"].widget.attrs["class"] = "form-control"
         self.fields["live_stream_client_secret"].widget.attrs["placeholder"] = "*" * 10
 
+    def clean_upstream_url(self):
+        url = self.cleaned_data.get("upstream_url")
+        if not url:
+            return url
+        competition_url = self.instance.competition.upstream_url
+        if not competition_url:
+            raise forms.ValidationError(
+                _("Set the upstream URL on the competition first.")
+            )
+        try:
+            backend = get_backend_for_url(competition_url)
+            if not backend.matches(url):
+                raise UpstreamURLError(
+                    _("Enter a URL on %(provider)s, the competition's provider.")
+                    % {"provider": backend.name}
+                )
+            return backend.parse_season_url(url, competition_url)
+        except UpstreamURLError as exc:
+            raise forms.ValidationError(str(exc))
+
     def clean_live_stream_client_secret(self):
         project_id = self.cleaned_data.get("live_stream_project_id")
         client_id = self.cleaned_data.get("live_stream_client_id")
@@ -631,6 +850,7 @@ class VenueForm(SuperUserSlugMixin, ModelForm):
             "abbreviation",
             "timezone",
             "latlng",
+            "scoreboard_auto_start",
             "slug",
             "slug_locked",
         )
@@ -671,14 +891,26 @@ class GroundFormSet(BaseGroundFormSet):
     def _construct_form(self, i, **kwargs):
         if i >= self.initial_form_count():
             kwargs["instance"] = self.model(order=i + 1)
-        return super(GroundFormSet, self)._construct_form(i, **kwargs)
+        return super()._construct_form(i, **kwargs)
 
 
-class DivisionForm(SuperUserSlugMixin, ModelForm):
+class DivisionForm(
+    ScoreboardTemplateMixin, UpstreamTitleMixin, SuperUserSlugMixin, ModelForm
+):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.instance.season.mode != DAILY:
             self.fields.pop("games_per_day", None)
+
+    # The timing of a match is optional to send. Left out or left empty, it
+    # stays as the division has it, which for a new division is the default.
+    def clean_periods(self):
+        value = self.cleaned_data.get("periods")
+        return self.instance.periods if value is None else value
+
+    def clean_break_minutes(self):
+        value = self.cleaned_data.get("break_minutes")
+        return self.instance.break_minutes if value is None else value
 
     class Meta:
         model = Division
@@ -694,6 +926,12 @@ class DivisionForm(SuperUserSlugMixin, ModelForm):
             "forfeit_for_score",
             "forfeit_against_score",
             "include_forfeits_in_played",
+            "periods",
+            "period_minutes",
+            "break_minutes",
+            "half_time_minutes",
+            "period_name",
+            "scoreboard_template",
             "slug",
             "slug_locked",
         )
@@ -711,9 +949,14 @@ class DivisionForm(SuperUserSlugMixin, ModelForm):
             "color": forms.TextInput(attrs={"type": "color"}),
         }
 
-    def _clean_formula(self, field_name, calculator_class):
+    def _clean_formula(self, field_name, calculator_class, allowed):
         """
         Generic clean function for both the formula fields.
+
+        As well as checking the syntax, make sure the formula only refers to
+        the ``allowed`` identifiers, which will be available on a LadderEntry
+        when the formula is evaluated; unknown identifiers would otherwise
+        silently evaluate to 0.
         """
         fake = LadderEntry()
         formula = self.cleaned_data.get(field_name)
@@ -722,16 +965,122 @@ class DivisionForm(SuperUserSlugMixin, ModelForm):
             parser.parse(formula)
         except ParseException:
             raise forms.ValidationError(_("Syntax of this points formula is invalid."))
+        unknown = parser.identifiers() - allowed
+        if unknown:
+            raise forms.ValidationError(
+                _("Unknown identifier(s) in this points formula: %(identifiers)s."),
+                params={"identifiers": ", ".join(sorted(unknown))},
+            )
         return formula
 
     def clean_points_formula(self):
-        return self._clean_formula("points_formula", Calculator)
+        return self._clean_formula(
+            "points_formula", Calculator, frozenset(valid_ladder_identifiers)
+        )
 
     def clean_bonus_points_formula(self):
-        return self._clean_formula("bonus_points_formula", BonusPointCalculator)
+        return self._clean_formula(
+            "bonus_points_formula",
+            BonusPointCalculator,
+            bonus_points_formula_identifiers,
+        )
 
 
-class StageForm(SuperUserSlugMixin, ModelForm):
+#: The most records a bulk create formset accepts at once.
+BULK_CREATE_MAX = 50
+
+
+class BulkCreateFormSet(BaseModelFormSet):
+    """
+    Create several new records under one ``parent`` at once, such as the
+    divisions of a season or the teams of a division.
+
+    None of the parent's existing records are shown. Each row is a new
+    record of the parent, ordered after the existing ones in the order the
+    rows are filled in; rows left blank are ignored. Titles must be unique
+    among the rows, as they must be among the parent's records.
+    """
+
+    def __init__(self, *args, parent, **kwargs):
+        self.parent = parent
+        self.fk = _get_foreign_key(type(parent), self.model)
+        kwargs.setdefault("queryset", self.model._default_manager.none())
+        super().__init__(*args, **kwargs)
+        last = self.model._default_manager.filter(**{self.fk.name: parent}).aggregate(
+            order=Max("order")
+        )["order"]
+        self.first_order = (last or 0) + 1
+
+    def get_form_kwargs(self, index):
+        kwargs = super().get_form_kwargs(index)
+        kwargs["instance"] = self.model(
+            order=self.first_order + (index or 0), **{self.fk.name: self.parent}
+        )
+        return kwargs
+
+    def clean(self):
+        super().clean()
+        filled = [form for form in self.forms if form.has_changed()]
+        if not filled:
+            raise ValidationError(_("Fill in at least one row."), code="empty")
+        rows = {}
+        for form in filled:
+            title = getattr(form, "cleaned_data", {}).get("title")
+            if not title:
+                continue
+            if title in rows:
+                form.add_error(
+                    "title",
+                    _("This title is already used in row %(row)d.")
+                    % {"row": rows[title]},
+                )
+            else:
+                rows[title] = self.forms.index(form) + 1
+
+    def save_new_objects(self, commit=True):
+        # Number the new records consecutively, whichever rows were filled.
+        for order, form in enumerate(
+            (form for form in self.extra_forms if form.has_changed()),
+            self.first_order,
+        ):
+            form.instance.order = order
+        return super().save_new_objects(commit)
+
+
+def bulk_create_formset_factory(form, extra):
+    """
+    A ``BulkCreateFormSet`` of ``form`` showing ``extra`` blank rows (at
+    most ``BULK_CREATE_MAX``).
+    """
+    return modelformset_factory(
+        form._meta.model,
+        form=form,
+        formset=BulkCreateFormSet,
+        extra=max(1, min(extra, BULK_CREATE_MAX)),
+        max_num=BULK_CREATE_MAX,
+        validate_max=True,
+        can_delete=False,
+    )
+
+
+class DivisionBulkCreateForm(DivisionForm):
+    """
+    The fields of ``DivisionForm`` an administrator needs to fill in for each
+    of several new divisions; the rest can be set on each division later.
+    """
+
+    class Meta(DivisionForm.Meta):
+        fields = (
+            "title",
+            "short_title",
+            "games_per_day",
+            "forfeit_for_score",
+            "forfeit_against_score",
+            "draft",
+        )
+
+
+class StageForm(ScoreboardTemplateMixin, SuperUserSlugMixin, ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.instance.order <= 1:
@@ -755,7 +1104,13 @@ class StageForm(SuperUserSlugMixin, ModelForm):
             "scale_group_points",
             "carry_ladder",
             "keep_mvp",
+            "periods",
+            "period_minutes",
+            "break_minutes",
+            "half_time_minutes",
+            "period_name",
             "color",
+            "scoreboard_template",
             "slug",
             "slug_locked",
         )
@@ -776,9 +1131,9 @@ class StageGroupForm(SuperUserSlugMixin, ModelForm):
 
         if not self.instance.pk:
             initial = queryset = Team.objects.none()
-        elif self.instance.stage.order > 1 and not self.instance.teams.count():
+        elif self.instance.stage.order > 1 and not self.instance.teams.exists():
             self._undecided = True
-            queryset = self.instance.stage.undecided_teams.exclude(
+            queryset = self.instance.stage.undecided_teams.of_our_own().exclude(
                 stage_group__in=other_pools
             )
             initial = self.instance.undecided_teams.all()
@@ -810,7 +1165,7 @@ class StageGroupForm(SuperUserSlugMixin, ModelForm):
                 self.instance.undecided_teams.set(self.cleaned_data.get("teams"))
             else:
                 self.instance.teams.set(self.cleaned_data.get("teams"))
-        return super(StageGroupForm, self).save(*args, **kwargs)
+        return super().save(*args, **kwargs)
 
     class Meta:
         model = StageGroup
@@ -849,7 +1204,7 @@ class StageGroupFormSet(ConstructFormMixin, BaseStageGroupFormSet):
     def _construct_form(self, i, **kwargs):
         if i >= self.initial_form_count():
             kwargs["instance"] = self.model(stage=self.stage, order=i + 1)
-        return super(StageGroupFormSet, self)._construct_form(i, **kwargs)
+        return super()._construct_form(i, **kwargs)
 
 
 class UndecidedTeamForm(UserMixin, ModelForm):
@@ -872,29 +1227,34 @@ class UndecidedTeamForm(UserMixin, ModelForm):
         }
 
     def clean_formula(self):
-        # TODO move to general clean and insert error back on field so that
-        # validation of `label` is not impacted by this.
         formula = self.cleaned_data.get("formula").upper()
-        if formula and not stage_group_position_re.match(formula):
+        if formula and not stage_group_position_re.fullmatch(formula):
             raise forms.ValidationError(_("This is not a valid team formula."))
+        error = zero_position_error(formula) or first_stage_position_error(
+            self.instance.stage, formula
+        )
+        if error:
+            raise forms.ValidationError(error)
         return formula
 
-    def clean_label(self):
-        formula = self.cleaned_data.get("formula")
-        label = self.cleaned_data.get("label")
-        if formula:
-            label = ""
-        elif not label:
-            raise forms.ValidationError(
-                _("You must specify a label when formula is blank.")
+    def clean(self):
+        data = super().clean()
+        if data.get("formula"):
+            # The formula names the team, so the label is not saved.
+            data["label"] = ""
+        elif not self.has_error("formula") and not data.get("label"):
+            # Only a formula that is blank, not one that was refused, needs a
+            # label in its place.
+            self.add_error(
+                "label", _("You must specify a label when formula is blank.")
             )
-        return label
+        return data
 
 
-class TeamForm(SuperUserSlugMixin, ModelForm):
+class TeamForm(UpstreamTitleMixin, SuperUserSlugMixin, ModelForm):
     def __init__(self, division, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if not division.season.competition.clubs.count():
+        if not division.season.competition.clubs.exists():
             self.fields.pop("club")
         else:
             self.fields["club"].queryset = division.season.competition.clubs
@@ -908,7 +1268,7 @@ class TeamForm(SuperUserSlugMixin, ModelForm):
             for field in timeslot_fields:
                 self.fields.pop(field, None)
                 setattr(self.instance, field, None)
-        elif self.instance.division.season.timeslots.count():
+        elif self.instance.division.season.timeslots.exists():
             timeslots = self.instance.division.season.get_timeslots()
             choices = [("", "")] + [time_choice(t) for t in timeslots]
 
@@ -944,7 +1304,7 @@ class TeamForm(SuperUserSlugMixin, ModelForm):
         self.fields["team_clashes"].queryset = queryset.select_related(
             "division"
         ).order_by("title", "division")
-        if not queryset.count():
+        if not queryset.exists():
             self.fields.pop("team_clashes", None)
 
     class Meta:
@@ -987,6 +1347,31 @@ class TeamForm(SuperUserSlugMixin, ModelForm):
         return title
 
 
+class TeamBulkCreateForm(BootstrapFormControlMixin, ModelForm):
+    """
+    The name of each of several new teams and, in a competition with clubs,
+    its club (the name then defaults to the club's); the rest can be set on
+    each team later.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        clubs = self.instance.division.season.competition.clubs.all()
+        if clubs.exists():
+            self.fields["club"].queryset = clubs
+            self.fields["title"].required = False
+        else:
+            self.fields.pop("club")
+
+    class Meta:
+        model = Team
+        # The club is cleaned first: an empty name defaults to the club's.
+        fields = ("club", "title")
+        labels = {"title": _("Name")}
+
+    clean_title = TeamForm.clean_title
+
+
 class DrawFormatForm(BootstrapFormControlMixin, ModelForm):
     def clean_text(self):
         text = self.cleaned_data.get("text").strip()
@@ -1012,8 +1397,10 @@ class BaseMatchFormMixin(BootstrapFormControlMixin):
 
         # set the queryset of the `home_team` and `away_team` fields
         team_ids = self.instance.stage.division.teams.values_list("id", flat=True)
-        undecided_team_ids = self.instance.stage.undecided_teams.values_list(
-            "id", flat=True
+        undecided_team_ids = (
+            self.instance.stage.undecided_teams.of_our_own().values_list(
+                "id", flat=True
+            )
         )
 
         for prefix in ("home", "away"):
@@ -1125,12 +1512,12 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
 
         # restrict the list of referees to those registered this season
         if "referees" in self.fields:
-            self.fields["referees"].queryset = (
-                self.instance.stage.division.season.referees.all()
-            )
+            self.fields[
+                "referees"
+            ].queryset = self.instance.stage.division.season.referees.all()
 
         # remove `stage_group` field if the `division` has no children
-        if not self.instance.stage.pools.count():
+        if not self.instance.stage.pools.exists():
             self.fields.pop("stage_group", None)
         elif "stage_group" in self.fields:
             self.fields["stage_group"].queryset = self.instance.stage.pools.all()
@@ -1152,13 +1539,12 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
 
         # remove team fields depending on if we are editing a match with known
         # teams, undecided teams, or teams that still need to be evaluated.
-        if not self.instance.home_team and self.instance.stage.undecided_teams.count():
+        undecided = self.instance.stage.undecided_teams.of_our_own().exists()
+
+        if not self.instance.home_team and undecided:
             self.fields.pop("home_team", None)
 
-        if (
-            not self.instance.home_team_undecided
-            and not self.instance.stage.undecided_teams.count()
-        ):
+        if not self.instance.home_team_undecided and not undecided:
             self.fields.pop("home_team_undecided", None)
             try:
                 empty_label = self.instance.get_home_team()["title"]
@@ -1166,13 +1552,10 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
                 empty_label = "---"
             self.fields["home_team"].empty_label = empty_label
 
-        if not self.instance.away_team and self.instance.stage.undecided_teams.count():
+        if not self.instance.away_team and undecided:
             self.fields.pop("away_team", None)
 
-        if (
-            not self.instance.away_team_undecided
-            and not self.instance.stage.undecided_teams.count()
-        ):
+        if not self.instance.away_team_undecided and not undecided:
             self.fields.pop("away_team_undecided", None)
             try:
                 empty_label = self.instance.get_away_team()["title"]
@@ -1271,6 +1654,11 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
             "round",
             "date",
             "include_in_ladder",
+            "periods",
+            "period_minutes",
+            "break_minutes",
+            "half_time_minutes",
+            "period_name",
             "videos",
             "live_stream_thumbnail_image",
         )
@@ -1286,35 +1674,21 @@ class MatchEditForm(BaseMatchFormMixin, ModelForm):
 
 
 class MatchStreamForm(MatchEditForm):
-    class Meta:
-        model = Match
-        fields = (
-            "stage_group",
-            "home_team",
-            "away_team",
-            "home_team_undecided",
-            "away_team_undecided",
-            "label",
-            "round",
-            "date",
-            "include_in_ladder",
-            "live_stream",
-            "live_stream_thumbnail_image",
-            # "external_identifier",
+    """
+    The match of a live streamed season: the fields of ``MatchEditForm``, with
+    whether the match is broadcast in place of its video links.
+    """
+
+    class Meta(MatchEditForm.Meta):
+        fields = tuple(
+            "live_stream" if name == "videos" else name
+            for name in MatchEditForm.Meta.fields
         )
-        labels = {
-            "home_team_undecided": _("Home team"),
-            "away_team_undecided": _("Away team"),
-            "live_stream_thumbnail_image": _("Video Thumbnail"),
-        }
         help_texts = {
             "live_stream_thumbnail_image": _(
                 "Upload a custom thumbnail for this match. "
                 "If not set, the season's default thumbnail will be used."
             ),
-        }
-        field_classes = {
-            "live_stream_thumbnail_image": ThumbnailImageField,
         }
 
 
@@ -1357,19 +1731,43 @@ class DrawGenerationMatchFormSet(BaseDrawGenerationMatchFormSet):
     def _construct_form(self, i, **kwargs):
         if i < self.initial_form_count() and not kwargs.get("instance"):
             kwargs["instance"] = self.get_queryset()[i]
+        # Skip BaseModelFormSet._construct_form: it rebinds instances by the
+        # posted pk and requires that pk; ours are taken by position instead.
         return super(BaseModelFormSet, self)._construct_form(i, **kwargs)
 
     def add_fields(self, form, index):
         """A hook for adding extra fields on to each form instance."""
-        super(DrawGenerationMatchFormSet, self).add_fields(form, index)
+        super().add_fields(form, index)
         if self.can_delete:
-            form.fields[DELETION_FIELD_NAME] = BooleanChoiceField(
+            form.fields[DELETION_FIELD_NAME] = forms.BooleanField(
                 label=_("Skip"), required=False
             )
+
+    def clean(self):
+        """Refuse to skip a match that a match not skipped depends on."""
+        super().clean()
+        skipped = {form.instance.uuid: form.instance for form in self.deleted_forms}
+        for form in self.forms:
+            if form in self.deleted_forms:
+                continue
+            for related in (
+                form.instance.home_team_eval_related,
+                form.instance.away_team_eval_related,
+            ):
+                if related is not None and related.uuid in skipped:
+                    raise forms.ValidationError(
+                        _("%(match)s depends on %(skipped)s, which is skipped.")
+                        % {
+                            "match": form.instance.label or form.instance,
+                            "skipped": skipped[related.uuid].label or related,
+                        }
+                    )
 
     def save(self, *args, **kwargs):
         matches = []
         for form in self.forms:
+            if form in self.deleted_forms:
+                continue
             if form.instance.home_team_eval_related is not None:
                 form.instance.home_team_eval_related = Match.objects.get(
                     uuid=form.instance.home_team_eval_related.uuid
@@ -1403,10 +1801,20 @@ class MatchResultForm(BootstrapFormControlMixin, ModelForm):
                 self.fields["home_team_score"].widget.attrs["placeholder"] = home_team
                 self.fields["away_team_score"].label = str(away_team)
                 self.fields["away_team_score"].widget.attrs["placeholder"] = away_team
-                self.fields["forfeit_winner"] = ModelChoiceField(
-                    queryset=Team.objects.filter(id__in=[home_team.pk, away_team.pk]),
-                    label_from_instance=lambda team: team.title,
-                    empty_label=_("Double forfeit"),
+                # The choices are the two teams already loaded with the match,
+                # instead of a query for each match on the page.
+                teams = {str(team.pk): team for team in (home_team, away_team)}
+                self.fields["forfeit_winner"] = forms.TypedChoiceField(
+                    choices=[("", _("Double forfeit"))]
+                    + [(pk, team.title) for pk, team in teams.items()],
+                    coerce=lambda pk: teams.get(str(pk)),
+                    empty_value=None,
+                    error_messages={
+                        "invalid_choice": ModelChoiceField.default_error_messages[
+                            "invalid_choice"
+                        ]
+                    },
+                    label=_("Forfeit winner"),
                     help_text=_("Select the winning team."),
                     required=False,
                 )
@@ -1435,14 +1843,20 @@ class MatchResultForm(BootstrapFormControlMixin, ModelForm):
         return self.cleaned_data
 
     def save(self, *args, **kwargs):
+        changed = SCORE_FIELDS.union(
+            {"is_forfeit", "forfeit_winner", "bye_processed"}
+        ).intersection(self.changed_data)
         logger.debug(
-            'MatchResultForm.save: updated fields "%s"',
-            '", "'.join(SCORE_FIELDS.intersection(self.changed_data)),
+            'MatchResultForm.save: updated fields "%s"', '", "'.join(sorted(changed))
         )
 
-        if SCORE_FIELDS.intersection(self.changed_data):
+        saved = super().save(*args, **kwargs)
+
+        # Announce the result only once it is written, so receivers (and
+        # anything they notify) see the saved state.
+        if changed:
             for rec, res in score_updated.send_robust(sender=self, match=self.instance):
-                receiver = "%s.%s" % (rec.__module__, rec.__name__)
+                receiver = f"{rec.__module__}.{rec.__name__}"
                 try:
                     if isinstance(res, Exception):
                         raise res
@@ -1450,7 +1864,7 @@ class MatchResultForm(BootstrapFormControlMixin, ModelForm):
                 except:  # noqa
                     logger.exception('Receiver "%s" did not complete.', receiver)
 
-        return super(MatchResultForm, self).save(*args, **kwargs)
+        return saved
 
     class Meta:
         model = Match
@@ -1531,12 +1945,10 @@ class LiveStreamEventForm(BootstrapFormControlMixin, ModelForm):
         # Times are always expressed in the season's timezone; it is implied
         # rather than asked for.
         tz = self.instance.season.timezone or timezone.get_current_timezone()
+        local_time = _("Local time in %s.") % tz
         for name in ("start", "stop"):
             self.fields[name].timezone = tz
-            self.fields[name].help_text = "{} {}".format(
-                self.fields[name].help_text,
-                _("Local time in %s.") % tz,
-            )
+            self.fields[name].help_text = f"{self.fields[name].help_text} {local_time}"
 
 
 class MatchScheduleForm(BaseMatchFormMixin, ModelForm):
@@ -1774,9 +2186,7 @@ class RescheduleDateFormSet(ConstructFormMixin, RescheduleDateFormSetBase):
         return {"matches": self.matches}
 
     def _construct_form(self, i, **kwargs):
-        return super(RescheduleDateFormSet, self)._construct_form(
-            i, date=self.dates[i], **kwargs
-        )
+        return super()._construct_form(i, date=self.dates[i], **kwargs)
 
     def save(self, *args, **kwargs):
         update = {}
@@ -1810,6 +2220,14 @@ class ProgressMatchesForm(BaseMatchFormMixin, ModelForm):
         # side javascript hack used previously.
         self.initial["home_team"] = home_team
         self.initial["away_team"] = away_team
+
+        # An undecided team which could not be resolved must be progressed
+        # via the ProgressTeamsFormSet so that every match it appears in is
+        # updated consistently; don't offer it for selection here.
+        if self.instance.home_team_undecided and not isinstance(home_team, Team):
+            home_team = None
+        if self.instance.away_team_undecided and not isinstance(away_team, Team):
+            away_team = None
 
         if (
             isinstance(home_team, ByeTeam)
@@ -1850,7 +2268,7 @@ class ProgressMatchesForm(BaseMatchFormMixin, ModelForm):
 
     def save(self, *args, **kwargs):
         self.instance.stage.matches_needing_printing.add(self.instance)
-        return super(ProgressMatchesForm, self).save(*args, **kwargs)
+        return super().save(*args, **kwargs)
 
     class Meta:
         model = Match
@@ -1892,10 +2310,6 @@ class ProgressTeamsFormSet(BaseProgressTeamsFormSet):
         self.stage = stage
         super().__init__(*args, **kwargs)
 
-    def get_queryset(self):
-        qs = super(ProgressTeamsFormSet, self).get_queryset()
-        return qs.filter(stage=self.stage)
-
     def clean(self):
         teams = {}
 
@@ -1912,7 +2326,7 @@ class ProgressTeamsFormSet(BaseProgressTeamsFormSet):
                     )
 
     def save(self, *args, **kwargs):
-        res = super(ProgressTeamsFormSet, self).save(*args, **kwargs)
+        res = super().save(*args, **kwargs)
         self.stage.matches_needing_printing.set(
             self.stage.matches.exclude(legitimate_bye_match)
         )
@@ -1929,31 +2343,10 @@ class DrawGenerationForm(BootstrapFormControlMixin, forms.Form):
         super().__init__(*args, **kwargs)
         self.instance = initial
 
-        # ensure we have an even number for filtering the `DrawFormat` table
-
-        if isinstance(self.instance, Stage):
-            teams = first(
-                (self.instance.teams.count(), self.instance.undecided_teams.count()),
-                default=0,
-            )
-
-        elif isinstance(self.instance, StageGroup):
-            teams = first(
-                (self.instance.undecided_teams.count(), self.instance.teams.count()),
-                default=0,
-            )
-
-        else:
-            teams = 0
-
-        if teams % 2:
-            teams += 1
-
         # produce a list of appropriate `DrawFormat` options
-        suitable_draw_formats = DrawFormat.objects.filter(
-            Q(teams__in=(teams, teams - 1)) if teams else Q()
+        self.fields["format"].queryset = suitable_draw_formats(
+            draw_target_team_count(self.instance)
         )
-        self.fields["format"].queryset = suitable_draw_formats
 
         if self.instance:
             self.fields["format"].help_text = _(
@@ -1974,16 +2367,7 @@ class DrawGenerationForm(BootstrapFormControlMixin, forms.Form):
     def generator(self):
         format = self.cleaned_data.get("format")
         start_date = self.cleaned_data.get("start_date")
-
-        generator = DrawGenerator(self.instance, start_date)
-        generator.parse(format.text)
-        return generator
-
-    def clean_start_date(self):
-        start_date = self.cleaned_data.get("start_date")
-        if not start_date:
-            raise forms.ValidationError("foo")
-        return start_date
+        return draw_generator(self.instance, format, start_date)
 
     def clean_rounds(self):
         format = self.cleaned_data.get("format")
@@ -1993,19 +2377,48 @@ class DrawGenerationForm(BootstrapFormControlMixin, forms.Form):
         return rounds
 
     def clean(self):
-        data = super(DrawGenerationForm, self).clean()
+        data = super().clean()
         try:
             matches = self.get_matches()
         except AttributeError:
             logger.exception("Can't build draw without a format selection.")
         else:
             data.setdefault("matches", matches)
+            self._clean_positions(matches)
         return data
 
+    def _clean_positions(self, matches):
+        """Refuse a format whose positions name no team on this stage."""
+        stage = (
+            self.instance.stage
+            if isinstance(self.instance, StageGroup)
+            else self.instance
+        )
+        team_evals = dict.fromkeys(
+            team_eval
+            for match in matches
+            for team_eval in (match.home_team_eval, match.away_team_eval)
+            if team_eval
+        )
+        for team_eval in team_evals:
+            error = zero_position_error(team_eval) or first_stage_position_error(
+                stage, team_eval
+            )
+            if error:
+                self.add_error("format", error)
+
     def get_matches(self):
-        n = self.cleaned_data.get("rounds")
-        offset = self.cleaned_data.get("offset") or 0
-        return self.generator.generate(n, offset)
+        format = self.cleaned_data.get("format")
+        if format is None:
+            # Preserve the historical failure mode ``clean`` relies on.
+            raise AttributeError("A draw format must be chosen.")
+        return generate_stage_draw(
+            self.instance,
+            format,
+            self.cleaned_data.get("start_date"),
+            self.cleaned_data.get("rounds"),
+            self.cleaned_data.get("offset") or 0,
+        )
 
 
 DrawGenerationFormSetBase = formset_factory(
@@ -2016,11 +2429,16 @@ DrawGenerationFormSetBase = formset_factory(
 class DrawGenerationFormSet(BootstrapFormControlMixin, DrawGenerationFormSetBase):
     def add_fields(self, form, index):
         """A hook for adding extra fields on to each form instance."""
-        super(DrawGenerationFormSet, self).add_fields(form, index)
+        super().add_fields(form, index)
         if self.can_delete:
-            form.fields[DELETION_FIELD_NAME] = BooleanChoiceField(
+            form.fields[DELETION_FIELD_NAME] = forms.BooleanField(
                 label=_("Skip"), required=False
             )
+
+    def clean(self):
+        super().clean()
+        if self.forms and len(self.deleted_forms) == len(self.forms):
+            raise ValidationError(_("Choose at least one stage or pool to build."))
 
 
 class ImportCsvForm(forms.Form):
@@ -2048,9 +2466,73 @@ class BaseClubAssociationFormSet(UserMixin, ConstructFormMixin, BaseInlineFormSe
         return {"user": self.user, "club": self.instance}
 
 
+def number_worn_error(number, person):
+    """A team's number can be worn by one of its people at a time."""
+    return forms.ValidationError(
+        _("Number %(number)s is already worn by %(person)s."),
+        params={"number": number, "person": person},
+    )
+
+
+def has_statistics_error(association):
+    """A person with statistics for a team stays in it (see ``removable``)."""
+    return forms.ValidationError(
+        _(
+            "%(person)s has statistics for %(team)s and cannot be removed "
+            "from the team."
+        ),
+        params={"person": association.person, "team": association.team},
+    )
+
+
 class BaseTeamAssociationFormSet(UserMixin, ConstructFormMixin, BaseInlineFormSet):
     def get_defaults(self):
-        return {"user": self.user, "team": self.instance}
+        return {
+            "user": self.user,
+            "team": self.instance,
+            # The forms are compared with each other in ``clean``, so that
+            # two people can exchange numbers in one submission.
+            "saved_together": self.get_queryset(),
+        }
+
+    def clean(self):
+        super().clean()
+        kept, removed = [], []
+        for form in self.forms:
+            if self.can_delete and self._should_delete_form(form):
+                removed.append(form)
+            elif hasattr(form, "cleaned_data"):
+                kept.append(form)
+        self._clean_numbers(kept)
+        staying = (
+            self.instance.people.exclude(pk__in=self.instance.people.removable())
+            .filter(pk__in=[form.instance.pk for form in removed if form.instance.pk])
+            .select_related("person", "team")
+        )
+        errors = [has_statistics_error(association) for association in staying]
+        if errors:
+            raise forms.ValidationError(errors)
+
+    @staticmethod
+    def _clean_numbers(kept):
+        """
+        Refuse a number given to more than one of the forms being ``kept``.
+        Only a form whose number was changed is refused, so a team that
+        already has a number twice can still be saved as it stands.
+        """
+        wearers = collections.defaultdict(list)
+        for form in kept:
+            number = form.cleaned_data.get("number")
+            if number is not None:
+                wearers[number].append(form)
+        for number, wearing in wearers.items():
+            for form in wearing:
+                others = [other for other in wearing if other is not form]
+                if others and "number" in form.changed_data:
+                    form.add_error(
+                        "number",
+                        number_worn_error(number, others[0].cleaned_data.get("person")),
+                    )
 
 
 class BaseSeasonAssociationFormSet(UserMixin, ConstructFormMixin, BaseModelFormSet):
@@ -2079,12 +2561,30 @@ class ClubAssociationForm(UserMixin, ModelForm):
 
 
 class TeamAssociationForm(UserMixin, ModelForm):
-    def __init__(self, team, *args, **kwargs):
+    def __init__(self, team, *args, saved_together=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["person"].queryset = team.club.members.all()
+        # A team's people come from its club; a team without one has nobody
+        # to choose from until it is given a club (``Team.ensure_club``).
+        people = Person.objects.none() if team.club is None else team.club.members.all()
+        self.fields["person"].queryset = people
         self.fields[
             "roles"
         ].queryset = team.division.season.competition.team_roles.all()
+        # The rest of the team, whose numbers this one must not take. A
+        # formset compares the people it saves together itself.
+        if saved_together is None:
+            saved_together = team.people.filter(pk=self.instance.pk)
+        self.others = team.people.exclude(pk__in=saved_together)
+
+    def clean_number(self):
+        number = self.cleaned_data.get("number")
+        # Only a number that was changed is checked, so a person who already
+        # shares a number can still be saved as they stand.
+        if number is not None and "number" in self.changed_data:
+            other = self.others.filter(number=number).select_related("person").first()
+            if other is not None:
+                raise number_worn_error(number, other.person)
+        return number
 
     class Meta:
         model = TeamAssociation
@@ -2211,6 +2711,8 @@ class MatchStatisticFormset(BaseMatchStatisticFormset):
     def _construct_form(self, i, **kwargs):
         if i < self.initial_form_count() and not kwargs.get("instance"):
             kwargs["instance"] = self.get_queryset()[i]
+        # Skip BaseModelFormSet._construct_form: it rebinds instances by the
+        # posted pk and requires that pk; ours are taken by position instead.
         return super(BaseModelFormSet, self)._construct_form(i, **kwargs)
 
     def clean(self):
@@ -2256,23 +2758,10 @@ class MatchStatisticFormset(BaseMatchStatisticFormset):
         stats = []
         for form in self.forms:
             stats.append(form.save())
+        if self.forms:
+            match = self.forms[0].instance.match
+            statistics_updated.send_robust(sender=self, match=match)
         return stats
-
-
-SeasonMatchTimeFormSet = inlineformset_factory(
-    Season,
-    SeasonMatchTime,
-    fk_name="season",
-    fields=(
-        "start_date",
-        "end_date",
-        "start",
-        "interval",
-        "count",
-    ),
-    extra=0,
-    can_delete=True,
-)
 
 
 class TournamentScheduleForm(BootstrapFormControlMixin, forms.Form):
@@ -2323,17 +2812,15 @@ class DivisionTournamentScheduleForm(TournamentScheduleForm):
             .distinct()
             .select_related()
         ),
-        label_from_instance=lambda o: "{} - {} - {}".format(
-            o.season.competition.title,
-            o.season.title,
-            o.title,
+        label_from_instance=lambda o: (
+            f"{o.season.competition.title} - {o.season.title} - {o.title}"
         ),
         label="Division",
     )
 
     def get_absolute_url(self):
         division = self.cleaned_data["team_hook"]
-        if division.matches.count():
+        if division.matches.exists():
             return reverse_lazy(
                 "competition:division",
                 kwargs=dict(
@@ -2345,50 +2832,6 @@ class DivisionTournamentScheduleForm(TournamentScheduleForm):
 
     def get_teams(self):
         return self.cleaned_data["team_hook"].teams.order_by("order")
-
-
-class StreamControlForm(forms.Form):
-    status = forms.ChoiceField(
-        label="Live Streaming Control",
-        choices=(
-            ("testing", "Testing"),
-            ("live", "Start streaming"),
-            ("complete", "Stop streaming"),
-        ),
-        widget=forms.RadioSelect,
-        required=True,
-        help_text=mark_safe(
-            "Start streams about 1 minute before matches start.<br/>"
-            "Stop streams about 1 minute after matches conclude."
-        ),
-    )
-
-    def save(self, request, youtube, queryset):
-        broadcast_status = self.cleaned_data["status"]
-
-        for match in queryset:
-            try:
-                # Use the new Match method for live stream transition
-                match.transition_live_stream(broadcast_status, youtube)
-                messages.success(request, f"{match}: broadcast is {broadcast_status!r}")
-            except LiveStreamError as exc:
-                messages.error(request, f"{match}: {exc}")
-            except HttpError as exc:
-                messages.error(request, f"{match}: {exc.reason}")
-            except Exception:
-                # Catch any warnings that are raised as exceptions
-                with warnings.catch_warnings(record=True) as w:
-                    warnings.simplefilter("always")
-                    try:
-                        # Re-attempt without catching warnings
-                        match.transition_live_stream(broadcast_status, youtube)
-                        messages.success(request, f"{match}: broadcast is {broadcast_status!r}")
-                        # Display any warnings as info messages
-                        for warning in w:
-                            if issubclass(warning.category, LiveStreamTransitionWarning):
-                                messages.info(request, f"{match}: {warning.message}")
-                    except Exception as final_exc:
-                        messages.error(request, f"{match}: {final_exc}")
 
 
 class DivisionStructureJSONForm(forms.Form):
@@ -2456,7 +2899,51 @@ class DivisionStructureJSONForm(forms.Form):
                 "A division of that name already exists in this season."
             )
 
+        # The formats must parse before their positions can be read.
+        errors = self._draw_format_errors(structure) or self._position_errors(structure)
+        if errors:
+            raise forms.ValidationError(errors)
+
         return json_data
+
+    def _draw_format_errors(self, structure):
+        """
+        One error per draw format a stage or pool refers to that
+        ``DrawGenerator`` refuses, naming the format, as ``DrawFormatForm``
+        reports the same message on a saved format.
+        """
+        errors = []
+        for key, text in structure.referenced_draw_formats().items():
+            try:
+                DrawGenerator.validate(text)
+            except ValueError as e:
+                errors.append(f"Draw format '{key}': {e}")
+        return errors
+
+    def _position_errors(self, structure):
+        """
+        The positions in the stages' draw formats that name no team, once
+        each, as the undecided-team form and the draw wizard refuse them: a
+        zero in any stage (``zero_position_error``), and in the first stage a
+        position that names the stage before it, which the division will not
+        have (``first_stage_position_message``).
+        """
+        errors = []
+        for index, stage in enumerate(structure.stages):
+            references = dict.fromkeys(
+                reference
+                for text in structure.stage_draw_formats(stage)
+                for round in draw_generator(None, text).rounds
+                for descriptor in round.matches
+                for reference in (descriptor.home_team, descriptor.away_team)
+            )
+            for reference in references:
+                error = zero_position_error(reference)
+                if error is None and index == 0:
+                    error = first_stage_position_message(stage.title, reference)
+                if error:
+                    errors.append(error)
+        return list(dict.fromkeys(errors))
 
     def get_division_structure(self):
         """Get the validated DivisionStructure instance."""

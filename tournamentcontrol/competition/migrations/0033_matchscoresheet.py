@@ -9,7 +9,6 @@ from django.utils.translation import gettext_lazy as _
 
 
 class Migration(migrations.Migration):
-
     dependencies = [("competition", "0032_resave_all_matches")]
 
     operations = [

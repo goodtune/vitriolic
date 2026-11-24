@@ -1,16 +1,41 @@
+import base64
+import copy
 import unittest
 from datetime import date, datetime, time
+from itertools import count
 from unittest.mock import ANY, MagicMock, PropertyMock, patch
 from zoneinfo import ZoneInfo
 
+import cloudinary
+import responses
 from dateutil.rrule import DAILY
-from django import VERSION
+from django import forms
+from django.conf import settings
 from django.contrib import messages
+from django.contrib.messages.test import MessagesTestMixin
+from django.db import connection
 from django.template import Context, Template
+from django.test import override_settings
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
+from guardian.shortcuts import assign_perm
 from test_plus import TestCase as BaseTestCase
 
-from touchtechnology.common.tests.factories import UserFactory
+from touchtechnology.admin.branding import get_brand
+from touchtechnology.admin.sites import site
+from touchtechnology.admin.tests.shells import (
+    ArrowMixin,
+    IconMixin,
+    by_shell,
+    per_shell,
+)
+from touchtechnology.common.tests.caches import WarmCachesMixin
+from touchtechnology.common.tests.factories import (
+    StaffFactory,
+    SuperUserFactory,
+    UserFactory,
+)
+from tournamentcontrol.competition.dashboard import MostValuableWidget
 from tournamentcontrol.competition.draw.schemas import (
     DivisionStructure,
     StageFixture,
@@ -19,56 +44,120 @@ from tournamentcontrol.competition.models import (
     Division,
     Ground,
     Match,
+    MatchScoreSheet,
+    SeasonAssociation,
     SimpleScoreMatchStatistic,
     Stage,
     StageGroup,
     Team,
+    TeamAssociation,
+    UndecidedTeam,
 )
+from tournamentcontrol.competition.tasks import generate_pdf_scorecards
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.utils import round_robin, round_robin_format
 
-try:
-    from django.contrib.messages.test import MessagesTestMixin
-except ImportError:  # Django < 5.0
-    from tournamentcontrol.competition.tests.test_utils import (
-        MessagesTestMixin,
+
+#: The home page's budget, with the caches warm (see ``WarmCachesMixin``): the
+#: widgets' queries, and two for its jobs (the latest day with results to enter
+#: and the next match day). It holds however many stages, seasons or matches
+#: there are.
+def dashboard_budget():
+    return by_shell(workbook=11, explorer=9)
+
+
+class DashboardQueriesMixin(WarmCachesMixin):
+    def assertDashboardQueries(self, queries):
+        with self.login(self.superuser):
+            self.warm_caches()
+            with self.assertNumQueries(queries):
+                self.get_check_200("admin:index")
+
+
+#: An icon of the admin's sprite, as the pages draw it.
+ICON = (
+    '<svg class="wb-icon" aria-hidden="true" focusable="false">'
+    '<use href="/static/touchtechnology/admin/workbook/icons.svg#%s"></use></svg>'
+)
+
+
+def bulk_link(url, name, title):
+    """Explorer's "Add several" control: a link, the dialog is the page's own."""
+    return (
+        f'<a class="button compact" href="{url}?count=5" '
+        f'data-add-many="add-many-{name}">'
+        '<svg class="icon" aria-hidden="true" focusable="false"><use '
+        'href="/static/touchtechnology/admin/explorer/img/icons.svg#plus-many">'
+        f"</use></svg><span>{title}</span></a>"
+    )
+
+
+def bulk_dialog(url, name, title):
+    """The "Add several" control a tab offers: a button and the dialog it opens."""
+    return (
+        f'<form method="get" action="{url}" class="wb-inline-form">'
+        f'<button type="submit" class="wb-button wb-button-small" '
+        f'data-wb-dialog="bulk-{name}" aria-label="{title}">'
+        f"{ICON % 'copy-plus'}Add several</button>"
+        f'<dialog class="wb-dialog" id="bulk-{name}" '
+        f'aria-labelledby="bulk-{name}-title"><div class="wb-dialog-body">'
+        f'<h2 class="wb-dialog-title" id="bulk-{name}-title">{title}</h2>'
+        '<div class="wb-field">'
+        f'<label class="wb-label" for="bulk-{name}-count">'
+        "How many do you want to add?</label>"
+        f'<input class="wb-input" type="number" id="bulk-{name}-count" '
+        'name="count" min="1" max="50" value="5" required>'
+        '<p class="wb-help">You get a row for each, to fill in on one page. '
+        "Rows left blank are ignored.</p></div>"
+        '<div class="wb-dialog-actions">'
+        '<button type="button" class="wb-button wb-button-quiet" '
+        "data-wb-dialog-close>Cancel</button>"
+        '<button type="submit" class="wb-button wb-button-primary">Continue</button>'
+        "</div></div></dialog></form>"
     )
 
 
 class TestCase(BaseTestCase):
     def setUp(self):
-        super(TestCase, self).setUp()
+        super().setUp()
         self.superuser = UserFactory.create(is_staff=True, is_superuser=True)
 
-    def assertGoodEditView(self, viewname, *args, **kwargs):
+    def assertGoodEditView(self, viewname, *args, saved_url=None, **kwargs):
         test_query_count = kwargs.pop("test_query_count", 50)
         self.assertLoginRequired(viewname, *args)
         with self.login(self.superuser):
             self.assertGoodView(viewname, test_query_count=test_query_count, *args)
             if kwargs:
                 self.post(viewname, *args, **kwargs)
-                self.response_302()
+                self.assert_http_302_found(url=saved_url)
 
-    def assertGoodDeleteView(self, viewname, *args):
+    def assertGoodDeleteView(self, viewname, *args, deleted_url):
         self.assertLoginRequired(viewname, *args)
         with self.login(self.superuser):
             self.get(viewname, *args)
-            self.response_405()
+            self.assert_http_405_method_not_allowed()
             self.post(viewname, *args)
-            self.response_302()
+            self.assert_http_302_found(url=deleted_url)
 
-    def assertGoodNamespace(self, instance, **kwargs):
+    def assertGoodNamespace(self, instance, deleted_url, saved_url=None, **kwargs):
+        """
+        ``deleted_url`` is where deleting the instance leads. When ``kwargs``
+        are posted, adding and editing lead to ``saved_url``.
+        """
         namespace = instance._get_admin_namespace()
         args = instance._get_url_args()
-        self.assertGoodEditView("%s:add" % namespace, *args[:-1], **kwargs)
-        self.assertGoodEditView("%s:edit" % namespace, *args, **kwargs)
-        self.assertGoodDeleteView("%s:delete" % namespace, *args)
+        self.assertGoodEditView(
+            f"{namespace}:add", *args[:-1], saved_url=saved_url, **kwargs
+        )
+        self.assertGoodEditView(
+            f"{namespace}:edit", *args, saved_url=saved_url, **kwargs
+        )
+        self.assertGoodDeleteView(f"{namespace}:delete", *args, deleted_url=deleted_url)
 
 
 class TemplateTests(TestCase):
     @classmethod
-    def setUpClass(cls):
-        super(TemplateTests, cls).setUpClass()
+    def setUpTestData(cls):
         stage1 = factories.StageFactory.create()
         stage2 = factories.StageFactory.create(division=stage1.division, follows=stage1)
         ground = factories.GroundFactory.create(venue__season=stage2.division.season)
@@ -102,10 +191,6 @@ class TemplateTests(TestCase):
         cls.season = cls.division.season
         cls.competition = cls.season.competition
 
-    @classmethod
-    def tearDownClass(cls):
-        super(TemplateTests, cls).tearDownClass()
-
     def test_team_title(self):
         template = Template("{% load common %}{{ team.title|htmlentities }}")
         context = Context({"team": self.team})
@@ -126,13 +211,10 @@ class TemplateTests(TestCase):
                 self.season.pk,
                 "20170213",
             )
-            self.assertResponseContains('<td class="team">1st</td>')
-            self.assertResponseContains(
-                '<td class="team">2nd </td>'
-            )  # whitespace deliberate
-            self.assertResponseContains(
-                '<td class="team">Chees&eacute;&nbsp;&amp;&nbsp;Crackers</td>'
-            )
+            cell = by_shell(workbook="<td>%s</td>", explorer='<td class="team">%s</td>')
+            self.assertResponseContains(cell % "1st")
+            self.assertResponseContains(cell % "2nd ")  # whitespace deliberate
+            self.assertResponseContains(cell % "Chees&eacute;&nbsp;&amp;&nbsp;Crackers")
 
     def test_match_grid(self):
         self.assertLoginRequired(
@@ -150,241 +232,510 @@ class TemplateTests(TestCase):
                 "20170213",
                 "html",
             )
+            for fragment in by_shell(
+                workbook=(f"<h4>{self.division} <small>{self.stage}</small></h4>",),
+                explorer=(
+                    f"<strong>{self.division}</strong>",
+                    f"<small>{self.stage}</small>",
+                ),
+            ):
+                self.assertResponseContains(fragment)
+            box = by_shell(workbook="<p>%s</p>", explorer="<div>%s</div>")
             self.assertResponseContains(
-                "<h4>%s<br /><small>%s</small></h4>" % (self.division, self.stage)
-            )
-            self.assertResponseContains(
-                "<p>1st <br>2nd</p>"
+                box % "1st <br>2nd"
             )  # whitespace & br style deliberate
             self.assertResponseContains(
-                "<p>Chees&eacute;&nbsp;&amp;&nbsp;Crackers<br>4th</p>"
+                box % "Chees&eacute;&nbsp;&amp;&nbsp;Crackers<br>4th"
             )
+
+    def test_scorecards_html(self):
+        # Regression test for #82: the scorecards template does
+        # ``{% load common %}`` and must render.
+        self.assertLoginRequired(
+            "admin:fixja:scorecards",
+            self.competition.pk,
+            self.season.pk,
+            "20170213",
+            "html",
+        )
+        with self.login(self.superuser):
+            self.assertGoodView(
+                "admin:fixja:scorecards",
+                self.competition.pk,
+                self.season.pk,
+                "20170213",
+                "html",
+            )
+            self.assertResponseContains(
+                by_shell(
+                    workbook=f"<title>Scorecards &middot; {get_brand().name}</title>",
+                    explorer="<title>Scorecards</title>",
+                )
+            )
+            css = by_shell(workbook="p-card-team team", explorer="team")
+            self.assertResponseContains(
+                f'<th colspan="5" class="{css}">'
+                "Chees&eacute;&nbsp;&amp;&nbsp;Crackers</th>"
+            )
+
+    @patch("tournamentcontrol.competition.utils.prince")
+    def test_scorecards_pdf_task(self, mock_prince):
+        # Regression test for #82: the PDF variant renders the same template
+        # inside the celery task (a fresh worker process in production)
+        # before handing the markup to Prince. Called the way the admin view
+        # queues it since #42: primary keys only, the task loads the season
+        # and competition for the template itself.
+        mock_prince.return_value = b"%PDF-1.4"
+        templates = site.shell.names(
+            "tournamentcontrol/competition/admin/scorecards.html"
+        )
+        match_pks = list(self.season.matches.values_list("pk", flat=True))
+        data = generate_pdf_scorecards(
+            match_pks, templates, {}, season_pk=self.season.pk
+        )
+        self.assertEqual(base64.b64decode(data), b"%PDF-1.4")
+        mock_prince.assert_called_once()
+        html = mock_prince.call_args.args[0]
+        self.assertIn(
+            by_shell(
+                workbook=f"<title>Scorecards \u00b7 {get_brand().name}</title>",
+                explorer="<title>Scorecards</title>",
+            ),
+            html,
+        )
+        css = by_shell(workbook="p-card-team team", explorer="team")
+        self.assertIn(
+            f'<th colspan="5" class="{css}">Chees\u00e9\u00a0&amp;\u00a0Crackers</th>',
+            html,
+        )
+
+
+@per_shell
+class ReorderTests(MessagesTestMixin, ArrowMixin, BaseTestCase):
+    """
+    The arrows of a division's stages and of its teams: each is a form that
+    posts, moves the row past its neighbour and returns to the tab it is in.
+    Following the address moves nothing. A row has arrows, and may be moved,
+    only by a person who may change it; a move off either end of the list
+    changes nothing.
+    """
+
+    user_factory = SuperUserFactory
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.superuser = cls.make_user("superuser")
+        cls.division = factories.DivisionFactory.create()
+        cls.stages = [
+            factories.StageFactory.create(division=cls.division, title=title, order=n)
+            for n, title in enumerate(("Pool play", "Semi-finals", "Finals"), 1)
+        ]
+        cls.teams = [
+            factories.TeamFactory.create(division=cls.division, title=title, order=n)
+            for n, title in enumerate(("Ants", "Bees", "Cats"), 1)
+        ]
+        # Two members of staff who may open the division and add to its
+        # lists, so every row is drawn for them: the editor may also change
+        # the second stage and the second team, the viewer nothing.
+        cls.viewer = StaffFactory.create(username="viewer")
+        cls.editor = StaffFactory.create(username="editor")
+        for user in (cls.viewer, cls.editor):
+            assign_perm("competition.change_division", user, cls.division)
+            assign_perm("competition.add_stage", user)
+            assign_perm("competition.add_team", user)
+        assign_perm("competition.change_stage", cls.editor, cls.stages[1])
+        assign_perm("competition.change_team", cls.editor, cls.teams[1])
+
+    def get_division(self):
+        self.get_check_200(
+            "admin:fixja:competition:season:division:edit",
+            self.division.season.competition_id,
+            self.division.season_id,
+            self.division.pk,
+        )
+
+    def title_cell(self, obj):
+        """The first cell of ``obj``'s row, for a person who may not edit it."""
+        css = self.by_shell(workbook="wb-title-cell", explorer="title-cell")
+        return f'<td class="{css}"><span>{obj.title}</span></td>'
+
+    def assertArrows(self, assertion):
+        """``assertion`` holds for both arrows of every stage and every team."""
+        lists = (("stage:division", self.stages), ("team:division", self.teams))
+        for route, rows in lists:
+            for obj in rows:
+                for direction in ("up", "down"):
+                    with self.subTest(obj=obj.title, direction=direction):
+                        action = self.reverse(
+                            "admin:fixja:reorder", route, obj.pk, direction
+                        )
+                        assertion(self.arrow(action, direction, obj.title))
+
+    def test_a_visitor_is_asked_to_sign_in(self):
+        self.assertLoginRequired(
+            "admin:fixja:reorder", "stage:division", self.stages[1].pk, "down"
+        )
+
+    def test_each_row_has_arrows_that_post(self):
+        with self.login(self.superuser):
+            self.get_division()
+        self.assertArrows(self.assertResponseContains)
+
+    def test_a_person_who_may_not_change_the_rows_sees_no_arrows(self):
+        with self.login(self.viewer):
+            self.get_division()
+        for obj in (*self.stages, *self.teams):
+            with self.subTest(obj=obj.title):
+                self.assertResponseContains(self.title_cell(obj))
+        self.assertArrows(self.assertResponseNotContains)
+
+    def test_the_arrows_are_drawn_for_the_rows_the_person_may_change(self):
+        pool_play, semi_finals, finals = self.stages
+        ants, bees, cats = self.teams
+        with self.login(self.editor):
+            self.get_division()
+        for route, obj in (("stage:division", semi_finals), ("team:division", bees)):
+            for direction in ("up", "down"):
+                with self.subTest(obj=obj.title, direction=direction):
+                    action = self.reverse(
+                        "admin:fixja:reorder", route, obj.pk, direction
+                    )
+                    self.assertResponseContains(
+                        self.arrow(action, direction, obj.title)
+                    )
+        for route, obj in (
+            ("stage:division", pool_play),
+            ("stage:division", finals),
+            ("team:division", ants),
+            ("team:division", cats),
+        ):
+            with self.subTest(obj=obj.title):
+                self.assertResponseContains(self.title_cell(obj))
+            for direction in ("up", "down"):
+                with self.subTest(obj=obj.title, direction=direction):
+                    action = self.reverse(
+                        "admin:fixja:reorder", route, obj.pk, direction
+                    )
+                    self.assertResponseNotContains(
+                        self.arrow(action, direction, obj.title)
+                    )
+
+    def test_a_person_who_may_not_change_a_stage_may_not_move_it(self):
+        semi_finals = self.stages[1]
+        with self.login(self.viewer):
+            self.post("admin:fixja:reorder", "stage:division", semi_finals.pk, "down")
+        self.assert_http_403_forbidden()
+        self.assertEqual(list(self.division.stages.all()), self.stages)
+
+    def test_a_person_who_may_change_a_stage_moves_it(self):
+        pool_play, semi_finals, finals = self.stages
+        with self.login(self.editor):
+            self.post("admin:fixja:reorder", "stage:division", semi_finals.pk, "down")
+            self.assert_http_302_found(url=f"{self.division.urls['edit']}#stages-tab")
+            self.get_check_200(self.last_response.url)
+        self.assertEqual(
+            list(self.division.stages.all()), [pool_play, finals, semi_finals]
+        )
+
+    def test_the_permission_to_move_a_stage_is_checked_on_that_stage(self):
+        pool_play = self.stages[0]
+        with self.login(self.editor):
+            self.post("admin:fixja:reorder", "stage:division", pool_play.pk, "down")
+        self.assert_http_403_forbidden()
+        self.assertEqual(list(self.division.stages.all()), self.stages)
+
+    def test_moving_a_stage_down_returns_to_the_stages(self):
+        pool_play, semi_finals, finals = self.stages
+        with self.login(self.superuser):
+            self.post("admin:fixja:reorder", "stage:division", semi_finals.pk, "down")
+            self.assert_http_302_found(url=f"{self.division.urls['edit']}#stages-tab")
+            self.assertMessages(
+                self.last_response,
+                [
+                    messages.Message(
+                        messages.INFO,
+                        'The stage "Semi-finals" has been reordered down the list.',
+                    )
+                ],
+            )
+            self.get_check_200(self.last_response.url)
+        self.assertEqual(
+            list(self.division.stages.all()), [pool_play, finals, semi_finals]
+        )
+
+    def test_moving_a_stage_up_returns_to_the_stages(self):
+        pool_play, semi_finals, finals = self.stages
+        with self.login(self.superuser):
+            self.post("admin:fixja:reorder", "stage:division", semi_finals.pk, "up")
+            self.assert_http_302_found(url=f"{self.division.urls['edit']}#stages-tab")
+            self.get_check_200(self.last_response.url)
+        self.assertEqual(
+            list(self.division.stages.all()), [semi_finals, pool_play, finals]
+        )
+
+    def test_a_stage_moves_down_past_a_gap_in_the_order(self):
+        # A deleted stage leaves a gap: the neighbour is the next stage in
+        # the list, whatever its number.
+        pool_play, semi_finals, finals = self.stages
+        Stage.objects.filter(pk=finals.pk).update(order=5)
+        Stage.objects.filter(pk=semi_finals.pk).update(order=3)
+        with self.login(self.superuser):
+            self.post("admin:fixja:reorder", "stage:division", semi_finals.pk, "down")
+            self.assert_http_302_found(url=f"{self.division.urls['edit']}#stages-tab")
+        self.assertEqual(
+            list(self.division.stages.values_list("title", "order")),
+            [("Pool play", 1), ("Finals", 3), ("Semi-finals", 5)],
+        )
+
+    def test_a_stage_moves_up_past_a_gap_in_the_order(self):
+        pool_play, semi_finals, finals = self.stages
+        Stage.objects.filter(pk=finals.pk).update(order=5)
+        Stage.objects.filter(pk=semi_finals.pk).update(order=3)
+        with self.login(self.superuser):
+            self.post("admin:fixja:reorder", "stage:division", semi_finals.pk, "up")
+            self.assert_http_302_found(url=f"{self.division.urls['edit']}#stages-tab")
+        self.assertEqual(
+            list(self.division.stages.values_list("title", "order")),
+            [("Semi-finals", 1), ("Pool play", 3), ("Finals", 5)],
+        )
+
+    def test_a_team_moves_down_past_a_gap_in_the_order(self):
+        ants, bees, cats = self.teams
+        Team.objects.filter(pk=cats.pk).update(order=5)
+        with self.login(self.superuser):
+            self.post("admin:fixja:reorder", "team:division", bees.pk, "down")
+            self.assert_http_302_found(url=f"{self.division.urls['edit']}#teams-tab")
+        self.assertEqual(
+            list(self.division.teams.values_list("title", "order")),
+            [("Ants", 1), ("Cats", 2), ("Bees", 5)],
+        )
+
+    def test_moving_a_team_down_returns_to_the_teams(self):
+        ants, bees, cats = self.teams
+        with self.login(self.superuser):
+            self.post("admin:fixja:reorder", "team:division", ants.pk, "down")
+            self.assert_http_302_found(url=f"{self.division.urls['edit']}#teams-tab")
+            self.get_check_200(self.last_response.url)
+        self.assertEqual(list(self.division.teams.all()), [bees, ants, cats])
+
+    def test_an_address_without_a_parent_returns_to_the_object(self):
+        stage = self.stages[0]
+        pools = [
+            factories.StageGroupFactory.create(stage=stage, order=n) for n in (1, 2)
+        ]
+        with self.login(self.superuser):
+            self.post("admin:fixja:reorder", "stagegroup", pools[0].pk, "down")
+            self.assert_http_302_found(url=pools[0].urls["edit"])
+            self.get_check_200(self.last_response.url)
+        self.assertEqual(list(stage.pools.all()), pools[::-1])
+
+    def test_following_the_address_moves_nothing(self):
+        with self.login(self.superuser):
+            self.get("admin:fixja:reorder", "stage:division", self.stages[1].pk, "down")
+        self.assert_http_405_method_not_allowed()
+        self.assertEqual(list(self.division.stages.all()), self.stages)
+
+    def test_moving_the_first_stage_up_returns_to_the_stages_unchanged(self):
+        first = self.stages[0]
+        with self.login(self.superuser):
+            self.post("admin:fixja:reorder", "stage:division", first.pk, "up")
+            self.assert_http_302_found(url=f"{self.division.urls['edit']}#stages-tab")
+            self.assertMessages(self.last_response, [])
+        self.assertEqual(list(self.division.stages.all()), self.stages)
+
+    def test_moving_the_last_stage_down_returns_to_the_stages_unchanged(self):
+        last = self.stages[-1]
+        with self.login(self.superuser):
+            self.post("admin:fixja:reorder", "stage:division", last.pk, "down")
+            self.assert_http_302_found(url=f"{self.division.urls['edit']}#stages-tab")
+            self.assertMessages(self.last_response, [])
+        self.assertEqual(list(self.division.stages.all()), self.stages)
+
+    def test_a_model_that_is_not_in_an_order_is_not_found(self):
+        semi_finals = self.stages[1]
+        for model in ("ladder", "match"):
+            with self.subTest(model=model), self.login(self.superuser):
+                self.post(
+                    "admin:fixja:reorder", f"{model}:division", semi_finals.pk, "down"
+                )
+                self.assert_http_404_not_found()
+        self.assertEqual(list(self.division.stages.all()), self.stages)
+
+    def test_a_stage_that_does_not_exist_is_not_found(self):
+        gone = self.stages[-1].pk + 1
+        with self.login(self.superuser):
+            self.post("admin:fixja:reorder", "stage:division", gone, "down")
+        self.assert_http_404_not_found()
+        self.assertEqual(list(self.division.stages.all()), self.stages)
+
+    def test_a_parent_the_model_does_not_have_is_not_found(self):
+        with self.login(self.superuser):
+            self.post("admin:fixja:reorder", "stage:league", self.stages[1].pk, "down")
+        self.assert_http_404_not_found()
+        self.assertEqual(list(self.division.stages.all()), self.stages)
+
+    def test_a_stage_moves_only_up_or_down(self):
+        middle = self.stages[1]
+        with self.login(self.superuser):
+            self.post("admin:fixja:reorder", "stage:division", middle.pk, "left")
+        self.assert_http_404_not_found()
+        self.assertEqual(list(self.division.stages.all()), self.stages)
 
 
 class GoodViewTests(TestCase):
-    def test_reorder_down(self):
-        stage = factories.StageFactory.create()
-        pool_a, pool_b, pool_c = factories.StageGroupFactory.create_batch(
-            stage=stage, size=3
-        )
-
-        with self.login(self.superuser):
-            # Without a HTTP_REFERER set this should throw a 404
-            self.get("admin:fixja:reorder", "stagegroup", pool_b.pk, "down")
-            self.response_404()
-
-            # The first time we try to shift this down it will work because it
-            # isn't last in it's set.
-            self.get(
-                "admin:fixja:reorder",
-                "stagegroup",
-                pool_b.pk,
-                "down",
-                extra=dict(HTTP_REFERER="http://testserver/"),
-            )
-            self.response_302()
-
-            # This time, however, it should fail because we're now last.
-            self.get(
-                "admin:fixja:reorder",
-                "stagegroup",
-                pool_b.pk,
-                "down",
-                extra=dict(HTTP_REFERER="http://testserver/"),
-            )
-            self.response_404()
-
-    def test_reorder_up(self):
-        stage = factories.StageFactory.create()
-        pool_a, pool_b, pool_c = factories.StageGroupFactory.create_batch(
-            stage=stage, size=3
-        )
-
-        with self.login(self.superuser):
-            # Without a HTTP_REFERER set this should throw a 404
-            self.get("admin:fixja:reorder", "stagegroup", pool_b.pk, "up")
-            self.response_404()
-
-            # The first time we try to shift this up it will work because it
-            # isn't first in it's set.
-            self.get(
-                "admin:fixja:reorder",
-                "stagegroup",
-                pool_b.pk,
-                "up",
-                extra=dict(HTTP_REFERER="http://testserver/"),
-            )
-            self.response_302()
-
-            # This time, however, it should fail because we're now first.
-            self.get(
-                "admin:fixja:reorder",
-                "stagegroup",
-                pool_b.pk,
-                "up",
-                extra=dict(HTTP_REFERER="http://testserver/"),
-            )
-            self.response_404()
-
-    def test_reorder_left(self):
-        stage = factories.StageFactory.create()
-        pool_a, pool_b, pool_c = factories.StageGroupFactory.create_batch(
-            stage=stage, size=3
-        )
-
-        with self.login(self.superuser):
-            # A direction of "left" is invalid and should throw a 404
-            self.get(
-                "admin:fixja:reorder",
-                pool_b.pk,
-                "left",
-                extra=dict(HTTP_REFERER="http://testserver/"),
-            )
-            self.response_404()
-
-    def test_stage_reorder_down(self):
-        division = factories.DivisionFactory.create()
-        stage_a = factories.StageFactory.create(division=division, order=1)
-        stage_b = factories.StageFactory.create(division=division, order=2)
-        stage_c = factories.StageFactory.create(division=division, order=3)
-
-        with self.login(self.superuser):
-            # Without a HTTP_REFERER set this should throw a 404
-            self.get("admin:fixja:reorder", "stage:division", stage_b.pk, "down")
-            self.response_404()
-
-            # The first time we try to shift this down it will work because it
-            # isn't last in it's set.
-            self.get(
-                "admin:fixja:reorder",
-                "stage:division",
-                stage_b.pk,
-                "down",
-                extra=dict(HTTP_REFERER="http://testserver/"),
-            )
-            self.response_302()
-
-            # This time, however, it should fail because we're now last.
-            self.get(
-                "admin:fixja:reorder",
-                "stage:division",
-                stage_b.pk,
-                "down",
-                extra=dict(HTTP_REFERER="http://testserver/"),
-            )
-            self.response_404()
-
-    def test_stage_reorder_up(self):
-        division = factories.DivisionFactory.create()
-        stage_a = factories.StageFactory.create(division=division, order=1)
-        stage_b = factories.StageFactory.create(division=division, order=2)
-        stage_c = factories.StageFactory.create(division=division, order=3)
-
-        with self.login(self.superuser):
-            # Without a HTTP_REFERER set this should throw a 404
-            self.get("admin:fixja:reorder", "stage:division", stage_b.pk, "up")
-            self.response_404()
-
-            # The first time we try to shift this up it will work because it
-            # isn't first in it's set.
-            self.get(
-                "admin:fixja:reorder",
-                "stage:division",
-                stage_b.pk,
-                "up",
-                extra=dict(HTTP_REFERER="http://testserver/"),
-            )
-            self.response_302()
-
-            # This time, however, it should fail because we're now first.
-            self.get(
-                "admin:fixja:reorder",
-                "stage:division",
-                stage_b.pk,
-                "up",
-                extra=dict(HTTP_REFERER="http://testserver/"),
-            )
-            self.response_404()
-
     def test_index(self):
+        """
+        Where the shell has landing pages Tournament Control opens on its own
+        page, its jobs and sections; where it has none it goes straight to the
+        list of competitions.
+        """
         self.assertLoginRequired("admin:fixja:index")
+        url = self.reverse("admin:fixja:competition:list")
         with self.login(self.superuser):
             self.get("admin:fixja:index")
-            self.response_302()
+            if site.shell.index_landing:
+                self.assert_http_200_ok()
+                self.assertResponseContains(
+                    f'<a class="wb-task" href="{url}">'
+                    f'<span class="wb-task-icon">{ICON % "chevron-right"}</span>'
+                    '<span class="wb-task-title">Competitions</span></a>',
+                )
+            else:
+                self.assert_http_302_found(url=url)
 
     def test_competition(self):
         competition = factories.CompetitionFactory.create()
         self.assertLoginRequired("admin:fixja:competition:list")
         with self.login(self.superuser):
             self.assertGoodView("admin:fixja:competition:list")
-        self.assertGoodNamespace(competition)
+        self.assertGoodNamespace(
+            competition, self.reverse("admin:fixja:competition:list")
+        )
 
     def test_clubrole(self):
         role = factories.ClubRoleFactory.create()
-        self.assertGoodNamespace(role, data={"name": "Club Role"})
+        competition_url = role.competition.urls["edit"]
+        self.assertGoodNamespace(
+            role,
+            f"{competition_url}#club_roles-tab",
+            saved_url=str(competition_url),
+            data={"name": "Club Role"},
+        )
 
     def test_teamrole(self):
         role = factories.TeamRoleFactory.create()
-        self.assertGoodNamespace(role, data={"name": "Team Role"})
+        competition_url = role.competition.urls["edit"]
+        self.assertGoodNamespace(
+            role,
+            f"{competition_url}#team_roles-tab",
+            saved_url=str(competition_url),
+            data={"name": "Team Role"},
+        )
 
     def test_season(self):
         season = factories.SeasonFactory.create()
-        self.assertGoodNamespace(season)
+        self.assertGoodNamespace(
+            season, f"{season.competition.urls['edit']}#seasons-tab"
+        )
 
     def test_season_exclusion(self):
         exclusion = factories.SeasonExclusionDateFactory.create()
-        self.assertGoodNamespace(exclusion)
+        self.assertGoodNamespace(
+            exclusion, f"{exclusion.season.urls['edit']}#exclusions-tab"
+        )
 
     def test_timeslot(self):
         matchtime = factories.SeasonMatchTimeFactory.create()
-        self.assertGoodNamespace(matchtime)
+        self.assertGoodNamespace(
+            matchtime, f"{matchtime.season.urls['edit']}#timeslots-tab"
+        )
 
     def test_livestreamevent(self):
         event = factories.LiveStreamEventFactory.create(season__live_stream=True)
-        self.assertGoodNamespace(event)
+        self.assertGoodNamespace(
+            event, f"{event.season.urls['edit']}#live_stream_events-tab"
+        )
 
     def test_livestreamkey(self):
         stream_key = factories.LiveStreamKeyFactory.create(season__live_stream=True)
-        self.assertGoodNamespace(stream_key)
+        self.assertGoodNamespace(
+            stream_key, f"{stream_key.season.urls['edit']}#live_stream_keys-tab"
+        )
 
     def test_venue(self):
         venue = factories.VenueFactory.create()
-        self.assertGoodNamespace(venue)
+        self.assertGoodNamespace(venue, f"{venue.season.urls['edit']}#venues-tab")
 
     def test_ground(self):
         ground = factories.GroundFactory.create()
-        self.assertGoodNamespace(ground)
+        self.assertGoodNamespace(ground, f"{ground.venue.urls['edit']}#grounds-tab")
 
     def test_division(self):
         division = factories.DivisionFactory.create()
-        self.assertGoodNamespace(division)
+        self.assertGoodNamespace(
+            division, f"{division.season.urls['edit']}#divisions-tab"
+        )
 
     def test_division_exclusion(self):
         exclusion = factories.DivisionExclusionDateFactory.create()
-        self.assertGoodNamespace(exclusion)
+        self.assertGoodNamespace(
+            exclusion, f"{exclusion.division.urls['edit']}#exclusions-tab"
+        )
 
     def test_team(self):
         team = factories.TeamFactory.create()
-        self.assertGoodNamespace(team)
+        self.assertGoodNamespace(team, str(team.division.urls["edit"]))
 
     def test_teamassociation(self):
         team_association = factories.TeamAssociationFactory.create()
-        self.assertGoodNamespace(team_association)
+        self.assertGoodNamespace(
+            team_association, f"{team_association.team.urls['edit']}#people-tab"
+        )
 
     def test_stage(self):
         stage = factories.StageFactory.create()
-        self.assertGoodNamespace(stage, test_query_count=100)
+        self.assertGoodNamespace(
+            stage,
+            f"{stage.division.urls['edit']}#stages-tab",
+            test_query_count=100,
+        )
 
     def test_match(self):
         match = factories.MatchFactory.create()
-        self.assertGoodNamespace(match)
+        self.assertGoodNamespace(match, f"{match.stage.urls['edit']}#matches-tab")
 
-    @unittest.skipIf(
-        VERSION > (4, 0), "FIXME: Django 4.1+ error seems to be factory_boy related"
+    @patch.multiple(
+        cloudinary.config(),
+        create=True,
+        cloud_name="test",
+        api_key="test",
+        api_secret="test",
     )
+    def test_match_scoresheet(self):
+        scoresheet = MatchScoreSheet.objects.create(
+            match=factories.MatchFactory.create(), image="harness/score-sheet"
+        )
+        self.assertGoodNamespace(
+            scoresheet, f"{scoresheet.match.urls['edit']}#scoresheets-tab"
+        )
+
+    @patch.multiple(
+        cloudinary.config(),
+        create=True,
+        cloud_name="test",
+        api_key="test",
+        api_secret="test",
+    )
+    def test_match_with_scoresheet(self):
+        match = factories.MatchFactory.create()
+        MatchScoreSheet.objects.create(match=match, image="harness/score-sheet")
+        with self.login(self.superuser):
+            self.get(f"{match._get_admin_namespace()}:edit", *match._get_url_args())
+            self.assert_http_200_ok()
+
     def test_pool(self):
         pool = factories.StageGroupFactory.create()
-        self.assertGoodNamespace(pool)
+        self.assertGoodNamespace(pool, f"{pool.stage.urls['edit']}#pools-tab")
 
     @unittest.skip(
         "django-guardian bug - see "
@@ -395,19 +746,19 @@ class GoodViewTests(TestCase):
         self.assertLoginRequired("admin:fixja:club:list")
         with self.login(self.superuser):
             self.assertGoodView("admin:fixja:club:list")
-        self.assertGoodNamespace(club)
+        self.assertGoodNamespace(club, self.reverse("admin:fixja:club:list"))
 
     def test_person(self):
         person = factories.PersonFactory.create()
-        self.assertFalse(person.statistics.count())
-        self.assertGoodNamespace(person)
+        self.assertEqual(person.statistics.count(), 0)
+        self.assertGoodNamespace(person, str(person.club.urls["edit"]))
 
     def test_format(self):
         draw_format = factories.DrawFormatFactory.create()
         self.assertLoginRequired("admin:fixja:format:list")
         with self.login(self.superuser):
             self.assertGoodView("admin:fixja:format:list")
-        self.assertGoodNamespace(draw_format)
+        self.assertGoodNamespace(draw_format, self.reverse("admin:fixja:format:list"))
 
     @unittest.skip("Not refactored as a namespace yet")
     def test_list_drawformat(self):
@@ -469,7 +820,7 @@ class GoodViewTests(TestCase):
                     "form-0-play_at": ground.pk,
                 },
             )
-            self.response_302()
+            self.assert_http_302_found(url=f"{season.urls['edit']}#schedule-tab")
 
     def test_match_live_stream_requires_staff_login(self):
         stage = factories.StageFactory.create()
@@ -590,7 +941,7 @@ class GoodViewTests(TestCase):
             # The round games cannot be progressed, it's the first stage and
             # therefore can't have any undecided teams.
             self.get(url_rounds.url_name, *url_rounds.args)
-            self.response_410()
+            self.assert_http_410_gone()
 
             # FIXME
             #
@@ -598,7 +949,7 @@ class GoodViewTests(TestCase):
             # # that need to be entered for matches in the preceding stage.
             # self.get(finals._get_admin_namespace() + ':progress',
             #          *finals._get_url_args())
-            # self.response_410()
+            # self.assert_http_410_gone()
             #
             # # Set random results for every unplayed match in the previous stage
             # # so that we can determine progressions.
@@ -608,7 +959,222 @@ class GoodViewTests(TestCase):
 
             # The final series progression should now be accessible.
             self.get(url_finals.url_name, *url_finals.args)
-            self.response_200()
+            self.assert_http_200_ok()
+
+    def test_progress_teams_position_before_undecided(self):
+        """
+        Regression test for issue #62.
+
+        A finals series which mixes positional references (P1..P6) with
+        undecided teams whose identity depends on the result of matches in the
+        same stage ("Lower placed qualifier") must progress the positional
+        references first. The undecided teams can only be chosen once the
+        qualifying matches have been played.
+        """
+        division = factories.DivisionFactory.create()
+        teams = factories.TeamFactory.create_batch(division=division, size=6)
+
+        round_games = factories.StageFactory.create(division=division, order=1)
+        finals = factories.StageFactory.create(
+            division=division, order=2, follows=round_games
+        )
+
+        # Lower index team always wins, so the ladder is teams[0] .. teams[5]
+        for round in round_robin(teams):
+            for home_team, away_team in round:
+                winner = min(home_team, away_team, key=teams.index)
+                factories.MatchFactory.create(
+                    stage=round_games,
+                    home_team=home_team,
+                    away_team=away_team,
+                    home_team_score=5 if winner == home_team else 0,
+                    away_team_score=5 if winner == away_team else 0,
+                )
+
+        lower = finals.undecided_teams.create(label="Lower placed qualifier")
+        higher = finals.undecided_teams.create(label="Higher placed qualifier")
+
+        qual_1 = factories.MatchFactory.create(
+            stage=finals,
+            label="Qualifier 1",
+            round=1,
+            home_team=None,
+            home_team_eval="P3",
+            away_team=None,
+            away_team_eval="P6",
+        )
+        qual_2 = factories.MatchFactory.create(
+            stage=finals,
+            label="Qualifier 2",
+            round=1,
+            home_team=None,
+            home_team_eval="P4",
+            away_team=None,
+            away_team_eval="P5",
+        )
+        semi_1 = factories.MatchFactory.create(
+            stage=finals,
+            label="Semi 1",
+            round=2,
+            home_team=None,
+            home_team_eval="P1",
+            away_team=None,
+            away_team_undecided=lower,
+        )
+        semi_2 = factories.MatchFactory.create(
+            stage=finals,
+            label="Semi 2",
+            round=2,
+            home_team=None,
+            home_team_eval="P2",
+            away_team=None,
+            away_team_undecided=higher,
+        )
+
+        url = finals.url_names["progress"]
+
+        with self.login(self.superuser):
+            # Positional references from the previous stage can be resolved
+            # immediately, so the match progression form must be presented.
+            self.get(url.url_name, *url.args)
+            self.assert_http_200_ok()
+            self.assertTemplateUsed(
+                self.last_response,
+                site.shell.shelled(
+                    "tournamentcontrol/competition/admin/progress_matches.html"
+                ),
+            )
+            formset = self.get_context("formset")
+            self.assertEqual(formset.model, Match)
+            # The undecided teams are not offered for selection yet, they can
+            # only be identified once the qualifiers have been played.
+            self.assertEqual(
+                {
+                    form.instance.pk: {
+                        name: form.initial[name] for name in form.fields if name != "id"
+                    }
+                    for form in formset.forms
+                },
+                {
+                    qual_1.pk: {"home_team": teams[2], "away_team": teams[5]},
+                    qual_2.pk: {"home_team": teams[3], "away_team": teams[4]},
+                    semi_1.pk: {"home_team": teams[0]},
+                    semi_2.pk: {"home_team": teams[1]},
+                },
+            )
+
+            data = {
+                "form-TOTAL_FORMS": "4",
+                "form-INITIAL_FORMS": "4",
+                "form-MIN_NUM_FORMS": "0",
+                "form-MAX_NUM_FORMS": "1000",
+            }
+            for i, (match, home, away) in enumerate(
+                [
+                    (qual_1, teams[2], teams[5]),
+                    (qual_2, teams[3], teams[4]),
+                    (semi_1, teams[0], None),
+                    (semi_2, teams[1], None),
+                ]
+            ):
+                data[f"form-{i}-id"] = str(match.pk)
+                data[f"form-{i}-home_team"] = str(home.pk)
+                if away is not None:
+                    data[f"form-{i}-away_team"] = str(away.pk)
+
+            self.post(url.url_name, *url.args, data=data)
+            self.assert_http_302_found(url=str(division.season.urls["edit"]))
+
+            for match in (qual_1, qual_2, semi_1, semi_2):
+                match.refresh_from_db()
+
+            self.assertEqual((qual_1.home_team, qual_1.away_team), (teams[2], teams[5]))
+            self.assertEqual((qual_2.home_team, qual_2.away_team), (teams[3], teams[4]))
+            self.assertEqual((semi_1.home_team, semi_1.away_team), (teams[0], None))
+            self.assertEqual((semi_2.home_team, semi_2.away_team), (teams[1], None))
+
+            # P6 upsets P3 and P4 beats P5; P6 is the lower placed qualifier.
+            qual_1.home_team_score, qual_1.away_team_score = 2, 3
+            qual_1.save()
+            qual_2.home_team_score, qual_2.away_team_score = 3, 2
+            qual_2.save()
+
+            # Only the undecided teams remain to be progressed.
+            self.get(url.url_name, *url.args)
+            self.assert_http_200_ok()
+            self.assertTemplateUsed(
+                self.last_response,
+                site.shell.shelled(
+                    "tournamentcontrol/competition/admin/progress_teams.html"
+                ),
+            )
+            formset = self.get_context("formset")
+            self.assertEqual(formset.model, UndecidedTeam)
+            self.assertCountEqual(
+                [form.instance for form in formset.forms], [lower, higher]
+            )
+
+            data = {
+                "form-TOTAL_FORMS": "2",
+                "form-INITIAL_FORMS": "2",
+                "form-MIN_NUM_FORMS": "0",
+                "form-MAX_NUM_FORMS": "1000",
+            }
+            for i, (undecided, team) in enumerate(
+                [(lower, teams[5]), (higher, teams[3])]
+            ):
+                data[f"form-{i}-id"] = str(undecided.pk)
+                data[f"form-{i}-team"] = str(team.pk)
+
+            self.post(url.url_name, *url.args, data=data)
+            self.assert_http_302_found(url=str(division.season.urls["edit"]))
+
+            semi_1.refresh_from_db()
+            semi_2.refresh_from_db()
+            self.assertEqual((semi_1.home_team, semi_1.away_team), (teams[0], teams[5]))
+            self.assertEqual((semi_2.home_team, semi_2.away_team), (teams[1], teams[3]))
+
+            # Nothing left to progress.
+            self.get(url.url_name, *url.args)
+            self.assert_http_410_gone()
+
+    def test_progression_list(self):
+        rounds = factories.StageFactory.create(order=1)
+        finals = factories.StageFactory.create(
+            division=rounds.division, order=2, follows=rounds
+        )
+        factories.MatchFactory.create(
+            stage=finals,
+            home_team=None,
+            home_team_eval="P1",
+            away_team=None,
+            away_team_eval="P2",
+        )
+        season = finals.division.season
+        self.assertLoginRequired(
+            "admin:fixja:competition:season:progression-list",
+            season.competition_id,
+            season.pk,
+        )
+        with self.login(self.superuser):
+            self.assertGoodView(
+                "admin:fixja:competition:season:progression-list",
+                season.competition_id,
+                season.pk,
+            )
+        url = self.reverse(
+            "admin:fixja:competition:season:division:stage:progress",
+            season.competition_id,
+            season.pk,
+            finals.division_id,
+            finals.pk,
+        )
+        self.assertResponseContains(
+            by_shell(
+                workbook=f'<a href="{url}">Progress teams</a>',
+                explorer=f'<a href="{url}">Place the teams</a>',
+            )
+        )
 
     def test_edit_person(self):
         person = factories.PersonFactory.create()
@@ -621,6 +1187,21 @@ class GoodViewTests(TestCase):
             self.assertGoodView(
                 "admin:fixja:club:person:edit", person.club.pk, person.pk
             )
+
+    def test_edit_club_primary_contact_choices(self):
+        "A club's primary contact is chosen from its own people, not the site's."
+        club = factories.ClubFactory.create()
+        member = factories.PersonFactory.create(club=club)
+        outsider = factories.PersonFactory.create()
+
+        with self.login(self.superuser):
+            self.get("admin:fixja:club:edit", club.pk)
+            self.assert_http_200_ok()
+
+        self.assertResponseContains(f'<option value="{member.pk}">{member}</option>')
+        self.assertResponseNotContains(
+            f'<option value="{outsider.pk}">{outsider}</option>'
+        )
 
     def test_merge_person(self):
         "Create two people, destructively merge second into the first."
@@ -659,7 +1240,7 @@ class GoodViewTests(TestCase):
                 "keep_old": "false",
             }
             self.post("admin:fixja:club:person:merge", club.pk, member1.pk, data=data)
-            self.response_302()
+            self.assert_http_302_found(url=str(club.urls["edit"]))
 
         # Check the database state after the merge.
         self.assertCountEqual(
@@ -701,7 +1282,7 @@ class GoodViewTests(TestCase):
         with self.login(self.superuser):
             # Test GET request shows the form
             self.get("admin:fixja:club:person:transfer", original_club.pk, person.pk)
-            self.response_200()
+            self.assert_http_200_ok()
 
             # Test POST request transfers the person
             data = {"club": target_club.pk}
@@ -711,7 +1292,7 @@ class GoodViewTests(TestCase):
                 person.pk,
                 data=data,
             )
-            self.response_302()
+            self.assert_http_302_found(url=str(original_club.urls["edit"]))
 
             # Verify the person was transferred
             person.refresh_from_db()
@@ -744,9 +1325,9 @@ class GoodViewTests(TestCase):
     #     self.assertLoginRequired('admin:fixja:competition:delete', 1)
     #     with self.login(username='gary@touch.asn.au'):
     #         self.get('admin:fixja:competition:delete', 1)
-    #         self.response_405()
+    #         self.assert_http_405_method_not_allowed()
     #         self.post('admin:fixja:competition:delete', 1)
-    #         self.response_302()
+    #         self.assert_http_302_found()
 
     def test_perms_views(self):
         team = factories.TeamFactory.create()
@@ -791,6 +1372,98 @@ class GoodViewTests(TestCase):
                 "html",
             )
 
+    def test_officials(self):
+        club = factories.ClubFactory.create()
+        season = factories.SeasonFactory.create()
+        season.competition.clubs.add(club)
+        with self.login(self.superuser):
+            self.get("admin:fixja:club:officials", club.pk, season.pk)
+            self.assert_http_200_ok()
+            self.assertResponseContains(
+                by_shell(
+                    workbook='<p class="wb-empty" data-wb-formset-none>'
+                    "There are no officials of this club.</p>",
+                    explorer='<td colspan="3" class="empty-state">'
+                    "The club has no officials for this season yet.</td>",
+                ),
+            )
+
+    def test_officials_complete_season_is_read_only_to_club_administrators(self):
+        club = factories.ClubFactory.create()
+        season = factories.SeasonFactory.create(complete=True)
+        season.competition.clubs.add(club)
+        user = UserFactory.create(is_staff=True)
+        with self.login(user):
+            self.get("admin:fixja:club:officials", club.pk, season.pk)
+            self.assert_http_200_ok()
+            self.assertResponseContains(
+                by_shell(
+                    workbook='<tr class="wb-table-empty"><td colspan="2">'
+                    "There are no club officials for this season.</td></tr>",
+                    explorer='<td colspan="2" class="empty-state">'
+                    "The club has no officials for this season.</td>",
+                ),
+            )
+
+    def test_officials_save_returns_to_the_club(self):
+        club = factories.ClubFactory.create()
+        season = factories.SeasonFactory.create()
+        season.competition.clubs.add(club)
+        person = factories.PersonFactory.create(club=club)
+        role = factories.ClubRoleFactory.create(competition=season.competition)
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:club:officials",
+                club.pk,
+                season.pk,
+                data={
+                    "form-TOTAL_FORMS": "1",
+                    "form-INITIAL_FORMS": "0",
+                    "form-MIN_NUM_FORMS": "",
+                    "form-MAX_NUM_FORMS": "1000",
+                    "form-0-person": person.pk,
+                    "form-0-roles": role.pk,
+                },
+            )
+            self.assert_http_302_found(
+                url=reverse("admin:fixja:club:edit", args=(club.pk,))
+            )
+        official = SeasonAssociation.objects.get(club=club, season=season)
+        self.assertEqual(official.person, person)
+        self.assertEqual(list(official.roles.all()), [role])
+
+    def test_team_members_save_returns_to_the_club(self):
+        club = factories.ClubFactory.create()
+        team = factories.TeamFactory.create(club=club)
+        season = team.division.season
+        season.competition.clubs.add(club)
+        person = factories.PersonFactory.create(club=club)
+        role = factories.TeamRoleFactory.create(competition=season.competition)
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:club:team:edit",
+                club.pk,
+                season.pk,
+                team.pk,
+                data={
+                    "people-TOTAL_FORMS": "1",
+                    "people-INITIAL_FORMS": "0",
+                    "people-MIN_NUM_FORMS": "",
+                    "people-MAX_NUM_FORMS": "1000",
+                    "people-0-number": "7",
+                    "people-0-person": person.pk,
+                    "people-0-is_player": "1",
+                    "people-0-roles": role.pk,
+                },
+            )
+            self.assert_http_302_found(
+                url=reverse("admin:fixja:club:edit", args=(club.pk,))
+            )
+        member = TeamAssociation.objects.get(team=team)
+        self.assertEqual(member.person, person)
+        self.assertEqual(member.number, 7)
+        self.assertEqual(list(member.roles.all()), [role])
+
     @unittest.expectedFailure
     def test_edit_team_members(self):
         club = factories.ClubFactory.create()
@@ -802,6 +1475,145 @@ class GoodViewTests(TestCase):
             self.assertGoodView(
                 "admin:fixja:club:team:edit", club.pk, team.division.season.pk, team.pk
             )
+
+
+@per_shell
+class RegistrationFormTests(TestCase):
+    """
+    A club's registration form for a season: a sheet for each of its teams,
+    with the team's staff and players, as HTML or as a PDF.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.club = factories.ClubFactory.create()
+        self.team = factories.TeamFactory.create(club=self.club, title="Marlins")
+        self.season = self.team.division.season
+        self.season.competition.clubs.add(self.club)
+
+    def test_html(self):
+        """
+        The sheet names the team (#464), its staff by their names and not the
+        repr of their bytes (#463), and its players.
+        """
+        coach = factories.TeamAssociationFactory.create(
+            team=self.team,
+            is_player=False,
+            person=factories.PersonFactory.create(
+                club=self.club, user__first_name="Staffy", user__last_name="McStaff"
+            ),
+        )
+        coach.roles.add(
+            factories.TeamRoleFactory.create(
+                competition=self.season.competition, name="Coach"
+            )
+        )
+        factories.TeamAssociationFactory.create(
+            team=self.team,
+            number=7,
+            person=factories.PersonFactory.create(
+                club=self.club,
+                user__first_name="Playa",
+                user__last_name="McPlay",
+                date_of_birth=date(2002, 12, 25),
+                email="playa@example.com",
+            ),
+        )
+        with self.login(self.superuser):
+            self.get(
+                "admin:fixja:club:registration-form",
+                self.club.pk,
+                self.season.pk,
+                "html",
+            )
+        self.assert_http_200_ok()
+        self.assertResponseContains(
+            self.by_shell(
+                workbook='<div class="rf-team team">Marlins</div>',
+                explorer="<h2>Marlins</h2>",
+            )
+        )
+        self.assertResponseContains(
+            '<tr><th rowspan="1">Coach</th><td>Staffy McStaff</td></tr>'
+        )
+        self.assertResponseContains(
+            self.by_shell(
+                workbook=(
+                    "<tr><td>7</td><td>Playa</td><td>McPlay</td><td>25/12/2002</td>"
+                    '<td>playa@example.com</td><td class="signature"></td></tr>'
+                ),
+                explorer=(
+                    '<tr><td class="num">7</td><td>Playa</td><td>McPlay</td>'
+                    "<td>25/12/2002</td><td>playa@example.com</td>"
+                    '<td class="signature"></td></tr>'
+                ),
+            )
+        )
+
+    @override_settings(PRINCE_SERVER="pdf.example.com")
+    def test_pdf(self):
+        """
+        The PDF server gets the form's HTML, not the repr of the bytes the
+        rendered form holds (#438), and the view answers with the PDF.
+        """
+        with self.login(self.superuser), responses.RequestsMock() as pdf_service:
+            pdf_service.post("https://pdf.example.com/", body=b"%PDF-1.4 fake")
+            self.get(
+                "admin:fixja:club:registration-form",
+                self.club.pk,
+                self.season.pk,
+                "pdf",
+            )
+            # The calls are cleared when the mock is stopped.
+            self.assertEqual(pdf_service.calls[0].request.body[:15], b"<!DOCTYPE html>")
+        self.assert_http_200_ok()
+        self.assertResponseHeaders({"Content-Type": "application/pdf"})
+        self.assertEqual(self.last_response.content, b"%PDF-1.4 fake")
+
+    #: The HTML form's queries, however many teams and people it lists (#470):
+    #: the teams with their divisions, the players, the staff and the staff's
+    #: roles are a query each.
+    QUERIES = 16
+
+    def add_people(self, *teams):
+        """Give each team three players, and two staff with two roles each."""
+        roles = factories.TeamRoleFactory.create_batch(
+            2, competition=self.season.competition
+        )
+        for team in teams:
+            factories.TeamAssociationFactory.create_batch(
+                3, team=team, person__club=self.club
+            )
+            for staff in factories.TeamAssociationFactory.create_batch(
+                2, team=team, is_player=False, person__club=self.club
+            ):
+                staff.roles.add(*roles)
+
+    def assertQueries(self):
+        with self.login(self.superuser), self.assertNumQueries(self.QUERIES):
+            self.get(
+                "admin:fixja:club:registration-form",
+                self.club.pk,
+                self.season.pk,
+                "html",
+            )
+        self.assert_http_200_ok()
+
+    def test_queries_one_team(self):
+        self.add_people(self.team)
+        self.assertQueries()
+
+    def test_queries_three_teams(self):
+        self.add_people(
+            self.team,
+            *(
+                factories.TeamFactory.create(
+                    club=self.club, division=self.team.division, title=title
+                )
+                for title in ("Dolphins", "Sharks")
+            ),
+        )
+        self.assertQueries()
 
 
 class BackendTests(MessagesTestMixin, TestCase):
@@ -834,17 +1646,20 @@ class BackendTests(MessagesTestMixin, TestCase):
         }
         add_division = Division(season=season).url_names["add"]
         self.post(add_division.url_name, *add_division.args, data=data)
-        self.response_302()
+        self.assert_http_302_found(url=str(season.urls["edit"]))
 
         with self.settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls"):
             self.assertGoodView(
                 "competition:season", season.competition.slug, season.slug
             )
-            self.assertResponseContains("Mixed 4", html=False)
+            mixed_4_url = self.reverse(
+                "competition:division", season.competition.slug, season.slug, "mixed-4"
+            )
+            self.assertResponseContains(f'<a href="{mixed_4_url}">Mixed 4</a>')
             self.assertGoodView(
                 "competition:division", season.competition.slug, season.slug, "mixed-4"
             )
-            self.assertResponseContains("Mixed 4", html=False)
+            self.assertResponseContains("<h2>Mixed 4</h2>")
 
         data.update(
             {
@@ -855,14 +1670,22 @@ class BackendTests(MessagesTestMixin, TestCase):
 
         edit_division = division.url_names["edit"]
         self.post(edit_division.url_name, *edit_division.args, data=data)
-        self.response_302()
+        self.assert_http_302_found(url=str(season.urls["edit"]))
 
         with self.settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls"):
             self.assertGoodView(
                 "competition:season", season.competition.slug, season.slug
             )
-            self.assertResponseNotContains("Mixed 4", html=False)
-            self.assertResponseContains("4th Division Mixed", html=False)
+            self.assertResponseNotContains(f'<a href="{mixed_4_url}">Mixed 4</a>')
+            division_url = self.reverse(
+                "competition:division",
+                season.competition.slug,
+                season.slug,
+                "4th-division-mixed",
+            )
+            self.assertResponseContains(
+                f'<a href="{division_url}">4th Division Mixed</a>'
+            )
 
     def test_scorers_view_basic(self):
         """Test that scorers view loads correctly with basic match and statistics data"""
@@ -897,7 +1720,7 @@ class BackendTests(MessagesTestMixin, TestCase):
                 division.season.pk,
                 division.pk,
             )
-            self.response_200()
+            self.assert_http_200_ok()
 
         # Get context data directly
         scorers = self.get_context("scorers")
@@ -919,21 +1742,29 @@ class BackendTests(MessagesTestMixin, TestCase):
         self.assertEqual([expected_scorer], list(mvp))
 
         # Assert HTML structure contains the expected table rows
-        expected_scorer_row = (
-            f"<td>{person.first_name} {person.last_name}</td>"
-            f"<td>{team.club.title}</td>"
-            f"<td>1</td>"  # played
-            f"<td>10</td>"  # points
-        )
-        expected_mvp_row = (
-            f"<td>{person.first_name} {person.last_name}</td>"
-            f"<td>{team.club.title}</td>"
-            f"<td>1</td>"  # played
-            f"<td>2</td>"  # mvp
-        )
+        def row(total):
+            return by_shell(
+                workbook=(
+                    '<tr><td class="wb-num">1</td>'  # rank
+                    f'<th scope="row">{person.first_name} {person.last_name}</th>'
+                    f"<td>{team.club.title}</td>"
+                    '<td class="wb-num">1</td>'  # played
+                    f'<td class="wb-num"><strong>{total}</strong></td></tr>'
+                ),
+                explorer=(
+                    '<tr><td class="num muted">1</td>'  # place
+                    f"<td>{person.first_name} {person.last_name}</td>"
+                    f'<td class="wide-only">{team.club.title}</td>'
+                    '<td class="num">1</td>'  # played
+                    f'<td class="num strong">{total}</td></tr>'
+                ),
+            )
 
-        self.assertResponseContains(expected_scorer_row, html=True)
-        self.assertResponseContains(expected_mvp_row, html=True)
+        expected_scorer_row = row(10)  # points
+        expected_mvp_row = row(2)  # votes
+
+        self.assertResponseContains(expected_scorer_row)
+        self.assertResponseContains(expected_mvp_row)
 
     def test_update_club(self):
         """
@@ -953,11 +1784,21 @@ class BackendTests(MessagesTestMixin, TestCase):
             "slug_locked": "0",
         }
         self.post("admin:fixja:club:edit", club.pk, data=data)
-        self.response_302()
+        self.assert_http_302_found(url=self.reverse("admin:fixja:club:list"))
 
         self.get("admin:fixja:club:list")
-        self.assertResponseContains("Bare Back Riders", html=False)
-        self.assertResponseContains("BBR", html=False)
+        self.assertResponseContains(
+            by_shell(
+                workbook=f'<a href="{club.urls["edit"]}">Bare Back Riders</a>',
+                explorer="<span>Bare Back Riders</span>",
+            )
+        )
+        self.assertResponseContains(
+            by_shell(
+                workbook='<td data-label="Abbreviation">BBR</td>',
+                explorer="<td>BBR</td>",
+            )
+        )
 
     def test_match_detail(self):
         play_at = factories.GroundFactory.create()
@@ -977,20 +1818,24 @@ class BackendTests(MessagesTestMixin, TestCase):
             "season_id": m.stage.division.season_id,
             "competition_id": m.stage.division.season.competition_id,
         }
-        url = reverse(
-            "admin:competition:competition:season:division:stage:match:detail",
-            kwargs=kwargs,
-        )
+        detail = "admin:fixja:competition:season:division:stage:match:detail"
 
-        res = self.client.get(url)
+        self.get(detail, **kwargs)
 
         # After GET ensure away_team has no players
-        text = """
-        <td colspan="5" class="no_results">
+        text = by_shell(
+            workbook="""
+        <tr class="wb-table-empty"><td colspan="5">
             There are no registered players in this team.
+        </td></tr>
+        """,
+            explorer="""
+        <td colspan="5" class="empty-state">
+            No player is registered in this team.
         </td>
-        """
-        self.assertContains(res, text, html=True)
+        """,
+        )
+        self.assertResponseContains(text)
 
         data = {
             "home-0-number": "3",
@@ -1021,16 +1866,31 @@ class BackendTests(MessagesTestMixin, TestCase):
             "away-MAX_NUM_FORMS": "1000",
         }
 
-        res = self.client.post(url, data=data)
-        text = """
-        <ul class="list-group">
-            <li class="list-group-item list-group-item-danger">
+        self.post(detail, data=data, **kwargs)
+        text = by_shell(
+            workbook="""
+        <div class="wb-problems" role="alert"><ul>
+            <li>
                 Total number of points (0) does not equal total
                 number of scores (3) for this team.
             </li>
-        </ul>
-        """
-        self.assertContains(res, text, html=True)
+        </ul></div>
+        """,
+            explorer="""
+        <div class="form-errors" role="alert">
+            <svg class="icon" aria-hidden="true" focusable="false">
+                <use href="/static/touchtechnology/admin/explorer/img/icons.svg#alert"></use>
+            </svg>
+            <ul>
+                <li>
+                    Total number of points (0) does not equal total
+                    number of scores (3) for this team.
+                </li>
+            </ul>
+        </div>
+        """,
+        )
+        self.assertResponseContains(text)
 
         data.update(
             {
@@ -1040,8 +1900,8 @@ class BackendTests(MessagesTestMixin, TestCase):
                 "home-3-points": "2",
             }
         )
-        res = self.client.post(url, data=data)
-        self.assertRedirects(res, reverse("admin:index"))
+        self.post(detail, data=data, **kwargs)
+        self.assert_http_302_found(url=reverse("admin:index"))
 
         # Make sure the database is correctly reflecting the detailed entries.
         self.assertEqual(m.statistics.count(), 4)
@@ -1078,7 +1938,8 @@ class BackendTests(MessagesTestMixin, TestCase):
             match.date.strftime("%Y%m%d"),
             data=data,
         )
-        self.response_302()
+        schedule_url = f"{match.stage.division.season.urls['edit']}#schedule-tab"
+        self.assert_http_302_found(url=schedule_url)
 
         data.update(
             {
@@ -1093,7 +1954,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             match.date.strftime("%Y%m%d"),
             data=data,
         )
-        self.response_302()
+        self.assert_http_302_found(url=schedule_url)
 
     def test_enhancement_0024_team(self):
         """
@@ -1119,11 +1980,11 @@ class BackendTests(MessagesTestMixin, TestCase):
         # Ensure that visiting the delete view does not respond when matches
         # are associated with the Team.
         self.get(delete_home.url_name, *delete_home.args)
-        self.response_410()
+        self.assert_http_410_gone()
 
         # Ensure that POST to the delete view fails the same as for GET.
         self.post(delete_home.url_name, *delete_home.args)
-        self.response_410()
+        self.assert_http_410_gone()
 
         # Create a new Team and re-check the scenarios.
         team = factories.TeamFactory.create(division=stage.division)
@@ -1139,15 +2000,15 @@ class BackendTests(MessagesTestMixin, TestCase):
         # Ensure that visiting the delete view is not allowed when there are no
         # matches but you use a GET request.
         self.get(delete_team.url_name, *delete_team.args)
-        self.response_405()
+        self.assert_http_405_method_not_allowed()
 
         # Ensure that POST to the delete view redirects.
         self.post(delete_team.url_name, *delete_team.args)
-        self.response_302()
+        self.assert_http_302_found(url=str(stage.division.urls["edit"]))
 
         # Subsequent GET request to the edit view should be a 404.
         self.get(edit_team.url_name, *edit_team.args)
-        self.response_404()
+        self.assert_http_404_not_found()
 
     def test_enhancement_0024_undecidedteam(self):
         """
@@ -1173,11 +2034,11 @@ class BackendTests(MessagesTestMixin, TestCase):
         # Ensure that visiting the delete view does not respond when matches
         # are associated with the Team.
         self.get(away._get_admin_namespace() + ":delete", *away._get_url_args())
-        self.response_410()
+        self.assert_http_410_gone()
 
         # Ensure that POST to the delete view fails the same as for GET.
         self.post(away._get_admin_namespace() + ":delete", *away._get_url_args())
-        self.response_410()
+        self.assert_http_410_gone()
 
         # Create a new UndecidedTeam and re-check the scenarios.
         team = factories.UndecidedTeamFactory.create(stage=stage)
@@ -1193,19 +2054,16 @@ class BackendTests(MessagesTestMixin, TestCase):
         # Ensure that visiting the delete view is not allowed when there are no
         # matches but you use a GET request.
         self.get(team._get_admin_namespace() + ":delete", *team._get_url_args())
-        self.response_405()
+        self.assert_http_405_method_not_allowed()
 
         # Ensure that POST to the delete view redirects.
         self.post(team._get_admin_namespace() + ":delete", *team._get_url_args())
-        self.response_302()
+        self.assert_http_302_found(url=str(stage.urls["edit"]))
 
         # Subsequent GET request to the edit view should be a 404.
         self.get(team._get_admin_namespace() + ":delete", *team._get_url_args())
-        self.response_404()
+        self.assert_http_404_not_found()
 
-    @unittest.skipIf(
-        VERSION > (4, 0), "FIXME: Django 4.1+ error seems to be factory_boy related"
-    )
     def test_bug_80_add_stagegroup(self):
         "Add Pool should gain order equal to max(order) + 1"
         pool = factories.StageGroupFactory.create()
@@ -1217,9 +2075,9 @@ class BackendTests(MessagesTestMixin, TestCase):
             "carry_ladder": "0",
         }
         add_pool = pool.url_names["add"]
-        self.post(add_pool.url_name, *add_pool.args, data=data)
-        self.response_302()
+        self.post(add_pool.url_name, *add_pool.args[:-1], data=data)
         z = pool.stage.pools.latest("order")
+        self.assert_http_302_found(url=str(z.urls["edit"]))
         self.assertEqual(z.order, pool.order + 1)
 
     def test_bug_0115_add_duplicate_team_name(self):
@@ -1247,7 +2105,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         # Unsaved instance means we don't have to trim the final positional argument.
         add_team = Team(division=division).url_names["add"]
         self.post(add_team.url_name, *add_team.args, data=data)
-        self.response_302()
+        self.assert_http_302_found(url=str(division.urls["edit"]))
         # Ensure that the team was created and that it has a slug
         team = division.teams.get(title="New Team")
         self.assertEqual(team.slug, "new-team")
@@ -1265,7 +2123,8 @@ class BackendTests(MessagesTestMixin, TestCase):
 
         edit_team = team.url_names["edit"]
         self.post(edit_team.url_name, *edit_team.args, data=data)
-        self.response_302()
+        division_url = str(team.division.urls["edit"])
+        self.assert_http_302_found(url=division_url)
 
         # Ensure that the team was updated
         blue = Team.objects.get(title="Blue")
@@ -1277,7 +2136,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         data["title"] = "Magenta"
         edit_blue = blue.url_names["edit"]
         self.post(edit_blue.url_name, *edit_blue.args, data=data)
-        self.response_302()
+        self.assert_http_302_found(url=division_url)
 
         magenta = Team.objects.get(title="Magenta")
         self.assertEqual(team.pk, magenta.pk)
@@ -1323,7 +2182,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         add_match = Match(stage=stage).url_names["add"]
         data["live_stream_thumbnail_image"] = ""
         self.post(add_match.url_name, *add_match.args, data=data)
-        self.response_302()
+        self.assert_http_302_found(url=str(stage.urls["edit"]))
 
     def test_bug_100_add_stagegroup(self):
         """
@@ -1390,7 +2249,7 @@ class BackendTests(MessagesTestMixin, TestCase):
                         "referees": [referees[referee].pk],
                     },
                 )
-                self.assertRedirects(self.last_response, stage.urls["edit"])
+                self.assert_http_302_found(url=str(stage.urls["edit"]))
                 self.assertCountEqual(
                     match.referees.values_list("person__first_name", flat=True),
                     [referees[referee].person.first_name],
@@ -1416,7 +2275,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             "live_stream": "0",
         }
         self.post(add_ground.url_name, *add_ground.args, data=data)
-        self.assertRedirects(self.last_response, venue.urls["edit"])
+        self.assert_http_302_found(url=str(venue.urls["edit"]))
 
     def test_delete_division_with_protected_objects(self):
         """
@@ -1432,7 +2291,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         self.post(delete_division.url_name, *delete_division.args)
 
         # Should redirect back to the division edit page with error message
-        self.assertRedirects(self.last_response, division.urls["edit"])
+        self.assert_http_302_found(url=str(division.urls["edit"]))
 
         # Check that objects still exists
         self.assertQuerySetEqual(Division.objects.all(), [division])
@@ -1440,21 +2299,20 @@ class BackendTests(MessagesTestMixin, TestCase):
         self.assertQuerySetEqual(Team.objects.all(), [team])
 
         # Check that error message was set
-        if VERSION >= (5, 0):
-            self.assertMessages(
-                self.last_response,
-                [
-                    messages.Message(
-                        level=messages.ERROR,
-                        message=(
-                            f'Cannot delete {division._meta.verbose_name} "{division.title}" '
-                            f"because it is still referenced by: "
-                            f"1 stage: {stage.title}; 1 team: {team.title}. "
-                            "Please delete or move these related objects first."
-                        ),
-                    )
-                ],
-            )
+        self.assertMessages(
+            self.last_response,
+            [
+                messages.Message(
+                    level=messages.ERROR,
+                    message=(
+                        f'Cannot delete {division._meta.verbose_name} "{division.title}" '
+                        f"because it is still referenced by: "
+                        f"1 stage: {stage.title}; 1 team: {team.title}. "
+                        "Please delete or move these related objects first."
+                    ),
+                )
+            ],
+        )
 
     def test_delete_division_without_protected_objects(self):
         """
@@ -1469,22 +2327,21 @@ class BackendTests(MessagesTestMixin, TestCase):
         self.post(delete_division.url_name, *delete_division.args)
 
         # Should redirect back to season page
-        self.assertRedirects(self.last_response, season.urls["edit"] + "#divisions-tab")
+        self.assert_http_302_found(url=f"{season.urls['edit']}#divisions-tab")
 
         # Check that division was deleted
         self.assertQuerySetEqual(Division.objects.all(), [])
 
         # Check that success message was displayed
-        if VERSION >= (5, 0):
-            self.assertMessages(
-                self.last_response,
-                [
-                    messages.Message(
-                        level=messages.SUCCESS,
-                        message=f"The {division._meta.verbose_name} has been deleted.",
-                    )
-                ],
-            )
+        self.assertMessages(
+            self.last_response,
+            [
+                messages.Message(
+                    level=messages.SUCCESS,
+                    message=f"The {division._meta.verbose_name} has been deleted.",
+                )
+            ],
+        )
 
     def test_delete_stage_with_protected_objects(self):
         """
@@ -1500,27 +2357,26 @@ class BackendTests(MessagesTestMixin, TestCase):
         self.post(delete_stage.url_name, *delete_stage.args)
 
         # Should redirect back to the stage edit page with error message
-        self.assertRedirects(self.last_response, stage.urls["edit"])
+        self.assert_http_302_found(url=str(stage.urls["edit"]))
 
         # Check that objects still exists
         self.assertQuerySetEqual(Stage.objects.all(), [stage])
         self.assertQuerySetEqual(StageGroup.objects.all(), [pool])
 
         # Check that error message was set
-        if VERSION >= (5, 0):
-            self.assertMessages(
-                self.last_response,
-                [
-                    messages.Message(
-                        level=messages.ERROR,
-                        message=(
-                            f'Cannot delete {stage._meta.verbose_name} "{stage.title}" because '
-                            f"it is still referenced by: 1 pool: {pool.title}. "
-                            "Please delete or move these related objects first."
-                        ),
-                    )
-                ],
-            )
+        self.assertMessages(
+            self.last_response,
+            [
+                messages.Message(
+                    level=messages.ERROR,
+                    message=(
+                        f'Cannot delete {stage._meta.verbose_name} "{stage.title}" because '
+                        f"it is still referenced by: 1 pool: {pool.title}. "
+                        "Please delete or move these related objects first."
+                    ),
+                )
+            ],
+        )
 
     def test_draw_generation_wizard_empty_form_bug(self):
         """
@@ -1556,19 +2412,18 @@ class BackendTests(MessagesTestMixin, TestCase):
         with self.login(self.superuser):
             # Step 0: Test that the first step renders without error
             self.get(build_url.url_name, *build_url.args)
-            self.response_200()
+            self.assert_http_200_ok()
 
             # Extract the formset from the context and test empty_form works
             formset = self.get_context("form")
-            self.assertIsNotNone(formset)
+            self.assertIsInstance(formset, forms.BaseFormSet)
 
             # This should not raise TypeError - the main bug we're testing
             empty_form = formset.empty_form
-            self.assertIsNotNone(empty_form)
+            self.assertIsInstance(empty_form, forms.BaseForm)
 
             # Test media property access (this was the original failing case)
-            media = empty_form.media
-            self.assertIsNotNone(media)
+            self.assertIsInstance(empty_form.media, forms.Media)
 
             # Prepare step 0 data with a valid DrawFormat selection and date
             step0_data = {
@@ -1593,19 +2448,18 @@ class BackendTests(MessagesTestMixin, TestCase):
 
             # Submit step 0 to proceed to step 1
             self.post(build_url.url_name, *build_url.args, data=step0_data)
-            self.response_200()
+            self.assert_http_200_ok()
 
             # Step 1: Test the second step
             formset = self.get_context("form")
-            self.assertIsNotNone(formset)
+            self.assertIsInstance(formset, forms.BaseFormSet)
 
             # Test that empty_form works on step 1 - this is the main fix
             empty_form = formset.empty_form
-            self.assertIsNotNone(empty_form)
+            self.assertIsInstance(empty_form, forms.BaseForm)
 
             # Test that we can access the media property without TypeError
-            media = empty_form.media
-            self.assertIsNotNone(media)
+            self.assertIsInstance(empty_form.media, forms.Media)
 
             # Prepare step 1 data
             step1_data = {
@@ -1648,7 +2502,7 @@ class BackendTests(MessagesTestMixin, TestCase):
 
             # Submit step 1 to complete the wizard
             self.post(build_url.url_name, *build_url.args, data=step1_data)
-            self.response_302()
+            self.assert_http_302_found(url=str(stage.division.urls["edit"]))
 
             # If we have successfully moved through the wizard and been
             # redirected, the following matches would have been created.
@@ -1746,14 +2600,12 @@ class BackendTests(MessagesTestMixin, TestCase):
 
             # This should complete successfully without TypeError
             data["live_stream_thumbnail_image"] = ""
-            self.post(
-                edit_match_url.url_name, *edit_match_url.args, data=data
-            )
-            self.response_302()  # Should redirect successfully
+            self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
+            self.assert_http_302_found(url=str(match.stage.urls["edit"]))
 
             # Verify the match was updated
             match.refresh_from_db()
-            self.assertFalse(match.live_stream)
+            self.assertEqual(match.live_stream, False)
             self.assertIsNone(match.external_identifier)
 
     def test_json_division_builder_post_invalid_json(self):
@@ -1776,15 +2628,23 @@ class BackendTests(MessagesTestMixin, TestCase):
             season.pk,
             data=data,
         )
-        self.response_200()  # Should stay on form with errors
+        self.assert_http_200_ok()  # Should stay on form with errors
 
         # Check that no divisions were created
         self.assertEqual(season.divisions.count(), 0)
 
         # Check for validation error
         formset = self.get_context("formset")
-        self.assertIsNotNone(formset)
-        self.assertFalse(formset.is_valid())
+        self.assertEqual(
+            formset.errors,
+            [
+                {
+                    "json_data": [
+                        "Invalid JSON: Expecting value: line 1 column 13 (char 12)"
+                    ]
+                }
+            ],
+        )
 
     def test_json_division_builder_post_empty_json(self):
         """Test that empty JSON shows validation errors instead of success."""
@@ -1806,20 +2666,14 @@ class BackendTests(MessagesTestMixin, TestCase):
                 season.pk,
                 data=data,
             )
-            self.response_200()  # Should stay on form with errors
+            self.assert_http_200_ok()  # Should stay on form with errors
 
         # Check that no divisions were created
         self.assertEqual(season.divisions.count(), 0)
 
         # Check for validation error
         formset = self.get_context("formset")
-        self.assertIsNotNone(formset)
-        self.assertFalse(formset.is_valid())
-
-        # Check for specific required field error
-        form = formset.forms[0]
-        self.assertFalse(form.is_valid())
-        self.assertEqual(form.errors, {"json_data": ["This field is required."]})
+        self.assertEqual(formset.errors, [{"json_data": ["This field is required."]}])
 
     def test_json_division_builder_post_valid_json(self):
         """Test that valid JSON creates divisions successfully."""
@@ -1830,9 +2684,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         structure = DivisionStructure(
             title="Test Division",
             teams=["Team A", "Team B", "Team C", "Team D"],
-            draw_formats={
-                "round-robin-4": "1 vs 2, 3 vs 4; 1 vs 3, 2 vs 4; 1 vs 4, 2 vs 3"
-            },
+            draw_formats={"round-robin-4": round_robin_format(4)},
             stages=[StageFixture(title="Round Robin", draw_format_ref="round-robin-4")],
         )
         valid_json = structure.model_dump_json()
@@ -1852,12 +2704,13 @@ class BackendTests(MessagesTestMixin, TestCase):
                 season.pk,
                 data=data,
             )
-            self.response_302()  # Should redirect after successful save
+            self.assert_http_302_found(url=str(season.urls["edit"]))
 
-        # Check that division was created
+        # Check that division was created, with a match for every line of the format
         self.assertEqual(season.divisions.count(), 1)
         division = season.divisions.first()
         self.assertEqual(division.title, "Test Division")
+        self.assertEqual(division.matches.count(), 6)
 
     def test_json_division_builder_duplicate_existing_division_name(self):
         """Test that existing division names cause validation errors."""
@@ -1872,9 +2725,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         structure = DivisionStructure(
             title="Existing Division",  # Same name as existing division
             teams=["Team A", "Team B", "Team C", "Team D"],
-            draw_formats={
-                "round-robin-4": "1 vs 2, 3 vs 4; 1 vs 3, 2 vs 4; 1 vs 4, 2 vs 3"
-            },
+            draw_formats={"round-robin-4": round_robin_format(4)},
             stages=[StageFixture(title="Round Robin", draw_format_ref="round-robin-4")],
         )
         conflicting_json = structure.model_dump_json()
@@ -1894,7 +2745,7 @@ class BackendTests(MessagesTestMixin, TestCase):
                 season.pk,
                 data=data,
             )
-            self.response_200()  # Should stay on form with errors
+            self.assert_http_200_ok()  # Should stay on form with errors
 
         # Check that no new divisions were created
         self.assertEqual(season.divisions.count(), 1)  # Still just the existing one
@@ -1902,15 +2753,9 @@ class BackendTests(MessagesTestMixin, TestCase):
 
         # Check for validation error
         formset = self.get_context("formset")
-        self.assertIsNotNone(formset)
-        self.assertFalse(formset.is_valid())
-
-        # Check for specific duplicate name error
-        form = formset.forms[0]
-        self.assertFalse(form.is_valid())
         self.assertEqual(
-            form.errors,
-            {"json_data": ["A division of that name already exists in this season."]},
+            formset.errors,
+            [{"json_data": ["A division of that name already exists in this season."]}],
         )
 
     def test_json_division_builder_duplicate_names_within_forms(self):
@@ -1922,17 +2767,13 @@ class BackendTests(MessagesTestMixin, TestCase):
         structure1 = DivisionStructure(
             title="Duplicate Name",
             teams=["Team A", "Team B", "Team C", "Team D"],
-            draw_formats={
-                "round-robin-4": "1 vs 2, 3 vs 4; 1 vs 3, 2 vs 4; 1 vs 4, 2 vs 3"
-            },
+            draw_formats={"round-robin-4": round_robin_format(4)},
             stages=[StageFixture(title="Round Robin", draw_format_ref="round-robin-4")],
         )
         structure2 = DivisionStructure(
             title="Duplicate Name",  # Same name as first structure
             teams=["Team E", "Team F", "Team G", "Team H"],
-            draw_formats={
-                "round-robin-4": "1 vs 2, 3 vs 4; 1 vs 3, 2 vs 4; 1 vs 4, 2 vs 3"
-            },
+            draw_formats={"round-robin-4": round_robin_format(4)},
             stages=[StageFixture(title="Round Robin", draw_format_ref="round-robin-4")],
         )
 
@@ -1955,23 +2796,20 @@ class BackendTests(MessagesTestMixin, TestCase):
                 season.pk,
                 data=data,
             )
-            self.response_200()  # Should stay on form with errors
+            self.assert_http_200_ok()  # Should stay on form with errors
 
         # Check that no divisions were created
         self.assertEqual(season.divisions.count(), 0)
 
         # Check for validation error
         formset = self.get_context("formset")
-        self.assertIsNotNone(formset)
-        self.assertFalse(formset.is_valid())
-
-        # Check that both forms have duplicate name errors
-        for i in [0, 1]:
-            form = formset.forms[i]
-            self.assertFalse(form.is_valid())
-            self.assertEqual(
-                form.errors, {"json_data": ["Division names must be unique."]}
-            )
+        self.assertEqual(
+            formset.errors,
+            [
+                {"json_data": ["Division names must be unique."]},
+                {"json_data": ["Division names must be unique."]},
+            ],
+        )
 
     def test_edit_match_youtube_api_basic_guard_clause(self):
         """
@@ -2019,14 +2857,12 @@ class BackendTests(MessagesTestMixin, TestCase):
 
             # This should complete successfully without TypeError
             data["live_stream_thumbnail_image"] = ""
-            self.post(
-                edit_match_url.url_name, *edit_match_url.args, data=data
-            )
-            self.response_302()  # Should redirect successfully
+            self.post(edit_match_url.url_name, *edit_match_url.args, data=data)
+            self.assert_http_302_found(url=str(match.stage.urls["edit"]))
 
             # Verify the match was updated
             match.refresh_from_db()
-            self.assertFalse(match.live_stream)
+            self.assertEqual(match.live_stream, False)
             self.assertIsNone(match.external_identifier)
 
     def test_undo_draw_with_dependent_matches(self):
@@ -2069,7 +2905,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         undo_draw_url = stage.url_names["undo"]
 
         self.post(undo_draw_url.url_name, *undo_draw_url.args)
-        self.response_302()  # Should redirect successfully without error
+        self.assert_http_302_found(url=f"{stage.division.urls['edit']}#stages-tab")
 
         # Verify all matches from the stage were deleted
         self.assertCountEqual(stage.matches.all(), [])
@@ -2165,7 +3001,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         undo_draw_url = stage.url_names["undo"]
 
         self.post(undo_draw_url.url_name, *undo_draw_url.args)
-        self.response_302()  # Should redirect successfully without error
+        self.assert_http_302_found(url=f"{stage.division.urls['edit']}#stages-tab")
 
         # Verify all matches from the stage were deleted despite complex dependencies
         self.assertCountEqual(stage.matches.all(), [])
@@ -2195,7 +3031,7 @@ class BackendTests(MessagesTestMixin, TestCase):
                 division.season.pk,
                 division.pk,
             )
-        self.response_200()
+        self.assert_http_200_ok()
 
         # Check response content type and headers
         self.assertResponseHeaders(
@@ -2227,6 +3063,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             division__season__live_stream_project_id="test-project-123",
             division__season__live_stream_client_id="test-client-id",
             division__season__live_stream_client_secret="test-client-secret",
+            division__season__live_stream_refresh_token="refresh-token",
         )
         team1 = factories.TeamFactory.create(division=stage.division)
         team2 = factories.TeamFactory.create(division=stage.division)
@@ -2248,10 +3085,12 @@ class BackendTests(MessagesTestMixin, TestCase):
         add_match = Match(stage=stage).url_names["add"]
         data["live_stream_thumbnail_image"] = ""
         self.post(add_match.url_name, *add_match.args, data=data)
-        self.response_302()
+        self.assert_http_302_found(url=str(stage.urls["edit"]))
 
     @patch("tournamentcontrol.competition.tasks.set_youtube_thumbnail")
-    @patch("tournamentcontrol.competition.models.Season.youtube", new_callable=PropertyMock)
+    @patch(
+        "tournamentcontrol.competition.models.Season.youtube", new_callable=PropertyMock
+    )
     def test_resync_live_stream_sends_unescaped_apostrophes(
         self, mock_youtube_prop, mock_thumbnail
     ):
@@ -2265,6 +3104,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             division__season__live_stream_project_id="test-project-123",
             division__season__live_stream_client_id="test-client-id",
             division__season__live_stream_client_secret="test-client-secret",
+            division__season__live_stream_refresh_token="refresh-token",
         )
         ground = factories.GroundFactory.create(
             venue__season=stage.division.season,
@@ -2273,9 +3113,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         home = factories.TeamFactory.create(
             title="St George's", division=stage.division
         )
-        away = factories.TeamFactory.create(
-            title="O'Connor", division=stage.division
-        )
+        away = factories.TeamFactory.create(title="O'Connor", division=stage.division)
         match = factories.MatchFactory.create(
             stage=stage,
             play_at=ground,
@@ -2301,7 +3139,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         resync = match.url_names["resync-live-stream"]
         with self.login(self.superuser):
             self.post(resync.url_name, *resync.args)
-        self.response_302()
+        self.assert_http_302_found(url=str(match.stage.urls["edit"]))
 
         update_call = mock_youtube.liveBroadcasts.return_value.update.call_args
         body = update_call.kwargs["body"]
@@ -2317,7 +3155,9 @@ class BackendTests(MessagesTestMixin, TestCase):
         self.assertNotIn("&#x27;", description)
         self.assertNotIn("&#39;", description)
 
-    @patch("tournamentcontrol.competition.models.Season.youtube", new_callable=PropertyMock)
+    @patch(
+        "tournamentcontrol.competition.models.Season.youtube", new_callable=PropertyMock
+    )
     def test_resync_live_stream_refuses_when_not_streaming(self, mock_youtube_prop):
         """Resync refuses and flashes an error when the match has no broadcast."""
         stage = factories.StageFactory.create(
@@ -2325,6 +3165,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             division__season__live_stream_project_id="test-project-123",
             division__season__live_stream_client_id="test-client-id",
             division__season__live_stream_client_secret="test-client-secret",
+            division__season__live_stream_refresh_token="refresh-token",
         )
         ground = factories.GroundFactory.create(venue__season=stage.division.season)
         match = factories.MatchFactory.create(
@@ -2343,7 +3184,7 @@ class BackendTests(MessagesTestMixin, TestCase):
         resync = match.url_names["resync-live-stream"]
         with self.login(self.superuser):
             self.post(resync.url_name, *resync.args)
-        self.response_302()
+        self.assert_http_302_found(url=str(match.stage.urls["edit"]))
 
         mock_youtube.liveBroadcasts.return_value.update.assert_not_called()
 
@@ -2385,7 +3226,7 @@ class BackendTests(MessagesTestMixin, TestCase):
                 season.pk,
                 "20250501",
             )
-        self.response_200()
+        self.assert_http_200_ok()
 
         formset = self.last_response.context["formset"]
         listed_pks = {form.instance.pk for form in formset.forms}
@@ -2433,12 +3274,12 @@ class BackendTests(MessagesTestMixin, TestCase):
                 "20250501",
                 data=data,
             )
-        self.response_302()
+        self.assert_http_302_found(url=str(season.urls["edit"]))
 
         match_to_turn_on.refresh_from_db()
         match_to_turn_off.refresh_from_db()
-        self.assertTrue(match_to_turn_on.live_stream)
-        self.assertFalse(match_to_turn_off.live_stream)
+        self.assertEqual(match_to_turn_on.live_stream, True)
+        self.assertEqual(match_to_turn_off.live_stream, False)
 
     def test_runsheet_and_season_schedule_link_to_bulk_live_stream_view(self):
         stage = factories.StageFactory.create()
@@ -2466,11 +3307,31 @@ class BackendTests(MessagesTestMixin, TestCase):
                 season.pk,
                 "20250501",
             )
-            self.response_200()
-            self.assertContains(self.last_response, expected_url)
+            self.assert_http_200_ok()
+            self.assertResponseContains(
+                by_shell(
+                    workbook=f'<a class="p-button" href="{expected_url}">Live Stream</a>',
+                    explorer=f'<a href="{expected_url}">Live stream</a>',
+                )
+            )
 
-            season_edit_response = self.client.get(str(season.urls["edit"]))
-            self.assertContains(season_edit_response, expected_url)
+            edit_season = season.url_names["edit"]
+            self.get(edit_season.url_name, *edit_season.args)
+            self.assert_http_200_ok()
+            self.assertResponseContains(
+                by_shell(
+                    workbook=(
+                        f'<li><a href="{expected_url}">{ICON % "video"}'
+                        "Live stream</a></li>"
+                    ),
+                    explorer=(
+                        f'<a href="{expected_url}">'
+                        '<svg class="icon" aria-hidden="true" focusable="false">'
+                        '<use href="/static/touchtechnology/admin/explorer/img/'
+                        'icons.svg#video"></use></svg>Live stream</a>'
+                    ),
+                )
+            )
 
     def test_runsheet_shows_resync_icon_only_when_broadcast_exists(self):
         stage = factories.StageFactory.create()
@@ -2519,15 +3380,22 @@ class BackendTests(MessagesTestMixin, TestCase):
             ],
         )
 
+        runsheet_url = self.reverse(
+            "admin:fixja:match-runsheet", season.competition.pk, season.pk, "20250501"
+        )
+
         with self.login(self.superuser):
-            self.get(
-                "admin:fixja:match-runsheet",
-                season.competition.pk,
-                season.pk,
-                "20250501",
+            self.get(runsheet_url)
+        self.assert_http_200_ok()
+        # The template prints ``next`` as the bare path; reverse(query=) would
+        # encode its slashes, so the link is spelled out as the page draws it.
+        resync_link = f"{streaming_resync_url}?next={runsheet_url}"
+        self.assertResponseContains(
+            by_shell(
+                workbook=(f'<a href="{resync_link}">{ICON % "refresh-cw"}Resync</a>'),
+                explorer=f'<a href="{resync_link}">Resync</a>',
             )
-        self.response_200()
-        self.assertContains(self.last_response, streaming_resync_url)
+        )
         self.assertNotContains(self.last_response, not_yet_streaming_resync_url)
 
     @patch("tournamentcontrol.competition.admin.sync_live_stream")
@@ -2538,6 +3406,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             division__season__live_stream=True,
             division__season__live_stream_client_id="test-client-id",
             division__season__live_stream_client_secret="test-client-secret",
+            division__season__live_stream_refresh_token="refresh-token",
         )
         camera_ground = factories.GroundFactory.create(
             venue__season=stage.division.season, live_stream=True
@@ -2570,7 +3439,7 @@ class BackendTests(MessagesTestMixin, TestCase):
                 "20250501",
                 data=data,
             )
-        self.response_302()
+        self.assert_http_302_found(url=str(season.urls["edit"]))
 
         mock_sync_live_stream.s.assert_called_once_with(
             match_to_turn_on.pk, base_url=ANY
@@ -2612,7 +3481,7 @@ class BackendTests(MessagesTestMixin, TestCase):
                 "20250501",
                 data=data,
             )
-        self.response_302()
+        self.assert_http_302_found(url=str(season.urls["edit"]))
 
         mock_sync_live_stream.s.assert_not_called()
 
@@ -2624,6 +3493,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             division__season__live_stream=True,
             division__season__live_stream_client_id="test-client-id",
             division__season__live_stream_client_secret="test-client-secret",
+            division__season__live_stream_refresh_token="refresh-token",
         )
         camera_ground = factories.GroundFactory.create(
             venue__season=stage.division.season, live_stream=True
@@ -2691,16 +3561,14 @@ class BackendTests(MessagesTestMixin, TestCase):
                 season.pk,
                 "20250501",
             )
-        self.response_302()
+        self.assert_http_302_found(url=str(season.urls["edit"]))
 
         queued_pks = {call.args[0] for call in mock_sync_live_stream.s.call_args_list}
         self.assertEqual(
             queued_pks,
             {streaming_match_1.pk, streaming_match_2.pk, never_broadcast.pk},
         )
-        self.assertEqual(
-            mock_sync_live_stream.s.return_value.apply_async.call_count, 3
-        )
+        self.assertEqual(mock_sync_live_stream.s.return_value.apply_async.call_count, 3)
 
     @patch("tournamentcontrol.competition.admin.sync_live_stream")
     def test_match_live_stream_resync_refuses_when_not_configured(
@@ -2716,7 +3584,7 @@ class BackendTests(MessagesTestMixin, TestCase):
                 season.pk,
                 "20250501",
             )
-        self.response_302()
+        self.assert_http_302_found(url=str(season.urls["edit"]))
 
         mock_sync_live_stream.s.assert_not_called()
 
@@ -2726,6 +3594,7 @@ class BackendTests(MessagesTestMixin, TestCase):
             division__season__live_stream=True,
             division__season__live_stream_client_id="test-client-id",
             division__season__live_stream_client_secret="test-client-secret",
+            division__season__live_stream_refresh_token="refresh-token",
         )
         camera_ground = factories.GroundFactory.create(
             venue__season=stage.division.season, live_stream=True
@@ -2748,7 +3617,7 @@ class BackendTests(MessagesTestMixin, TestCase):
                 season.pk,
                 "20250501",
             )
-        self.response_302()
+        self.assert_http_302_found(url=str(season.urls["edit"]))
 
         mock_sync_live_stream.s.assert_not_called()
 
@@ -2756,7 +3625,7 @@ class BackendTests(MessagesTestMixin, TestCase):
 class TeamEditViewQueryTests(TestCase):
     """
     The team edit page in the competition admin renders the team's
-    ``people`` (``TeamAssociation``) list using the ``mvp_list``
+    ``people`` (``TeamAssociation``) list using the ``admin_list``
     template tag. Without prefetching, that produces one
     ``competition_person`` query and one ``competition_teamrole`` query
     per association. Pin the view's query count so the same upper bound
@@ -2780,7 +3649,9 @@ class TeamEditViewQueryTests(TestCase):
             self.assertGoodView(
                 edit_team.url_name,
                 *edit_team.args,
-                test_query_count=25,
+                # The tree in the rail opens the folders down to the team
+                # (28 in Workbook, 30 in Explorer).
+                test_query_count=30,
             )
 
     def test_full_team_query_count(self):
@@ -2789,5 +3660,1790 @@ class TeamEditViewQueryTests(TestCase):
             self.assertGoodView(
                 edit_team.url_name,
                 *edit_team.args,
-                test_query_count=25,
+                # The tree in the rail opens the folders down to the team
+                # (28 in Workbook, 30 in Explorer).
+                test_query_count=30,
             )
+
+
+class EditViewPermissionTests(TestCase):
+    """
+    Editing an existing record must be governed by the ``change_<model>``
+    permission (including object-level permissions assigned through the
+    permissions tab), while creating a record is governed by ``add_<model>``.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.season = factories.SeasonFactory.create()
+        cls.other = factories.SeasonFactory.create()
+        cls.staff = factories.UserFactory.create(is_staff=True)
+
+    def test_object_level_change_permission_allows_edit(self):
+        assign_perm("competition.change_season", self.staff, self.season)
+        with self.login(self.staff):
+            self.get(
+                "admin:fixja:competition:season:edit", *self.season._get_url_args()
+            )
+            self.assert_http_200_ok()
+            css = by_shell(workbook='class="wb-input" ', explorer="")
+            self.assertResponseContains(
+                f'<input type="text" name="title" value="{self.season.title}" '
+                f'maxlength="255" {css}required id="id_title">'
+            )
+
+    def test_object_level_change_permission_is_scoped_to_object(self):
+        assign_perm("competition.change_season", self.staff, self.season)
+        with self.login(self.staff):
+            self.get("admin:fixja:competition:season:edit", *self.other._get_url_args())
+            self.assert_http_403_forbidden()
+
+    def test_change_permission_does_not_allow_add(self):
+        assign_perm("competition.change_season", self.staff)
+        with self.login(self.staff):
+            self.get("admin:fixja:competition:season:add", self.season.competition_id)
+            self.assert_http_403_forbidden()
+
+    def test_add_permission_allows_add_but_not_edit(self):
+        assign_perm("competition.add_season", self.staff)
+        with self.login(self.staff):
+            self.get("admin:fixja:competition:season:add", self.season.competition_id)
+            self.assert_http_200_ok()
+            self.get(
+                "admin:fixja:competition:season:edit", *self.season._get_url_args()
+            )
+            self.assert_http_403_forbidden()
+
+
+class BulkCreateDivisionTests(MessagesTestMixin, TestCase):
+    """Add several divisions to a season at once."""
+
+    viewname = "admin:fixja:competition:season:division:bulk"
+
+    def setUp(self):
+        super().setUp()
+        self.season = factories.SeasonFactory.create(mode=DAILY)
+        self.args = (self.season.competition_id, self.season.pk)
+
+    def rows(self, *rows, total=None):
+        data = {
+            "form-TOTAL_FORMS": str(len(rows) if total is None else total),
+            "form-INITIAL_FORMS": "0",
+            "form-MIN_NUM_FORMS": "0",
+            "form-MAX_NUM_FORMS": "50",
+        }
+        for index, row in enumerate(rows):
+            # A browser posts the "No" the draft select shows on blank rows.
+            for name, value in {"draft": "0", **row}.items():
+                data[f"form-{index}-{name}"] = value
+        return data
+
+    def division(self, title, **kwargs):
+        return {
+            "title": title,
+            "short_title": "",
+            "games_per_day": "3",
+            "forfeit_for_score": "5",
+            "forfeit_against_score": "0",
+            **kwargs,
+        }
+
+    def test_season_edit_offers_bulk_create(self):
+        with self.login(self.superuser):
+            self.get("admin:fixja:competition:season:edit", *self.args)
+            self.assert_http_200_ok()
+            self.assertResponseContains(
+                by_shell(
+                    workbook=bulk_dialog(
+                        self.reverse(self.viewname, *self.args),
+                        "division",
+                        "Add several divisions",
+                    ),
+                    explorer=bulk_link(
+                        self.reverse(self.viewname, *self.args),
+                        "division",
+                        "Add several divisions",
+                    ),
+                )
+            )
+
+    def test_get_shows_count_blank_rows_after_existing_divisions(self):
+        factories.DivisionFactory.create(season=self.season, order=4)
+        self.assertLoginRequired(self.viewname, *self.args)
+        with self.login(self.superuser):
+            self.get(self.viewname, *self.args, data={"count": "3"})
+            self.assert_http_200_ok()
+            self.assertResponseContains(
+                '<input type="hidden" name="form-TOTAL_FORMS" value="3" '
+                'id="id_form-TOTAL_FORMS">'
+            )
+            self.assertResponseContains(
+                by_shell(
+                    workbook='<label for="id_form-0-games_per_day" class="field_name">'
+                    "Games per day</label>",
+                    explorer="<th>Games per day</th>",
+                )
+            )
+            formset = self.get_context("formset")
+            self.assertEqual([form.instance.order for form in formset], [5, 6, 7])
+            self.assertEqual([form.instance.pk for form in formset], [None] * 3)
+
+    def test_get_count_is_limited(self):
+        with self.login(self.superuser):
+            for count, rows in (("0", 1), ("500", 50), ("x", 5)):
+                with self.subTest(count=count):
+                    self.get(self.viewname, *self.args, data={"count": count})
+                    self.assert_http_200_ok()
+                    self.assertEqual(len(self.get_context("formset").forms), rows)
+
+    def test_weekly_season_has_no_games_per_day(self):
+        season = factories.SeasonFactory.create()
+        with self.login(self.superuser):
+            self.get(self.viewname, season.competition_id, season.pk)
+            self.assert_http_200_ok()
+            formset = self.get_context("formset")
+            self.assertNotIn("games_per_day", formset.forms[0].fields)
+
+    def test_post_creates_divisions_in_row_order(self):
+        factories.DivisionFactory.create(season=self.season, title="Mixed", order=1)
+        data = self.rows(
+            self.division("Men's Open", short_title="Men"),
+            {},
+            self.division("Women's Open", draft="1", games_per_day="2"),
+        )
+        with self.login(self.superuser):
+            self.post(self.viewname, *self.args, data=data)
+            self.assert_http_302_found(url=f"{self.season.urls['edit']}#divisions-tab")
+        self.assertEqual(
+            list(
+                self.season.divisions.order_by("order").values_list(
+                    "title",
+                    "short_title",
+                    "order",
+                    "draft",
+                    "games_per_day",
+                    "forfeit_for_score",
+                    "forfeit_against_score",
+                )
+            ),
+            [
+                ("Mixed", "", 1, False, 2, 5, 0),
+                ("Men's Open", "Men", 2, False, 3, 5, 0),
+                ("Women's Open", "", 3, True, 2, 5, 0),
+            ],
+        )
+
+    def test_post_refuses_duplicate_titles(self):
+        factories.DivisionFactory.create(season=self.season, title="Mixed")
+        data = self.rows(
+            self.division("Men's Open"),
+            self.division("Men's Open"),
+            self.division("Mixed"),
+        )
+        with self.login(self.superuser):
+            self.post(self.viewname, *self.args, data=data)
+            self.assert_http_200_ok()
+            formset = self.get_context("formset")
+            self.assertEqual(
+                [form.errors.get("title") for form in formset],
+                [
+                    None,
+                    ["This title is already used in row 1."],
+                    ["Division with this Title already exists."],
+                ],
+            )
+        self.assertEqual(self.season.divisions.count(), 1)
+
+    def test_post_refuses_no_rows(self):
+        with self.login(self.superuser):
+            self.post(self.viewname, *self.args, data=self.rows({}, {}))
+            self.assert_http_200_ok()
+            self.assertResponseContains(
+                by_shell(
+                    workbook='<div class="wb-problems" role="alert" tabindex="-1">'
+                    "<h2>Please check the form</h2>"
+                    "<ul><li>Fill in at least one row.</li></ul></div>",
+                    explorer='<div class="form-errors" role="alert">'
+                    '<svg class="icon" aria-hidden="true" focusable="false"><use href="/static/touchtechnology/admin/explorer/img/icons.svg#alert"></use></svg>'
+                    "<ul><li>Fill in at least one row.</li></ul></div>",
+                )
+            )
+        self.assertEqual(self.season.divisions.count(), 0)
+
+    def test_post_refuses_too_many_rows(self):
+        data = self.rows(*(self.division(f"D{n}") for n in range(51)))
+        with self.login(self.superuser):
+            self.post(self.viewname, *self.args, data=data)
+            self.assert_http_200_ok()
+        self.assertEqual(self.season.divisions.count(), 0)
+
+    def test_permission_required(self):
+        staff = UserFactory.create(is_staff=True)
+        data = self.rows(self.division("Men's Open"))
+        with self.login(staff):
+            self.get(self.viewname, *self.args)
+            self.assert_http_403_forbidden()
+            self.post(self.viewname, *self.args, data=data)
+            self.assert_http_403_forbidden()
+        assign_perm("competition.add_division", staff)
+        with self.login(staff):
+            self.post(self.viewname, *self.args, data=data)
+            self.assert_http_302_found(url=f"{self.season.urls['edit']}#divisions-tab")
+        self.assertEqual(self.season.divisions.get().title, "Men's Open")
+
+
+class BulkCreateTeamTests(MessagesTestMixin, TestCase):
+    """Add several teams to a division at once."""
+
+    viewname = "admin:fixja:competition:season:division:team:bulk"
+
+    def setUp(self):
+        super().setUp()
+        self.division = factories.DivisionFactory.create()
+        self.competition = self.division.season.competition
+        self.args = (self.competition.pk, self.division.season_id, self.division.pk)
+
+    def rows(self, *rows):
+        data = {
+            "form-TOTAL_FORMS": str(len(rows)),
+            "form-INITIAL_FORMS": "0",
+            "form-MIN_NUM_FORMS": "0",
+            "form-MAX_NUM_FORMS": "50",
+        }
+        for index, row in enumerate(rows):
+            for name, value in row.items():
+                data[f"form-{index}-{name}"] = value
+        return data
+
+    def test_division_edit_offers_bulk_create(self):
+        with self.login(self.superuser):
+            self.get("admin:fixja:competition:season:division:edit", *self.args)
+            self.assert_http_200_ok()
+            self.assertResponseContains(
+                by_shell(
+                    workbook=bulk_dialog(
+                        self.reverse(self.viewname, *self.args),
+                        "team",
+                        "Add several teams",
+                    ),
+                    explorer=bulk_link(
+                        self.reverse(self.viewname, *self.args),
+                        "team",
+                        "Add several teams",
+                    ),
+                )
+            )
+
+    def test_get_shows_count_blank_rows_after_existing_teams(self):
+        factories.TeamFactory.create(division=self.division, order=2)
+        self.assertLoginRequired(self.viewname, *self.args)
+        with self.login(self.superuser):
+            self.get(self.viewname, *self.args, data={"count": "4"})
+            self.assert_http_200_ok()
+            self.assertResponseContains(
+                '<input type="hidden" name="form-TOTAL_FORMS" value="4" '
+                'id="id_form-TOTAL_FORMS">'
+            )
+            formset = self.get_context("formset")
+            self.assertEqual([form.instance.order for form in formset], [3, 4, 5, 6])
+            self.assertEqual(
+                [field.name for field in formset.forms[0].visible_fields()], ["title"]
+            )
+
+    def test_post_creates_teams_in_row_order(self):
+        factories.TeamFactory.create(division=self.division, title="Alpha", order=1)
+        data = self.rows({"title": "Bravo"}, {"title": ""}, {"title": "Charlie"})
+        with self.login(self.superuser):
+            self.post(self.viewname, *self.args, data=data)
+            self.assert_http_302_found(url=f"{self.division.urls['edit']}#teams-tab")
+        self.assertEqual(
+            list(self.division.teams.order_by("order").values_list("title", "order")),
+            [("Alpha", 1), ("Bravo", 2), ("Charlie", 3)],
+        )
+
+    def test_post_with_clubs_defaults_title_to_club(self):
+        nzl = factories.ClubFactory.create(title="New Zealand")
+        aus = factories.ClubFactory.create(title="Australia")
+        other = factories.ClubFactory.create(title="Elsewhere")
+        self.competition.clubs.set([nzl, aus])
+        with self.login(self.superuser):
+            self.get(self.viewname, *self.args)
+            formset = self.get_context("formset")
+            self.assertEqual(
+                list(formset.forms[0].fields["club"].queryset.order_by("title")),
+                [aus, nzl],
+            )
+            rows = [
+                {"title": "", "club": str(nzl.pk)},
+                {"title": "Kangaroos", "club": str(aus.pk)},
+            ]
+            self.post(
+                self.viewname,
+                *self.args,
+                data=self.rows(*rows, {"title": "", "club": str(other.pk)}),
+            )
+            self.assert_http_200_ok()
+            self.assertEqual(
+                [list(form.errors) for form in self.get_context("formset")],
+                [[], [], ["club", "title"]],
+            )
+            self.post(self.viewname, *self.args, data=self.rows(*rows))
+            self.assert_http_302_found(url=f"{self.division.urls['edit']}#teams-tab")
+        self.assertEqual(
+            list(self.division.teams.order_by("order").values_list("title", "club")),
+            [("New Zealand", nzl.pk), ("Kangaroos", aus.pk)],
+        )
+
+    def test_post_refuses_duplicate_titles(self):
+        factories.TeamFactory.create(division=self.division, title="Alpha")
+        data = self.rows({"title": "Bravo"}, {"title": "Bravo"}, {"title": "Alpha"})
+        with self.login(self.superuser):
+            self.post(self.viewname, *self.args, data=data)
+            self.assert_http_200_ok()
+            self.assertEqual(
+                [form.errors.get("title") for form in self.get_context("formset")],
+                [
+                    None,
+                    ["This title is already used in row 1."],
+                    ["Team with this Title already exists."],
+                ],
+            )
+        self.assertEqual(self.division.teams.count(), 1)
+
+    def test_permission_required(self):
+        staff = UserFactory.create(is_staff=True)
+        data = self.rows({"title": "Bravo"})
+        with self.login(staff):
+            self.get(self.viewname, *self.args)
+            self.assert_http_403_forbidden()
+            self.post(self.viewname, *self.args, data=data)
+            self.assert_http_403_forbidden()
+        assign_perm("competition.add_team", staff)
+        with self.login(staff):
+            self.post(self.viewname, *self.args, data=data)
+            self.assert_http_302_found(url=f"{self.division.urls['edit']}#teams-tab")
+        self.assertEqual(self.division.teams.get().title, "Bravo")
+
+
+class SeasonEditForfeitNotificationsTests(TestCase):
+    """
+    The season page lists every user on the site in its "forfeit
+    notifications" box, which made one of the most visited pages of the
+    event admin slow to load. The box is left off the page; the people
+    already chosen keep being notified.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.season = factories.SeasonFactory.create(timezone="Australia/Sydney")
+        cls.recipients = factories.UserFactory.create_batch(3)
+        cls.season.forfeit_notifications.set(cls.recipients)
+
+    def test_season_page_has_no_forfeit_notifications(self):
+        with self.login(self.superuser):
+            self.get(
+                "admin:fixja:competition:season:edit", *self.season._get_url_args()
+            )
+            self.assert_http_200_ok()
+            self.assertNotIn("forfeit_notifications", self.get_context("form").fields)
+
+    def test_saving_the_season_keeps_its_forfeit_notifications(self):
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:competition:season:edit",
+                *self.season._get_url_args(),
+                data={
+                    "title": "Renamed",
+                    "slug": self.season.slug,
+                    "mode": self.season.mode,
+                    "timezone": "Australia/Sydney",
+                    "live_stream_privacy": "public",
+                },
+            )
+            self.assert_http_302_found(url=str(self.season.competition.urls["edit"]))
+        self.season.refresh_from_db()
+        self.assertEqual(self.season.title, "Renamed")
+        self.assertCountEqual(self.season.forfeit_notifications.all(), self.recipients)
+
+
+class MatchResultsQueryTests(WarmCachesMixin, TestCase):
+    """
+    Results are entered on one page per day of matches. Each match drew its
+    two teams, its ground, its division and the forfeit winner choices with
+    queries of their own, so a full day of an event took hundreds of
+    queries. The same query budget now holds however many matches the day
+    has.
+    """
+
+    kickoff = datetime(2026, 10, 8, 9, 0, tzinfo=ZoneInfo("UTC"))
+
+    def setUp(self):
+        super().setUp()
+        self.season = factories.SeasonFactory.create(timezone="UTC")
+        venue = factories.VenueFactory.create(season=self.season)
+        self.ground = factories.GroundFactory.create(venue=venue)
+        self.few = self._day(date(2026, 10, 8), 2)
+        self.many = self._day(date(2026, 10, 9), 10)
+
+    def _day(self, day, matches):
+        stage = factories.StageFactory.create(division__season=self.season)
+        created = []
+        for number in range(matches):
+            when = datetime.combine(day, time(9 + number), tzinfo=ZoneInfo("UTC"))
+            created.append(
+                factories.MatchFactory.create(
+                    stage=stage,
+                    home_team=factories.TeamFactory.create(division=stage.division),
+                    away_team=factories.TeamFactory.create(division=stage.division),
+                    play_at=self.ground,
+                    datetime=when,
+                    date=when.date(),
+                    time=when.time(),
+                )
+            )
+        return created
+
+    def get_day(self, matches):
+        self.get_check_200(
+            "admin:fixja:match-results",
+            self.season.competition.pk,
+            self.season.pk,
+            matches[0].date.strftime("%Y%m%d"),
+        )
+
+    # The day costs the same however many matches it has, with the caches
+    # warm. The tree in the rail opens the season's match days down to it.
+    def assertDayQueries(self, matches):
+        with self.login(self.superuser):
+            self.warm_caches()
+            with self.assertNumQueries(by_shell(workbook=13, explorer=14)):
+                self.get_day(matches)
+
+    def test_few_matches_query_count(self):
+        self.assertDayQueries(self.few)
+
+    def test_many_matches_query_count(self):
+        self.assertDayQueries(self.many)
+
+    def test_forfeit_winner_choices(self):
+        match = self.few[0]
+        with self.login(self.superuser):
+            self.get_day(self.few)
+        self.assertResponseContains(
+            '<select name="matches-0-forfeit_winner" '
+            + by_shell(
+                workbook='class="wb-select" '
+                'aria-describedby="id_matches-0-forfeit_winner_help" ',
+                explorer='aria-describedby="id_matches-0-forfeit_winner_helptext" ',
+            )
+            + f'id="id_matches-0-forfeit_winner">'
+            f'<option value="" selected>Double forfeit</option>'
+            f'<option value="{match.home_team.pk}">{match.home_team.title}</option>'
+            f'<option value="{match.away_team.pk}">{match.away_team.title}</option>'
+            f"</select>"
+        )
+
+    def test_forfeit_saves_the_winner(self):
+        match = self.few[0]
+        data = {
+            "matches-INITIAL_FORMS": "2",
+            "matches-MAX_NUM_FORMS": "1000",
+            "matches-TOTAL_FORMS": "2",
+            "matches-0-id": str(match.pk),
+            "matches-0-home_team_score": "0",
+            "matches-0-away_team_score": "5",
+            "matches-0-is_forfeit": "1",
+            "matches-0-forfeit_winner": str(match.away_team.pk),
+            "matches-1-id": str(self.few[1].pk),
+            "byes-INITIAL_FORMS": "0",
+            "byes-MAX_NUM_FORMS": "1000",
+            "byes-TOTAL_FORMS": "0",
+        }
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:match-results",
+                self.season.competition.pk,
+                self.season.pk,
+                match.date.strftime("%Y%m%d"),
+                data=data,
+            )
+        self.assert_http_302_found(url=f"{self.season.urls['edit']}#schedule-tab")
+        match.refresh_from_db()
+        self.assertEqual(match.forfeit_winner, match.away_team)
+
+    def test_forfeit_winner_must_be_one_of_the_teams(self):
+        match = self.few[0]
+        outsider = factories.TeamFactory.create(division=match.stage.division)
+        data = {
+            "matches-INITIAL_FORMS": "2",
+            "matches-MAX_NUM_FORMS": "1000",
+            "matches-TOTAL_FORMS": "2",
+            "matches-0-id": str(match.pk),
+            "matches-0-home_team_score": "0",
+            "matches-0-away_team_score": "5",
+            "matches-0-is_forfeit": "1",
+            "matches-0-forfeit_winner": str(outsider.pk),
+            "matches-1-id": str(self.few[1].pk),
+            "byes-INITIAL_FORMS": "0",
+            "byes-MAX_NUM_FORMS": "1000",
+            "byes-TOTAL_FORMS": "0",
+        }
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:match-results",
+                self.season.competition.pk,
+                self.season.pk,
+                match.date.strftime("%Y%m%d"),
+                data=data,
+            )
+        self.assert_http_200_ok()
+        match.refresh_from_db()
+        self.assertEqual(match.forfeit_winner, None)
+
+
+class MatchDetailQueryTests(WarmCachesMixin, TestCase):
+    """
+    The detailed results page has a row for every player of both teams.
+    Each row looked up its player and their statistics for the match on its
+    own, so a full squad took well over a hundred queries. The same query
+    budget now holds however many players the teams have.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.small = self._match(players=2)
+        self.large = self._match(players=12)
+
+    def _match(self, players):
+        match = factories.MatchFactory.create(
+            play_at=factories.GroundFactory.create(),
+            home_team_score=players,
+            away_team_score=0,
+        )
+        for team in (match.home_team, match.away_team):
+            associations = factories.TeamAssociationFactory.create_batch(
+                players, is_player=True, team=team, person__club=team.club
+            )
+        # The away team's players already have statistics entered.
+        for association in associations:
+            SimpleScoreMatchStatistic.objects.create(
+                match=match, player=association.person, played=1, points=0
+            )
+        return match
+
+    def get_detail(self, match):
+        self.get_check_200(
+            "admin:fixja:competition:season:division:stage:match:detail",
+            competition_id=match.stage.division.season.competition_id,
+            season_id=match.stage.division.season_id,
+            division_id=match.stage.division_id,
+            stage_id=match.stage_id,
+            match_id=match.pk,
+        )
+
+    # The page costs the same however many players the teams have, with the
+    # caches warm. The tree in the rail opens the folders down to the match's
+    # pool.
+    def assertDetailQueries(self, match):
+        with self.login(self.superuser):
+            self.warm_caches()
+            with self.assertNumQueries(22):
+                self.get_detail(match)
+
+    def test_small_squads_query_count(self):
+        self.assertDetailQueries(self.small)
+
+    def test_large_squads_query_count(self):
+        self.assertDetailQueries(self.large)
+
+    def test_entered_statistics_are_shown(self):
+        with self.login(self.superuser):
+            self.get_detail(self.small)
+        away = self.last_response.context["formsets"][1]
+        self.assertEqual(
+            [form.instance.pk is not None for form in away.forms], [True, True]
+        )
+
+
+class MatchRowMixin(WarmCachesMixin, IconMixin):
+    """
+    The menu of a match's row on its stage's Matches tab, and the run sheet's
+    links to its statistics and referees pages.
+    """
+
+    detail = "admin:fixja:competition:season:division:stage:match:detail"
+    referees = "admin:fixja:competition:season:division:stage:match:referees"
+
+    def actions_cell(
+        self, match, name, statistics=False, edit=True, delete=True, referees=True
+    ):
+        """
+        The last cell of the match's row, named ``name``. Its menu offers
+        Referees and Edit to those who may change the match, Statistics too
+        when the players' statistics of the match can be entered, and Delete
+        to those who may delete it.
+        """
+        namespace = "admin:fixja:competition:season:division:stage:match"
+        args = match._get_url_args()
+        referees_url = self.reverse(f"{namespace}:referees", *args)
+        detail = self.reverse(f"{namespace}:detail", *args)
+        edit_url = self.reverse(f"{namespace}:edit", *args)
+        delete_url = self.reverse(f"{namespace}:delete", *args)
+        csrf = (
+            '<input type="hidden" name="csrfmiddlewaretoken" '
+            f'value="{self.get_context("csrf_token")}">'
+        )
+        workbook_referees, explorer_referees = (
+            (
+                f'<li><a href="{referees_url}">{self.icon("flag")}Referees</a></li>',
+                f'<a href="{referees_url}">{self.icon("referee")}Referees</a>',
+            )
+            if referees
+            else ("", "")
+        )
+        workbook_statistics, explorer_statistics = (
+            (
+                f'<li><a href="{detail}">{self.icon("chart-bar")}Statistics</a></li>',
+                f'<a href="{detail}">{self.icon("chart")}Statistics</a>',
+            )
+            if statistics
+            else ("", "")
+        )
+        workbook_edit, explorer_edit = (
+            (
+                f'<li><a href="{edit_url}">{self.icon("pencil")}Edit</a></li>',
+                f'<a href="{edit_url}">{self.icon("edit")}Edit</a>',
+            )
+            if edit
+            else ("", "")
+        )
+        workbook_delete, explorer_delete = (
+            (
+                '<li class="wb-menu-last">'
+                f'<form method="post" action="{delete_url}" '
+                f'data-wb-confirm="The match “{name}” will be removed for good." '
+                f'data-wb-confirm-title="Delete {name}?" '
+                'data-wb-confirm-label="Delete match">'
+                f'{csrf}<button type="submit" class="wb-danger-item">'
+                f"{self.icon('trash-2')}Delete</button></form></li>",
+                f'<form method="post" action="{delete_url}" '
+                f'data-confirm="The match “{name}” will be removed for good." '
+                'data-confirm-title="Delete this match?" data-confirm-label="Delete">'
+                f'{csrf}<button type="submit" class="destructive-item">'
+                f"{self.icon('trash')}Delete</button></form>",
+            )
+            if delete
+            else ("", "")
+        )
+        return self.by_shell(
+            workbook=(
+                '<td class="wb-row-actions"><div class="wb-row-buttons">'
+                '<button type="button" class="wb-button wb-button-quiet '
+                'wb-button-icon wb-button-small wb-menu-button" '
+                f'popovertarget="wbm-match-{match.pk}" aria-expanded="false" '
+                f'aria-label="More actions for {name}">{self.icon("ellipsis")}'
+                "</button>"
+                f'<div class="wb-menu" popover id="wbm-match-{match.pk}"><ul>'
+                f"{workbook_referees}{workbook_statistics}{workbook_edit}"
+                f"{workbook_delete}</ul></div></div></td>"
+            ),
+            explorer=(
+                '<td class="actions-cell"><div class="row-actions"><div class="menu">'
+                '<button type="button" class="button quiet icon-only compact" '
+                'data-popover aria-expanded="false" '
+                f'aria-controls="row-menu-match-{match.pk}">{self.icon("more")}'
+                f'<span class="visually-hidden">More actions for {name}</span>'
+                "</button>"
+                f'<div class="menu-panel" id="row-menu-match-{match.pk}">'
+                f"{explorer_referees}{explorer_statistics}{explorer_edit}"
+                f"{explorer_delete}</div></div></div></td>"
+            ),
+        )
+
+    def statistics_link(self, match):
+        """The run sheet's link to the match's statistics page."""
+        url = self.reverse(self.detail, *match._get_url_args())
+        return self.by_shell(
+            workbook=f'<a href="{url}">{self.icon("chart-bar")}Detail</a>',
+            explorer=f'<a href="{url}">Statistics</a>',
+        )
+
+    def back_to_sheet(self, name, match):
+        """
+        The URL of the match's page ``name``, which sends the person back to
+        the run sheet of the match's day.
+        """
+        season = match.stage.division.season
+        sheet = self.reverse(
+            "admin:fixja:match-runsheet",
+            season.competition_id,
+            season.pk,
+            f"{match.date:%Y%m%d}",
+        )
+        namespace = "admin:fixja:competition:season:division:stage:match"
+        # The sheet writes its own path after "?next=" as it is, which
+        # reverse(query=) would percent-encode.
+        url = self.reverse(f"{namespace}:{name}", *match._get_url_args())
+        return f"{url}?next={sheet}"
+
+    def resync_link(self, match):
+        """The run sheet's link that re-pushes the match's broadcast to YouTube."""
+        url = self.back_to_sheet("resync-live-stream", match)
+        return self.by_shell(
+            workbook=f'<a href="{url}">{self.icon("refresh-cw")}Resync</a>',
+            explorer=f'<a href="{url}">Resync</a>',
+        )
+
+    def stream_link(self, match, icon, label):
+        """
+        The Workbook run sheet's link to the match's page about its stream:
+        "Fix stream" for a broadcast without a stream key, "Stream?" for a
+        match on a camera ground that is not being streamed.
+        """
+        url = self.back_to_sheet("edit", match)
+        return f'<a href="{url}">{self.icon(icon)}{label}</a>'
+
+    def referees_link(self, match):
+        """
+        The run sheet's link to the match's referees page, which sends the
+        person back to the sheet.
+        """
+        url = self.back_to_sheet("referees", match)
+        return self.by_shell(
+            workbook=f'<a href="{url}">{self.icon("flag")}Referees</a>',
+            explorer=f'<a href="{url}">Referees</a>',
+        )
+
+    # The run sheet's cost is fixed, however many matches the day has: the
+    # sheet asks guardian for the person's permissions on the day's matches
+    # once and Django for their permissions on every match once (their own
+    # and their groups'), and selects or prefetches every relation a row
+    # touches.
+    RUN_SHEET_QUERIES = 13
+
+    def get_run_sheet(self, queries=None):
+        """
+        The run sheet of 1 May 2025, as the member of staff sees it, at the
+        fixed cost unless ``queries`` says otherwise.
+        """
+        if queries is None:
+            queries = self.RUN_SHEET_QUERIES
+        season = self.stage.division.season
+        self.warm_caches()
+        with self.login(self.staff), self.assertNumQueries(queries):
+            self.get_check_200(
+                "admin:fixja:match-runsheet",
+                season.competition_id,
+                season.pk,
+                "20250501",
+            )
+
+
+class MatchUrlsTests(TestCase):
+    """A match names its pages in the admin, its statistics page among them."""
+
+    def test_detail_is_the_statistics_page(self):
+        match = factories.MatchFactory.create()
+        self.assertEqual(
+            str(match.urls["detail"]),
+            self.reverse(
+                "admin:fixja:competition:season:division:stage:match:detail",
+                *match._get_url_args(),
+            ),
+        )
+
+
+@per_shell
+class MatchDetailNotReadyTests(MatchRowMixin, TestCase):
+    """
+    The players' statistics of a match are entered once both teams are known
+    and the result is in: each side's points must add up to its score. Until
+    then the statistics page sends the person to the match's page with a
+    message saying why, and neither the run sheet nor the match's row menu
+    links to it.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.stage = factories.StageFactory.create()
+
+    def match(self, **kwargs):
+        return factories.MatchFactory.create(
+            stage=self.stage, date=date(2025, 5, 1), **kwargs
+        )
+
+    def assertSentToMatch(self, match):
+        self.assert_http_302_found(url=str(match.urls["edit"]))
+        self.assertResponseMessages(
+            [
+                messages.Message(
+                    messages.WARNING,
+                    "Player statistics can be entered once both teams are "
+                    "known and the result is in.",
+                )
+            ]
+        )
+
+    def test_match_without_result(self):
+        match = self.match()
+        with self.login(self.superuser):
+            self.get(self.detail, *match._get_url_args())
+        self.assertSentToMatch(match)
+
+    def test_bye(self):
+        match = self.match(is_bye=True, away_team=None, bye_processed=True)
+        with self.login(self.superuser):
+            self.get(self.detail, *match._get_url_args())
+        self.assertSentToMatch(match)
+
+    def test_undecided_team(self):
+        # The scores are in, so only the team still to be decided stops it.
+        match = self.match(
+            home_team=None,
+            home_team_undecided=factories.UndecidedTeamFactory.create(stage=self.stage),
+            home_team_score=2,
+            away_team_score=1,
+        )
+        with self.login(self.superuser):
+            self.get(self.detail, *match._get_url_args())
+        self.assertSentToMatch(match)
+
+    def test_post_saves_nothing(self):
+        match = self.match()
+        factories.TeamAssociationFactory.create(
+            is_player=True, team=match.home_team, person__club=match.home_team.club
+        )
+        data = {
+            "home-TOTAL_FORMS": "1",
+            "home-INITIAL_FORMS": "1",
+            "home-MAX_NUM_FORMS": "1000",
+            "home-0-id": "",
+            "home-0-number": "7",
+            "home-0-played": "1",
+            "home-0-points": "0",
+            "home-0-mvp": "0",
+            "away-TOTAL_FORMS": "0",
+            "away-INITIAL_FORMS": "0",
+            "away-MAX_NUM_FORMS": "1000",
+        }
+        with self.login(self.superuser):
+            self.post(self.detail, *match._get_url_args(), data=data)
+        self.assertSentToMatch(match)
+        self.assertCountEqual(match.statistics.all(), [])
+
+    def test_run_sheet_links_only_matches_with_a_result(self):
+        played = self.match(home_team_score=3, away_team_score=1)
+        unplayed = self.match()
+        season = self.stage.division.season
+        with self.login(self.superuser):
+            self.get_check_200(
+                "admin:fixja:match-runsheet",
+                season.competition_id,
+                season.pk,
+                "20250501",
+            )
+        self.assertResponseContains(self.statistics_link(played), count=1)
+        self.assertResponseContains(self.statistics_link(unplayed), count=0)
+
+    def test_row_menu_offers_statistics_only_with_a_result(self):
+        played = self.match(
+            home_team__title="Leopards",
+            away_team__title="Marlins",
+            home_team_score=3,
+            away_team_score=1,
+        )
+        unplayed = self.match(home_team__title="Sharks", away_team__title="Eagles")
+        bye = self.match(
+            home_team__title="Hawks", is_bye=True, away_team=None, bye_processed=True
+        )
+        undecided = self.match(
+            home_team=None,
+            home_team_undecided=factories.UndecidedTeamFactory.create(
+                stage=self.stage, label="Winner SF1"
+            ),
+            away_team__title="Lions",
+            home_team_score=2,
+            away_team_score=1,
+        )
+        with self.login(self.superuser):
+            self.get_check_200(
+                "admin:fixja:competition:season:division:stage:edit",
+                *self.stage._get_url_args(),
+            )
+        self.assertResponseContains(
+            self.actions_cell(played, "Leopards vs Marlins", statistics=True)
+        )
+        self.assertResponseContains(self.actions_cell(unplayed, "Sharks vs Eagles"))
+        self.assertResponseContains(self.actions_cell(bye, "Hawks vs Bye"))
+        self.assertResponseContains(self.actions_cell(undecided, "Winner SF1 vs Lions"))
+
+
+@per_shell
+class MatchDetailPermissionTests(MatchRowMixin, TestCase):
+    """
+    The players' statistics of a match are entered by whoever may change the
+    match: ``change_match`` on the match, or on every match, as the match's
+    own page asks. The statistics page refuses anyone else, and the row menu
+    and the run sheet offer it only to those who may open it.
+    """
+
+    user_factory = StaffFactory
+
+    def setUp(self):
+        super().setUp()
+        self.stage = factories.StageFactory.create()
+        self.staff = self.make_user("staff")
+
+    def match(self, **kwargs):
+        """A match on 1 May 2025 with its result in, 3-0 to the home side."""
+        return factories.MatchFactory.create(
+            **{
+                "stage": self.stage,
+                "date": date(2025, 5, 1),
+                "home_team_score": 3,
+                "away_team_score": 0,
+                **kwargs,
+            }
+        )
+
+    def statistics(self, match):
+        """One home player, who scored the home side's three points."""
+        factories.TeamAssociationFactory.create(
+            is_player=True, team=match.home_team, person__club=match.home_team.club
+        )
+        return {
+            "home-TOTAL_FORMS": "1",
+            "home-INITIAL_FORMS": "1",
+            "home-MAX_NUM_FORMS": "1000",
+            "home-0-id": "",
+            "home-0-number": "7",
+            "home-0-played": "1",
+            "home-0-points": "3",
+            "home-0-mvp": "0",
+            "away-TOTAL_FORMS": "0",
+            "away-INITIAL_FORMS": "0",
+            "away-MAX_NUM_FORMS": "1000",
+        }
+
+    def test_login_required(self):
+        match = self.match()
+        self.assertLoginRequired(self.detail, *match._get_url_args())
+
+    def test_staff_without_change_match_is_refused(self):
+        match = self.match()
+        data = self.statistics(match)
+        with self.login(self.staff):
+            self.get(self.detail, *match._get_url_args())
+            self.assert_http_403_forbidden()
+            self.post(self.detail, *match._get_url_args(), data=data)
+            self.assert_http_403_forbidden()
+        self.assertCountEqual(match.statistics.all(), [])
+
+    def test_change_match_on_another_match_is_refused(self):
+        match = self.match()
+        assign_perm("competition.change_match", self.staff, self.match())
+        with self.login(self.staff):
+            self.get(self.detail, *match._get_url_args())
+            self.assert_http_403_forbidden()
+
+    def test_refused_before_the_result_is_looked_at(self):
+        # Someone who may not change the match is refused, not sent to the
+        # match's page to be told its result is not in.
+        match = self.match(home_team_score=None, away_team_score=None)
+        with self.login(self.staff):
+            self.get(self.detail, *match._get_url_args())
+            self.assert_http_403_forbidden()
+
+    def test_change_match_on_the_match_enters_statistics(self):
+        match = self.match()
+        data = self.statistics(match)
+        assign_perm("competition.change_match", self.staff, match)
+        with self.login(self.staff):
+            self.get(self.detail, *match._get_url_args())
+            self.assert_http_200_ok()
+            self.post(self.detail, *match._get_url_args(), data=data)
+            self.assert_http_302_found(url=self.reverse("admin:index"))
+        self.assertEqual(match.statistics.get().points, 3)
+
+    def test_change_match_on_every_match_opens_the_page(self):
+        match = self.match()
+        assign_perm("competition.change_match", self.staff)
+        with self.login(self.staff):
+            self.get(self.detail, *match._get_url_args())
+            self.assert_http_200_ok()
+
+    def test_row_menu_offers_statistics_to_those_who_may_change_the_match(self):
+        # The stage's Matches tab lists the matches the person may act on at
+        # all. They may change the first and delete the second, so both rows
+        # are drawn, and Statistics is offered with Edit, not with Delete.
+        theirs = self.match(home_team__title="Leopards", away_team__title="Marlins")
+        other = self.match(home_team__title="Sharks", away_team__title="Eagles")
+        assign_perm("competition.change_stage", self.staff, self.stage)
+        assign_perm("competition.change_match", self.staff, theirs)
+        assign_perm("competition.delete_match", self.staff, other)
+        with self.login(self.staff):
+            self.get_check_200(
+                "admin:fixja:competition:season:division:stage:edit",
+                *self.stage._get_url_args(),
+            )
+        self.assertResponseContains(
+            self.actions_cell(
+                theirs, "Leopards vs Marlins", statistics=True, delete=False
+            )
+        )
+        self.assertResponseContains(
+            self.actions_cell(other, "Sharks vs Eagles", edit=False, referees=False)
+        )
+
+    def test_row_menu_offers_edit_and_statistics_for_change_match_on_every_match(
+        self,
+    ):
+        # change_match on every match (a global permission) opens each match's
+        # edit, referees and statistics pages, so the row menu offers them, as
+        # it does for change_match on the one match. The tab lists every match
+        # for the holder of a global permission.
+        first = self.match(home_team__title="Leopards", away_team__title="Marlins")
+        second = self.match(home_team__title="Sharks", away_team__title="Eagles")
+        assign_perm("competition.change_stage", self.staff, self.stage)
+        assign_perm("competition.change_match", self.staff)
+        with self.login(self.staff):
+            self.get_check_200(
+                "admin:fixja:competition:season:division:stage:edit",
+                *self.stage._get_url_args(),
+            )
+        self.assertResponseContains(
+            self.actions_cell(
+                first, "Leopards vs Marlins", statistics=True, delete=False
+            )
+        )
+        self.assertResponseContains(
+            self.actions_cell(second, "Sharks vs Eagles", statistics=True, delete=False)
+        )
+
+    def test_run_sheet_offers_statistics_to_those_who_may_change_the_match(self):
+        theirs = self.match(home_team__title="Leopards")
+        other = self.match(home_team__title="Sharks")
+        assign_perm("competition.change_match", self.staff, theirs)
+        self.get_run_sheet()
+        self.assertResponseContains(self.statistics_link(theirs), count=1)
+        # The other match is on the sheet, without the link.
+        self.assertResponseContains(
+            self.by_shell(
+                workbook="<td>Sharks <strong>3</strong></td>",
+                explorer='<td class="team">Sharks <strong>3</strong></td>',
+            )
+        )
+        self.assertResponseContains(self.statistics_link(other), count=0)
+
+    def test_run_sheet_costs_the_same_however_many_matches(self):
+        # Four refereed matches cost what two do: a row's stage, division,
+        # season, competition, place and referees come with the sheet's own
+        # queries, not one each a row. A season with referees costs four
+        # more than one without, whatever the sheet: every page of the season
+        # fetches its referees' people, users and clubs, and the sheet
+        # fetches the matches' referees' people once.
+        season = self.stage.division.season
+        referees = factories.SeasonRefereeFactory.create_batch(2, season=season)
+        queries = self.RUN_SHEET_QUERIES + 4
+
+        def refereed_match():
+            match = self.match()
+            assign_perm("competition.change_match", self.staff, match)
+            match.referees.set(referees)
+            return match
+
+        matches = [refereed_match() for _ in range(2)]
+        self.get_run_sheet(queries)
+        matches += [refereed_match() for _ in range(2)]
+        self.get_run_sheet(queries)
+        for match in matches:
+            self.assertResponseContains(self.statistics_link(match), count=1)
+        names = [
+            f"{referee.person.first_name[0]} {referee.person.last_name}"
+            for referee in season.referees.all()
+        ]
+        self.assertResponseContains(
+            self.by_shell(
+                workbook=f"<td><div>{names[0]}</div><div>{names[1]}</div></td>",
+                explorer=f"<td>{names[0]}<br>{names[1]}</td>",
+            ),
+            count=4,
+        )
+
+    def test_run_sheet_offers_statistics_for_change_match_on_every_match(self):
+        first = self.match(home_team__title="Leopards")
+        second = self.match(home_team__title="Sharks")
+        assign_perm("competition.change_match", self.staff)
+        self.get_run_sheet()
+        self.assertResponseContains(self.statistics_link(first), count=1)
+        self.assertResponseContains(self.statistics_link(second), count=1)
+
+
+@per_shell
+class RefereeAppointmentsPermissionTests(MatchRowMixin, TestCase):
+    """
+    A match's referees are appointed by whoever may change the match, which is
+    what its referees page asks. The row menu and the run sheet offer the page
+    only to those who may open it.
+    """
+
+    user_factory = StaffFactory
+
+    def setUp(self):
+        super().setUp()
+        self.stage = factories.StageFactory.create()
+        self.staff = self.make_user("staff")
+
+    def match(self, **kwargs):
+        """A match on 1 May 2025, yet to be played."""
+        return factories.MatchFactory.create(
+            stage=self.stage, date=date(2025, 5, 1), **kwargs
+        )
+
+    def test_staff_without_change_match_is_refused(self):
+        match = self.match()
+        with self.login(self.staff):
+            self.get(self.referees, *match._get_url_args())
+            self.assert_http_403_forbidden()
+
+    def test_change_match_on_the_match_opens_the_page(self):
+        match = self.match()
+        assign_perm("competition.change_match", self.staff, match)
+        with self.login(self.staff):
+            self.get_check_200(self.referees, *match._get_url_args())
+
+    def test_row_menu_offers_referees_to_those_who_may_change_the_match(self):
+        # The stage's Matches tab lists the matches the person may act on at
+        # all. They may change the first and delete the second, so both rows
+        # are drawn, and Referees is offered with Edit, not with Delete.
+        theirs = self.match(home_team__title="Leopards", away_team__title="Marlins")
+        other = self.match(home_team__title="Sharks", away_team__title="Eagles")
+        assign_perm("competition.change_stage", self.staff, self.stage)
+        assign_perm("competition.change_match", self.staff, theirs)
+        assign_perm("competition.delete_match", self.staff, other)
+        with self.login(self.staff):
+            self.get_check_200(
+                "admin:fixja:competition:season:division:stage:edit",
+                *self.stage._get_url_args(),
+            )
+        self.assertResponseContains(
+            self.actions_cell(theirs, "Leopards vs Marlins", delete=False)
+        )
+        self.assertResponseContains(
+            self.actions_cell(other, "Sharks vs Eagles", edit=False, referees=False)
+        )
+
+    def test_run_sheet_offers_referees_to_those_who_may_change_the_match(self):
+        theirs = self.match(home_team__title="Leopards")
+        other = self.match(home_team__title="Sharks")
+        assign_perm("competition.change_match", self.staff, theirs)
+        self.get_run_sheet()
+        self.assertResponseContains(self.referees_link(theirs), count=1)
+        # The other match is on the sheet, without the link.
+        self.assertResponseContains(
+            self.by_shell(
+                workbook="<td>Sharks</td>", explorer='<td class="team">Sharks</td>'
+            )
+        )
+        self.assertResponseContains(self.referees_link(other), count=0)
+
+
+@per_shell
+class GlobalChangePermissionRowMenuTests(IconMixin, TestCase):
+    """
+    A change permission held on every object of a model (a global permission)
+    opens each object's edit page, so the rows of the division's Stages and
+    Teams tabs offer Edit to its holder, as they do to the holder of the
+    permission on the one object.
+    """
+
+    user_factory = StaffFactory
+
+    def setUp(self):
+        super().setUp()
+        self.division = factories.DivisionFactory.create()
+        self.staff = self.make_user("staff")
+        assign_perm("competition.change_division", self.staff, self.division)
+
+    def edit_item(self, name, obj):
+        """The Edit item of the row menu of ``obj``, whose edit view is ``name``."""
+        url = self.reverse(name, *obj._get_url_args())
+        return self.by_shell(
+            workbook=f'<li><a href="{url}">{self.icon("pencil")}Edit</a></li>',
+            explorer=f'<a href="{url}">{self.icon("edit")}Edit</a>',
+        )
+
+    def test_stages_offer_edit_for_change_stage_on_every_stage(self):
+        stage = factories.StageFactory.create(division=self.division)
+        assign_perm("competition.change_stage", self.staff)
+        with self.login(self.staff):
+            self.get_check_200(
+                "admin:fixja:competition:season:division:edit",
+                *self.division._get_url_args(),
+            )
+        self.assertResponseContains(
+            self.edit_item("admin:fixja:competition:season:division:stage:edit", stage)
+        )
+
+    def test_stages_withhold_edit_without_change_stage(self):
+        stage = factories.StageFactory.create(division=self.division)
+        assign_perm("competition.delete_stage", self.staff, stage)
+        with self.login(self.staff):
+            self.get_check_200(
+                "admin:fixja:competition:season:division:edit",
+                *self.division._get_url_args(),
+            )
+        self.assertResponseContains(
+            self.edit_item("admin:fixja:competition:season:division:stage:edit", stage),
+            count=0,
+        )
+
+    def test_teams_offer_edit_for_change_team_on_every_team(self):
+        team = factories.TeamFactory.create(division=self.division)
+        assign_perm("competition.change_team", self.staff)
+        with self.login(self.staff):
+            self.get_check_200(
+                "admin:fixja:competition:season:division:edit",
+                *self.division._get_url_args(),
+            )
+        self.assertResponseContains(
+            self.edit_item("admin:fixja:competition:season:division:team:edit", team)
+        )
+
+    def test_teams_withhold_edit_without_change_team(self):
+        team = factories.TeamFactory.create(division=self.division)
+        assign_perm("competition.delete_team", self.staff, team)
+        with self.login(self.staff):
+            self.get_check_200(
+                "admin:fixja:competition:season:division:edit",
+                *self.division._get_url_args(),
+            )
+        self.assertResponseContains(
+            self.edit_item("admin:fixja:competition:season:division:team:edit", team),
+            count=0,
+        )
+
+
+class StreamedMatchMixin(MatchRowMixin):
+    """A season set up to stream to YouTube, with a camera on one ground."""
+
+    user_factory = StaffFactory
+
+    def setUp(self):
+        super().setUp()
+        self.stage = factories.StageFactory.create(
+            division__season__live_stream=True,
+            division__season__live_stream_project_id="test-project-123",
+            division__season__live_stream_client_id="test-client-id",
+            division__season__live_stream_client_secret="test-client-secret",
+            division__season__live_stream_refresh_token="refresh-token",
+        )
+        self.camera = factories.GroundFactory.create(
+            venue__season=self.stage.division.season, live_stream=True
+        )
+        self.staff = self.make_user("staff")
+        # YouTube's broadcast identifiers are unique.
+        self.broadcasts = count(1)
+
+    def match(self, **kwargs):
+        """A match on the camera ground at 14:00 UTC on 1 May 2025."""
+        return factories.MatchFactory.create(
+            **{
+                "stage": self.stage,
+                "play_at": self.camera,
+                "date": date(2025, 5, 1),
+                "time": time(14, 0),
+                "datetime": datetime(2025, 5, 1, 14, 0, tzinfo=ZoneInfo("UTC")),
+                **kwargs,
+            }
+        )
+
+    def streamed(self, **kwargs):
+        """A match whose broadcast is scheduled and bound to a stream key."""
+        return self.match(
+            live_stream=True,
+            live_stream_bind="yt-bound-abc",
+            external_identifier=f"yt-broadcast-{next(self.broadcasts)}",
+            **kwargs,
+        )
+
+
+@per_shell
+class ResyncLiveStreamPermissionTests(MessagesTestMixin, StreamedMatchMixin, TestCase):
+    """
+    A match's broadcast is re-pushed to YouTube by whoever may change the
+    match, as its own page asks. The resync page refuses anyone else, and the
+    run sheet offers Resync only to those who may use it.
+    """
+
+    resync = "admin:fixja:competition:season:division:stage:match:resync-live-stream"
+
+    def test_login_required(self):
+        match = self.streamed()
+        self.assertLoginRequired(self.resync, *match._get_url_args())
+
+    @patch("tournamentcontrol.competition.admin.sync_live_stream")
+    def test_staff_without_change_match_is_refused(self, mock_sync_live_stream):
+        match = self.streamed()
+        with self.login(self.staff):
+            self.get(self.resync, *match._get_url_args())
+            self.assert_http_403_forbidden()
+            self.post(self.resync, *match._get_url_args())
+            self.assert_http_403_forbidden()
+        mock_sync_live_stream.s.assert_not_called()
+
+    @patch("tournamentcontrol.competition.admin.sync_live_stream")
+    def test_change_match_on_another_match_is_refused(self, mock_sync_live_stream):
+        match = self.streamed()
+        assign_perm("competition.change_match", self.staff, self.streamed())
+        with self.login(self.staff):
+            self.post(self.resync, *match._get_url_args())
+            self.assert_http_403_forbidden()
+        mock_sync_live_stream.s.assert_not_called()
+
+    @patch("tournamentcontrol.competition.admin.sync_live_stream")
+    def test_change_match_on_the_match_queues_the_resync(self, mock_sync_live_stream):
+        match = self.streamed()
+        assign_perm("competition.change_match", self.staff, match)
+        with self.login(self.staff):
+            self.get(self.resync, *match._get_url_args())
+            self.assert_http_200_ok()
+            self.post(self.resync, *match._get_url_args())
+            self.assert_http_302_found(url=str(self.stage.urls["edit"]))
+        self.assertResponseMessages(
+            [
+                messages.Message(
+                    messages.SUCCESS, "YouTube live stream resync has been queued."
+                )
+            ]
+        )
+        mock_sync_live_stream.s.assert_called_once_with(match.pk, base_url=ANY)
+        mock_sync_live_stream.s.return_value.apply_async.assert_called_once_with()
+
+    def test_change_match_on_every_match_opens_the_page(self):
+        match = self.streamed()
+        assign_perm("competition.change_match", self.staff)
+        with self.login(self.staff):
+            self.get_check_200(self.resync, *match._get_url_args())
+
+    def test_run_sheet_offers_resync_to_those_who_may_change_the_match(self):
+        theirs = self.streamed(home_team__title="Leopards")
+        other = self.streamed(home_team__title="Sharks")
+        assign_perm("competition.change_match", self.staff, theirs)
+        self.get_run_sheet()
+        self.assertResponseContains(self.resync_link(theirs), count=1)
+        # The other match is on the sheet, without the link.
+        self.assertResponseContains(
+            self.by_shell(
+                workbook="<td>Sharks</td>", explorer='<td class="team">Sharks</td>'
+            )
+        )
+        self.assertResponseContains(self.resync_link(other), count=0)
+
+
+@per_shell(shells=("workbook",))
+class StreamLinksPermissionTests(StreamedMatchMixin, TestCase):
+    """
+    The Workbook run sheet's "Fix stream" and "Stream?" links open the match's
+    page, which asks for ``change_match``, so they are offered only to those
+    who may change the match. The Explorer sheet has no such links.
+    """
+
+    def test_fix_stream_is_offered_to_those_who_may_change_the_match(self):
+        # Streaming, but not yet bound to a stream key.
+        theirs = self.match(live_stream=True, home_team__title="Leopards")
+        other = self.match(live_stream=True, home_team__title="Sharks")
+        assign_perm("competition.change_match", self.staff, theirs)
+        self.get_run_sheet()
+        self.assertResponseContains(
+            self.stream_link(theirs, "triangle-alert", "Fix stream"), count=1
+        )
+        self.assertResponseContains("<td>Sharks</td>")
+        self.assertResponseContains(
+            self.stream_link(other, "triangle-alert", "Fix stream"), count=0
+        )
+
+    def test_stream_prompt_is_offered_to_those_who_may_change_the_match(self):
+        # On a camera ground, not streamed.
+        theirs = self.match(home_team__title="Leopards")
+        other = self.match(home_team__title="Sharks")
+        assign_perm("competition.change_match", self.staff, theirs)
+        # Whether the ground has a camera comes with the sheet's places.
+        self.get_run_sheet()
+        self.assertResponseContains(
+            self.stream_link(theirs, "pencil", "Stream?"), count=1
+        )
+        self.assertResponseContains("<td>Sharks</td>")
+        self.assertResponseContains(
+            self.stream_link(other, "pencil", "Stream?"), count=0
+        )
+
+
+@per_shell(shells=("explorer",))
+class MatchPageStatisticsTests(IconMixin, TestCase):
+    """
+    Explorer's page of a match has a Statistics button beside Referees once
+    the players' statistics of the match can be entered: both teams are known
+    and the result is in. A bye never has one. The page itself, and so the
+    button, is for those who may change the match.
+    """
+
+    namespace = "admin:fixja:competition:season:division:stage:match"
+    user_factory = StaffFactory
+
+    def button(self, match, name, icon, label):
+        url = self.reverse(f"{self.namespace}:{name}", *match._get_url_args())
+        return (
+            f'<a class="button quiet" href="{url}">{self.icon(icon)}'
+            f"<span>{label}</span></a>"
+        )
+
+    def get_match_page(self, **kwargs):
+        match = factories.MatchFactory.create(**kwargs)
+        with self.login(self.superuser):
+            self.get_check_200(f"{self.namespace}:edit", *match._get_url_args())
+        self.assertResponseContains(
+            self.button(match, "referees", "referee", "Referees")
+        )
+        return match
+
+    def test_match_with_a_result(self):
+        match = self.get_match_page(home_team_score=3, away_team_score=1)
+        self.assertResponseContains(
+            self.button(match, "detail", "chart", "Statistics"), count=1
+        )
+
+    def test_match_without_a_result(self):
+        match = self.get_match_page()
+        self.assertResponseContains(
+            self.button(match, "detail", "chart", "Statistics"), count=0
+        )
+
+    def test_bye(self):
+        match = self.get_match_page(is_bye=True, away_team=None, bye_processed=True)
+        self.assertResponseContains(
+            self.button(match, "detail", "chart", "Statistics"), count=0
+        )
+
+    def test_undecided_team(self):
+        stage = factories.StageFactory.create()
+        match = self.get_match_page(
+            stage=stage,
+            home_team=None,
+            home_team_undecided=factories.UndecidedTeamFactory.create(stage=stage),
+            home_team_score=2,
+            away_team_score=1,
+        )
+        self.assertResponseContains(
+            self.button(match, "detail", "chart", "Statistics"), count=0
+        )
+
+    def test_change_match_on_the_match_shows_the_button(self):
+        match = factories.MatchFactory.create(home_team_score=3, away_team_score=1)
+        staff = self.make_user("staff")
+        assign_perm("competition.change_match", staff, match)
+        with self.login(staff):
+            self.get_check_200(f"{self.namespace}:edit", *match._get_url_args())
+        self.assertResponseContains(
+            self.button(match, "detail", "chart", "Statistics"), count=1
+        )
+
+    def test_without_change_match_the_page_is_refused(self):
+        match = factories.MatchFactory.create(home_team_score=3, away_team_score=1)
+        with self.login(self.make_user("staff")):
+            self.get(f"{self.namespace}:edit", *match._get_url_args())
+            self.assert_http_403_forbidden()
+
+
+class DashboardQueryTests(DashboardQueriesMixin, TestCase):
+    """
+    The dashboard lists matches awaiting results and the stages with
+    reports to print. Each report row looked up its division, season and
+    competition on its own. The same query budget now holds however many
+    stages need reports.
+    """
+
+    def _stages(self, count):
+        season = factories.SeasonFactory.create()
+        for _ in range(count):
+            stage = factories.StageFactory.create(division__season=season)
+            stage.matches_needing_printing.add(
+                factories.MatchFactory.create(stage=stage)
+            )
+
+    def test_few_stages_query_count(self):
+        self._stages(2)
+        self.assertDashboardQueries(dashboard_budget())
+
+    def test_many_stages_query_count(self):
+        self._stages(8)
+        self.assertDashboardQueries(dashboard_budget())
+
+
+class MostValuableWidgetTests(DashboardQueriesMixin, TestCase):
+    """
+    The "Awaiting MVP Points" widget lists the matches where a team's
+    players have statistics but no MVP points. Each row it listed looked up
+    its teams, clubs, stage, division, season and competition on its own, so
+    the dashboard made more queries the more seasons were waiting. The same
+    query budget now holds however many seasons and matches are listed.
+    """
+
+    def _season(self, matches=2, divisions=2, **kwargs):
+        season = factories.SeasonFactory.create(**kwargs)
+        listed = []
+        for _ in range(divisions):
+            stage = factories.StageFactory.create(division__season=season)
+            for _ in range(matches):
+                listed.append(self._match(stage, home_mvp=0, away_mvp=1))
+        return listed
+
+    def _match(self, stage, home_mvp, away_mvp):
+        match = factories.MatchFactory.create(
+            stage=stage, home_team_score=3, away_team_score=1
+        )
+        for team, mvp in ((match.home_team, home_mvp), (match.away_team, away_mvp)):
+            association = factories.TeamAssociationFactory.create(
+                team=team, person__club=team.club, is_player=True
+            )
+            SimpleScoreMatchStatistic.objects.create(
+                match=match,
+                player=association.person,
+                number=1,
+                played=1,
+                points=0,
+                mvp=mvp,
+            )
+        return match
+
+    def get_dashboard(self):
+        with self.login(self.superuser):
+            self.get_check_200("admin:index")
+
+    def dashboard_queries(self):
+        with self.login(self.superuser):
+            with CaptureQueriesContext(connection) as queries:
+                self.get("admin:index")
+            self.assert_http_200_ok()
+        return len(queries)
+
+    def test_few_seasons_query_count(self):
+        self._season()
+        self.assertDashboardQueries(dashboard_budget())
+
+    def test_many_seasons_query_count(self):
+        for _ in range(6):
+            self._season(matches=4)
+        self.assertDashboardQueries(dashboard_budget())
+
+    def test_query_count_does_not_grow(self):
+        self._season()
+        few = self.dashboard_queries()
+        for _ in range(5):
+            self._season(matches=4)
+        self.assertEqual(self.dashboard_queries(), few)
+
+    def test_matches_listed(self):
+        listed = self._season(matches=1, divisions=1)
+        # A completed season whose MVP results have no publish time is
+        # still listed, as it always has been.
+        listed += self._season(
+            matches=1, divisions=1, complete=True, mvp_results_public=None
+        )
+        # A completed season whose MVP results have a publish time is not.
+        self._season(
+            matches=1,
+            divisions=1,
+            complete=True,
+            mvp_results_public=datetime(2020, 1, 1, tzinfo=ZoneInfo("UTC")),
+        )
+        # Nor is a stage that does not keep MVP points, a match where both
+        # teams have MVP points, or one where none were entered at all.
+        season = factories.SeasonFactory.create()
+        self._match(
+            factories.StageFactory.create(division__season=season, keep_mvp=False),
+            home_mvp=0,
+            away_mvp=0,
+        )
+        stage = factories.StageFactory.create(division__season=season)
+        self._match(stage, home_mvp=1, away_mvp=2)
+        self._match(stage, home_mvp=None, away_mvp=None)
+
+        self.assertCountEqual(
+            [match.pk for match in MostValuableWidget().matches],
+            [match.pk for match in listed],
+        )
+
+    def test_listed_match_links_to_match(self):
+        (match,) = self._season(matches=1, divisions=1)
+        self.get_dashboard()
+        url = reverse(
+            "admin:fixja:competition:season:division:stage:match:detail",
+            args=(
+                match.stage.division.season.competition_id,
+                match.stage.division.season_id,
+                match.stage.division_id,
+                match.stage_id,
+                match.pk,
+            ),
+        )
+        self.assertResponseContains(
+            f'<a class="{by_shell(workbook="wb-button wb-button-small", explorer="button compact")}" '
+            f'href="{url}">Enter</a>'
+        )
+
+
+class WizardBrandTests(TestCase):
+    """
+    The wizards render through SessionWizardView, not AdminComponentMixin.render,
+    so the shell must brand them without the context processor's help.
+    """
+
+    @override_settings(TOUCHTECHNOLOGY_ADMIN_BRAND=None)
+    def test_draw_generation_wizard_is_branded_without_the_context_processor(self):
+        stage = factories.StageFactory.create(
+            division__season__mode=DAILY, division__games_per_day=1
+        )
+        factories.TeamFactory.create_batch(4, division=stage.division)
+        build_url = stage.url_names["build"]
+
+        templates = copy.deepcopy(settings.TEMPLATES)
+        processors = templates[0]["OPTIONS"]["context_processors"]
+        processors.remove("touchtechnology.admin.context_processors.brand")
+
+        with self.settings(TEMPLATES=templates), self.login(self.superuser):
+            self.get(build_url.url_name, *build_url.args)
+            self.assert_http_200_ok()
+            self.assertNotIn("brand", self.last_response.context_data)
+            self.assertResponseContains(
+                by_shell(
+                    workbook=f"<title>Build the draw &middot; {stage.title} "
+                    "&middot; Administration</title>",
+                    explorer=f"<title>{stage.title} \u2013 Administration</title>",
+                ),
+            )
+            self.assertResponseContains(
+                "<style>:root{--brand-primary:#275d8b;--brand-secondary:#e8862a;"
+                "--brand-success:#2a8a5c;--brand-warning:#d9a21b;"
+                "--brand-danger:#b8322f;}</style>",
+            )
+            self.assertResponseContains(
+                by_shell(
+                    workbook='<a class="wb-brand" href="/admin/">'
+                    '<img class="wb-brand-logo" src="/static/img/logo.png" alt="">'
+                    '<span class="wb-brand-name">Administration</span></a>',
+                    explorer='<img src="/static/img/logo.png" alt="Administration">',
+                ),
+            )
+
+
+@per_shell
+class ByeMatchTests(MatchRowMixin, TestCase):
+    """
+    A bye match is named in plain text, "Bye vs Marlins". The admin puts the
+    name of a match where markup is not read as markup: the label of the
+    button that opens its row's menu, the words of the delete confirmation and
+    the title of its own page.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.stage = factories.StageFactory.create(title="Regular Season")
+        self.args = (
+            self.stage.division.season.competition_id,
+            self.stage.division.season_id,
+            self.stage.division_id,
+            self.stage.pk,
+        )
+
+    def bye(self, **kwargs):
+        return factories.MatchFactory.create(stage=self.stage, is_bye=True, **kwargs)
+
+    def results(self, **teams):
+        """The results page of the day of a bye, with only the bye to process."""
+        bye = self.bye(date=date(2026, 10, 8), time=None, datetime=None, **teams)
+        with self.login(self.superuser):
+            self.get_check_200(
+                "admin:fixja:match-results", *self.args[:2], f"{bye.date:%Y%m%d}"
+            )
+        return bye
+
+    def bye_row(self, bye, team):
+        """The bye's row on the results page, named for the team with the bye."""
+        division = self.stage.division.title
+        key = (
+            f'<input type="hidden" name="byes-0-id" value="{bye.pk}" id="id_byes-0-id">'
+        )
+        attrs = self.by_shell(
+            workbook='class="wb-select"', explorer='placeholder="Bye processed"'
+        )
+        select = (
+            f'<select name="byes-0-bye_processed" {attrs} id="id_byes-0-bye_processed">'
+            '<option value="1">Yes</option><option value="0" selected>No</option>'
+            "</select>"
+        )
+        return self.by_shell(
+            workbook=(
+                f'<div class="wb-row-form">{key}'
+                '<div class="wb-field wb-field-select select"><div class="wb-label">'
+                '<label class="field_name" for="id_byes-0-bye_processed">'
+                f"{team}</label></div>"
+                f'<div class="wb-control-wrap">{select}</div></div>'
+                f'<p class="wb-help">{division}</p></div>'
+            ),
+            explorer=(
+                f'<li class="bye">{key}<label for="id_byes-0-bye_processed">{team} '
+                f'<small class="muted">{division}</small></label>{select}</li>'
+            ),
+        )
+
+    def test_a_bye_at_home_is_named_in_its_row(self):
+        match = self.bye(home_team=None, away_team__title="Marlins")
+        with self.login(self.superuser):
+            self.get_check_200(
+                "admin:fixja:competition:season:division:stage:edit", *self.args
+            )
+        self.assertResponseContains(
+            self.by_shell(
+                workbook='<td data-label="Home">Bye</td>', explorer="<td>Bye</td>"
+            ),
+        )
+        self.assertResponseContains(self.actions_cell(match, "Bye vs Marlins"))
+
+    def test_a_bye_away_is_named_in_its_row(self):
+        match = self.bye(home_team__title="Leopards", away_team=None)
+        with self.login(self.superuser):
+            self.get_check_200(
+                "admin:fixja:competition:season:division:stage:edit", *self.args
+            )
+        self.assertResponseContains(
+            self.by_shell(
+                workbook='<td data-label="Away">Bye</td>', explorer="<td>Bye</td>"
+            ),
+        )
+        self.assertResponseContains(self.actions_cell(match, "Leopards vs Bye"))
+
+    def test_the_page_of_a_bye_is_titled_in_plain_text(self):
+        match = self.bye(home_team=None, away_team__title="Marlins")
+        with self.login(self.superuser):
+            self.get_check_200(
+                "admin:fixja:competition:season:division:stage:match:edit",
+                *self.args,
+                match.pk,
+            )
+        brand = get_brand().name
+        self.assertResponseContains(
+            self.by_shell(
+                workbook=f"<title>Bye vs Marlins &middot; {brand}</title>",
+                explorer=f"<title>Regular Season &ndash; {brand}</title>",
+            ),
+        )
+        self.assertResponseContains("<h1>Bye vs Marlins</h1>")
+
+    def test_the_results_page_names_the_home_team_of_a_bye_away(self):
+        bye = self.results(home_team__title="Leopards", away_team=None)
+        self.assertResponseContains(self.bye_row(bye, "Leopards"))
+
+    def test_the_results_page_names_the_away_team_of_a_bye_at_home(self):
+        bye = self.results(home_team=None, away_team__title="Marlins")
+        self.assertResponseContains(self.bye_row(bye, "Marlins"))

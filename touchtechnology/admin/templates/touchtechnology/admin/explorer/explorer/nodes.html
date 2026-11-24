@@ -1,0 +1,11 @@
+{% load i18n admin admin_explorer %}{% for node in nodes %}
+<li class="node{% if node.on_trail %} on-trail{% endif %}{% if node.current %} here{% endif %}{% if node.more %} more{% endif %}">
+	<div class="node-row">
+		{% if node.expandable %}<button type="button" class="twisty" aria-expanded="{{ node.open|yesno:"true,false" }}" aria-controls="{{ node.dom_id }}" data-node="{{ node.key }}"{% if node.children is None %} data-lazy{% endif %}>{% icon "chevron-right" %}<span class="visually-hidden">{% blocktrans with label=node.label %}Inside {{ label }}{% endblocktrans %}</span></button>{% else %}<span class="twisty-gap"></span>{% endif %}
+		<a class="node-link" href="{{ node.url|default:"#" }}"{% if node.is_page %} aria-current="page"{% elif node.current %} aria-current="location"{% endif %}>{% icon node.icon %}<span class="node-label">{{ node.label }}</span>{% if node.note %}<small class="node-note">{{ node.note }}</small>{% endif %}</a>
+	</div>
+	{% if node.expandable %}
+		<ul class="nodes" role="list" id="{{ node.dom_id }}"{% if not node.open %} hidden{% endif %}>{% if node.children is not None %}{% include "touchtechnology/admin/explorer/explorer/nodes.html" with nodes=node.children parent_key=node.key %}{% endif %}</ul>
+	{% endif %}
+</li>
+{% empty %}{% if parent_key %}<li class="node empty"><span class="node-empty">{% trans "Nothing here yet" %}</span></li>{% endif %}{% endfor %}

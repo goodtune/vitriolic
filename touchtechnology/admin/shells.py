@@ -1,0 +1,298 @@
+"""
+The shells the admin can wear.
+
+A shell is a complete presentation of the admin: its templates, its styles and
+scripts, its icons and the template tag library that draws them. The Python
+that drives the admin (the components, the explorer, the set-up checklists) is
+the same whichever shell is chosen. A deployment chooses one when it builds its
+site::
+
+    from touchtechnology.admin.sites import AdminSite
+
+    site = AdminSite(name="admin", shell="explorer")
+
+``"workbook"`` is the default.
+
+Every template a shell ships lives in a directory of its own, next to the
+neutral path a deployment may use to override it (see
+``AdminComponentMixin._template_path``): at each level the neutral path is
+tried first, then the shell's directory. Apart from the four shims described
+below, the library ships no page at a neutral path, so nothing is shadowed.
+
+What keeps working is an override that the admin finds by that search. A
+deployment's ``tournamentcontrol/competition/admin/season/edit.html``, say, is
+chosen for either shell, as it was before shells existed.
+
+What does not keep working, unless it is one of the four, is an override that
+*extends* a page by the neutral name it had in 4.x: that page is no longer
+there. The four are ``touchtechnology/admin/base.html``,
+``touchtechnology/admin/list.html``, ``touchtechnology/admin/edit.html`` and
+``40x.html``, kept for now as shims. A shim holds no markup. It
+extends the page of the same name in the folder of the shell in the context
+(``shell``, which the admin puts there for every page it renders, and the
+``brand`` context processor for every page), or of the default shell when the
+context has none; it follows the shell the site wears and so shadows neither.
+Any other 4.x page that was at a neutral path has moved into the shells'
+folders for good, and an override that extends it needs the new name.
+``docs/upgrading.md`` lists the names.
+"""
+
+import os.path
+from collections.abc import Mapping
+from dataclasses import dataclass
+from types import MappingProxyType
+
+from django.core.exceptions import ImproperlyConfigured
+
+#: The directory, under a component's template base, of the pages of every shell.
+TEMPLATE_ROOT = "touchtechnology/admin"
+STATIC_ROOT = "touchtechnology/admin"
+
+#: The icons Workbook draws from its sprite: one for each component's folder,
+#: by the component's ``app_name``, and one for the objects of each model, by
+#: the model's name.
+WORKBOOK_ICONS = MappingProxyType(
+    {
+        "components": MappingProxyType(
+            {
+                "competition": "trophy",
+                "content": "file-text",
+                "news": "newspaper",
+                "auth": "users",
+                "enrolment": "graduation-cap",
+                "settings": "settings",
+            }
+        ),
+        "component": "layout-grid",
+        "models": MappingProxyType(
+            {
+                "competition": "trophy",
+                "season": "calendar",
+                "division": "layers",
+                "stage": "git-merge",
+                "stagegroup": "users-round",
+                "team": "shield",
+                "undecidedteam": "circle-dashed",
+                "venue": "map-pin",
+                "ground": "map",
+                "match": "goal",
+                "club": "flag",
+                "person": "user",
+                "drawformat": "list-ordered",
+                "user": "user",
+                "group": "users",
+                "article": "newspaper",
+                "category": "tag",
+                "schoolyear": "school",
+                "grade": "award",
+                "classgroup": "users-round",
+                "student": "user",
+                "enrolment": "notebook-pen",
+                "teacher": "user",
+                "assessment": "clipboard-list",
+                "attendancerecord": "list-checks",
+                "reportcard": "book-marked",
+                "score": "star",
+            }
+        ),
+        # Workbook has an icon for every kind of object; one it does not know
+        # gets this.
+        "model": "file",
+        # A section of a component's menu is drawn with its model's icon.
+        "section": "model",
+        "item": "file",
+        "kinds": MappingProxyType({"page": "file"}),
+        # The icon of the folders and nodes a component's explorer names by role.
+        "roles": MappingProxyType(
+            {
+                "venues": "map-pin",
+                "days": "calendar-days",
+                "day": "square-check",
+                "teams": "shield",
+            }
+        ),
+        "more": "ellipsis",
+        "folder": "folder",
+    }
+)
+
+#: The icons Explorer draws from its sprite. Its sprite is named after the
+#: models, so an object is drawn with an icon of its model's name; a
+#: section uses the icon its component's menu names for it.
+EXPLORER_ICONS = MappingProxyType(
+    {
+        "components": MappingProxyType(
+            {
+                "competition": "competition",
+                "content": "sitemap",
+                "news": "article",
+                "auth": "group",
+                "enrolment": "schoolyear",
+                "settings": "settings",
+            }
+        ),
+        "component": "component",
+        "models": MappingProxyType({}),
+        "model": None,
+        "section": "menu",
+        "item": "item",
+        "kinds": MappingProxyType({"page": "page"}),
+        "roles": MappingProxyType(
+            {"venues": "venue", "days": "season", "day": "results", "teams": "team"}
+        ),
+        "more": "more",
+        "folder": "folder",
+    }
+)
+
+
+@dataclass(frozen=True)
+class Shell:
+    """
+    One presentation of the admin.
+
+    ``template_dir`` is where the shell's pages are, under ``TEMPLATE_ROOT`` for
+    the admin itself and under each component's own template base for the
+    components'. ``static_prefix`` is the shell's folder of static files.
+    ``tag_library`` is the name of the template tag library its templates load.
+    ``index_landing`` says whether a component's index is a landing page of its
+    own (``True``) or sends the visitor on to the component's first list.
+    ``icons`` is the shell's vocabulary of icon names.
+    """
+
+    name: str
+    template_dir: str
+    static_prefix: str
+    tag_library: str
+    index_landing: bool
+    icons: Mapping
+
+    def template(self, filename):
+        """The path of one of the shell's own admin templates."""
+        return os.path.join(self.template_dir, filename)
+
+    def static(self, filename):
+        """The path of one of the shell's own static files."""
+        return os.path.join(self.static_prefix, filename)
+
+    def shelled(self, name):
+        """
+        The shell's own spelling of the name of an admin template that does not
+        name a shell: ``<app>/admin/<path>`` becomes ``<app>/admin/<shell>/<path>``.
+        """
+        head, admin, tail = name.partition("/admin/")
+        if not admin:
+            return name
+        return f"{head}/admin/{self.name}/{tail}"
+
+    def names(self, name):
+        """Where to look for an admin template: the neutral path, then the shell's."""
+        return [name, self.shelled(name)]
+
+    @property
+    def error_template(self):
+        """The page the shell's 403 and 404 pages extend."""
+        return self.template("40x.html")
+
+    @property
+    def field_template(self):
+        """The template a form field is drawn with."""
+        return self.template("templatetags/field.html")
+
+    @property
+    def forbidden_template(self):
+        """The page of a refused request (see ``admin.errors``)."""
+        return self.template("403.html")
+
+    @property
+    def not_found_template(self):
+        """The page of a missing one (see ``admin.errors``)."""
+        return self.template("404.html")
+
+    @property
+    def print_template(self):
+        """The page print layouts (scorecards, reports, grids) extend."""
+        return self.template("print.html")
+
+    def icon(self, name):
+        """
+        The icon for ``name``: a role a component's explorer names (``venues``,
+        ``days``, ``day``, ``teams``) becomes the shell's own icon for it, any
+        other name is already an icon.
+        """
+        return self.icons["roles"].get(name, name)
+
+    def component_icon(self, component):
+        """The icon of a component's folder in the tree."""
+        icons = self.icons
+        return getattr(component, "icon", None) or icons["components"].get(
+            getattr(component, "app_name", ""), icons["component"]
+        )
+
+    def model_icon(self, model):
+        """The icon of the objects of a model."""
+        icons = self.icons
+        default = icons["model"] or model._meta.model_name
+        return icons["models"].get(model._meta.model_name, default)
+
+    def section_icon(self, entry, model):
+        """
+        The icon of a section of a component's menu: ``entry`` is the tuple
+        ``AdminComponent.dropdowns`` gave for it, ``model`` the model its list
+        shows (or ``None``).
+        """
+        icons = self.icons
+        if icons["section"] == "model":
+            return self.model_icon(model) if model else icons["folder"]
+        return (entry[2] if len(entry) > 2 else None) or icons["folder"]
+
+
+WORKBOOK = Shell(
+    name="workbook",
+    template_dir=os.path.join(TEMPLATE_ROOT, "workbook"),
+    static_prefix=os.path.join(STATIC_ROOT, "workbook"),
+    tag_library="admin_workbook",
+    index_landing=True,
+    icons=WORKBOOK_ICONS,
+)
+
+EXPLORER = Shell(
+    name="explorer",
+    template_dir=os.path.join(TEMPLATE_ROOT, "explorer"),
+    static_prefix=os.path.join(STATIC_ROOT, "explorer"),
+    tag_library="admin_explorer",
+    index_landing=False,
+    icons=EXPLORER_ICONS,
+)
+
+SHELLS = MappingProxyType({shell.name: shell for shell in (WORKBOOK, EXPLORER)})
+
+DEFAULT_SHELL = WORKBOOK.name
+
+
+def get_shell(name):
+    """The shell called ``name``; anything else is a configuration error."""
+    try:
+        return SHELLS[name]
+    except (KeyError, TypeError):
+        known = ", ".join(repr(known) for known in SHELLS)
+        raise ImproperlyConfigured(
+            f"Unknown admin shell {name!r}; choose one of {known}."
+        )
+
+
+class ShellTemplatesMixin:
+    """
+    For an application with templates of its own for each shell: it names its
+    shell as ``shell`` and its templates are looked for in the shell's folder
+    of its ``template_base`` after the same place without the shell (where a
+    deployment overrides them, and the library ships nothing).
+    """
+
+    def _template_path(self, filename, *args):
+        shell = self.shell
+        base = self.template_base
+        for candidate in super()._template_path(filename, *args):
+            yield candidate
+            if candidate.startswith(base + os.sep):
+                yield os.path.join(base, shell.name, os.path.relpath(candidate, base))

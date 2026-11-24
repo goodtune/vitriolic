@@ -1,0 +1,64 @@
+{
+ "data": {
+  "competitionLadder": {
+   "teams": [
+    {
+     "_id": 67776192,
+     "name": "Try Time Baby Collective",
+     "pool": null
+    },
+    {
+     "_id": 67740014,
+     "name": "Before & After",
+     "pool": null
+    },
+    {
+     "_id": 67699589,
+     "name": "Sneaky Cheesies",
+     "pool": null
+    },
+    {
+     "_id": 68100677,
+     "name": "Eat Pasta Run Faster",
+     "pool": null
+    },
+    {
+     "_id": 67727471,
+     "name": "Touch n Go",
+     "pool": null
+    },
+    {
+     "_id": 67691981,
+     "name": "Rockets",
+     "pool": null
+    }
+   ]
+  },
+  "teams": [
+   {
+    "_id": 67740014,
+    "name": "Before & After"
+   },
+   {
+    "_id": 68100677,
+    "name": "Eat Pasta Run Faster"
+   },
+   {
+    "_id": 67691981,
+    "name": "Rockets"
+   },
+   {
+    "_id": 67699589,
+    "name": "Sneaky Cheesies"
+   },
+   {
+    "_id": 67727471,
+    "name": "Touch n Go"
+   },
+   {
+    "_id": 67776192,
+    "name": "Try Time Baby Collective"
+   }
+  ]
+ }
+}

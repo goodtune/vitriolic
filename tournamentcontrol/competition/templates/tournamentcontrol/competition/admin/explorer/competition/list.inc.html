@@ -1,0 +1,16 @@
+{% extends "touchtechnology/admin/explorer/list.inc.html" %}
+{% load i18n %}
+
+{% block table-headings %}
+	<th>{% trans "Competition" %}</th>
+	<th class="wide-only">{% trans "Short name" %}</th>
+	<th class="num">{% trans "Seasons" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	{{ block.super }}
+	<td class="wide-only">{{ obj.short_title|default:"&ndash;" }}</td>
+	<td class="num">{{ obj.seasons.count }}</td>
+{% endblock %}
+
+{% block empty-row-colspan %}4{% endblock %}

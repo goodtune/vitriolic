@@ -4,7 +4,6 @@ import touchtechnology.common.db.models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("news", "0005_auto_20191122_1340"),
     ]

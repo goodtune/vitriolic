@@ -1,18 +1,25 @@
 import unittest
 
-from django.test.utils import override_settings
-from example_app.models import TestDateTimeField
+from django.contrib.auth.views import redirect_to_login
+from django.test.utils import override_script_prefix, override_settings
+from example_app.models import Relative, TestDateTimeField
 from example_app.tests.factories import TestDateTimeFieldFactory
 from test_plus import TestCase as BTC
 
 from touchtechnology.common.tests import factories
 
 
-@override_settings(ROOT_URLCONF="example_app.urls")
+# The example urlconf has no admin site to sign in to, only the accounts pages.
+@override_settings(ROOT_URLCONF="example_app.urls", LOGIN_URL="accounts:login")
 class TestCase(BTC):
-    def setUp(self):
-        self.staff = factories.UserFactory.create(is_staff=True, is_superuser=True)
-        self.regular = factories.UserFactory.create()
+    user_factory = factories.UserFactory
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.staff = cls.make_user("staff")
+        cls.staff.is_staff = cls.staff.is_superuser = True
+        cls.staff.save()
+        cls.regular = cls.make_user("regular")
 
 
 class GenericListTests(TestCase):
@@ -27,18 +34,19 @@ class GenericListTests(TestCase):
 
         with self.login(self.regular):
             self.get("generic:permissions:list")
-            self.response_403()
+            self.assert_http_403_forbidden()
 
         with self.login(self.staff):
             self.assertGoodView("generic:permissions:list")
 
 
 class GenericDetailTests(TestCase):
-    def setUp(self):
-        super().setUp()
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
         TestDateTimeFieldFactory.reset_sequence()
         TestDateTimeFieldFactory.create_batch(20)
-        self.instance = TestDateTimeField.objects.earliest("pk")
+        cls.instance = TestDateTimeField.objects.earliest("pk")
 
     def test_vanilla(self):
         self.assertGoodView("generic:vanilla:detail", self.instance.pk)
@@ -49,7 +57,7 @@ class GenericDetailTests(TestCase):
     @unittest.skip("permissions_required not implemented for generic_detail")
     def test_permissions_403(self):
         self.get("generic:permissions:detail", self.instance.pk)
-        self.response_403()
+        self.assert_http_403_forbidden()
 
 
 class GenericEditTests(TestCase):
@@ -62,10 +70,9 @@ class GenericEditTests(TestCase):
             "datetime_1": "9:00",
             "datetime_2": "UTC",
         }
-        res = self.post("generic:vanilla:add", data=data)
+        self.post("generic:vanilla:add", data=data)
         self.assertEqual(1, TestDateTimeField.objects.count())
-        self.response_302()
-        self.assertRedirects(res, self.reverse("generic:vanilla:list"))
+        self.assert_http_302_found(url=self.reverse("generic:vanilla:list"))
 
         self.assertGoodView("generic:vanilla:list")
         self.assertResponseContains("<li>2015-01-01 09:00:00+00:00</li>")
@@ -82,66 +89,67 @@ class GenericEditTests(TestCase):
 
         with self.login(self.regular):
             self.get("generic:permissions:add")
-            self.response_403()
+            self.assert_http_403_forbidden()
             self.post("generic:permissions:add", data=data)
-            self.response_403()
+            self.assert_http_403_forbidden()
 
         with self.login(self.staff):
             self.assertGoodView("generic:permissions:add")
             self.post("generic:permissions:add", data=data)
-            self.response_302()
+            self.assert_http_302_found(url=self.reverse("generic:permissions:list"))
 
 
 class GenericDeleteTests(TestCase):
-    def setUp(self):
-        super(GenericDeleteTests, self).setUp()
-        self.object = TestDateTimeFieldFactory.create()
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.object = TestDateTimeFieldFactory.create()
 
     def test_vanilla(self):
         self.post("generic:vanilla:delete", self.object.pk)
-        self.response_302()
+        self.assert_http_302_found(url=self.reverse("generic:vanilla:list"))
 
     def test_permissions_403(self):
         "Ensure unprivileged user is denied, superuser may delete"
-        self.post("generic:permissions:delete", self.object.pk)
-        self.response_302()  # Anonymous users will be redirected to login
+        delete_url = self.reverse("generic:permissions:delete", self.object.pk)
+        # A POST, so assertLoginRequired (which uses GET) does not apply. The
+        # URL comes from redirect_to_login: test-plus compares it as a string,
+        # and reverse(query=) escapes the slashes in "next".
+        self.post(delete_url)
+        self.assert_http_302_found(url=redirect_to_login(delete_url).url)
 
         with self.login(self.regular):
-            self.post("generic:permissions:delete", self.object.pk)
-            self.response_403()
+            self.post(delete_url)
+            self.assert_http_403_forbidden()
 
         with self.login(self.staff):
-            self.post("generic:permissions:delete", self.object.pk)
-            self.response_302()
+            self.post(delete_url)
+            self.assert_http_302_found(url=self.reverse("generic:permissions:list"))
 
 
 class GenericPermissionsTests(TestCase):
-    def setUp(self):
-        super(GenericPermissionsTests, self).setUp()
-        self.object = TestDateTimeFieldFactory.create()
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.object = TestDateTimeFieldFactory.create()
 
     def test_vanilla(self):
         self.get("generic:vanilla:perms", self.object.pk)
-        self.response_403()
+        self.assert_http_403_forbidden()
 
         with self.login(self.regular):
             self.get("generic:vanilla:perms", self.object.pk)
-            self.response_403()
+            self.assert_http_403_forbidden()
 
         with self.login(self.staff):
             self.assertGoodView("generic:vanilla:perms", self.object.pk)
-            self.response_200()
-            self.assertResponseContains(
-                """
+            self.assertResponseContains(f"""
                 <p>
                     Control who <em>can change test date time field</em>
                     for the test date time field
-                    <strong>{}</strong>.
+                    <strong>{self.object}</strong>.
                 </p>
-            """.format(
-                    self.object
-                )
-            )
+            """)
 
 
 class GenericEditMultipleTests(TestCase):
@@ -164,10 +172,9 @@ class GenericEditMultipleTests(TestCase):
             "form-1-datetime_1": "9:00",
             "form-1-datetime_2": "UTC",
         }
-        res = self.post("generic:vanilla:edit", data=data)
+        self.post("generic:vanilla:edit", data=data)
         self.assertEqual(2, TestDateTimeField.objects.count())
-        self.response_302()
-        self.assertRedirects(res, self.reverse("generic:vanilla:list"))
+        self.assert_http_302_found(url=self.reverse("generic:vanilla:list"))
 
         self.assertGoodView("generic:vanilla:list")
         self.assertResponseContains(
@@ -197,14 +204,14 @@ class GenericEditMultipleTests(TestCase):
 
         with self.login(self.regular):
             self.get("generic:permissions:edit")
-            self.response_403()
+            self.assert_http_403_forbidden()
             self.post("generic:permissions:edit", data=data)
-            self.response_403()
+            self.assert_http_403_forbidden()
 
         with self.login(self.staff):
             self.assertGoodView("generic:permissions:edit")
             self.post("generic:permissions:edit", data=data)
-            self.response_302()
+            self.assert_http_302_found(url=self.reverse("generic:permissions:list"))
 
         self.assertEqual(2, TestDateTimeField.objects.count())
 
@@ -232,8 +239,7 @@ class GenericBulkCreateTests(TestCase):
 
         self.post("generic:vanilla:bulk_create", data=data)
         # Should create 2 objects (form-2 was empty)
-        self.response_302()
-        self.assertRedirects(self.last_response, self.reverse("generic:vanilla:list"))
+        self.assert_http_302_found(url=self.reverse("generic:vanilla:list"))
 
         # Verify the objects were created correctly
         self.assertQuerySetEqual(
@@ -260,17 +266,16 @@ class GenericBulkCreateTests(TestCase):
             "form-0-datetime_2": "UTC",
         }
 
-        test_cases = [
-            ("regular_user_get", self.regular, self.get, None, self.response_403),
-            ("regular_user_post", self.regular, self.post, data, self.response_403),
-            ("staff_user_get", self.staff, self.get, None, self.response_200),
-            ("staff_user_post", self.staff, self.post, data, self.response_302),
-        ]
+        with self.login(self.regular):
+            self.get("generic:permissions:bulk_create")
+            self.assert_http_403_forbidden()
+            self.post("generic:permissions:bulk_create", data=data)
+            self.assert_http_403_forbidden()
 
-        for test_name, user, method, test_data, assertion in test_cases:
-            with self.subTest(test_name=test_name), self.login(user):
-                method("generic:permissions:bulk_create", data=test_data)
-                assertion()
+        with self.login(self.staff):
+            self.get_check_200("generic:permissions:bulk_create")
+            self.post("generic:permissions:bulk_create", data=data)
+            self.assert_http_302_found(url=self.reverse("generic:permissions:list"))
 
         # Verify that one object was created by the staff user
         self.assertQuerySetEqual(
@@ -278,3 +283,84 @@ class GenericBulkCreateTests(TestCase):
             ["<TestDateTimeField: 2015-01-01 09:00:00+00:00>"],
             transform=repr,
         )
+
+
+class GenericNestedRedirectTests(TestCase):
+    """
+    The relatives of an object nest under it with no list of their own, so the
+    generic views send them back to the nearest page above: the object's.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.parent = TestDateTimeFieldFactory.create()
+
+    def test_adding_returns_to_the_parent(self):
+        self.post("generic:vanilla:relative:add", self.parent.pk, data={"name": "Ann"})
+        self.assert_http_302_found(
+            url=self.reverse("generic:vanilla:detail", self.parent.pk)
+        )
+        self.get_check_200("generic:vanilla:detail", self.parent.pk)
+        self.assertCountEqual(
+            self.parent.relative_set.values_list("name", flat=True), ["Ann"]
+        )
+
+    def test_deleting_returns_to_the_parent(self):
+        relative = Relative.objects.create(link=self.parent, name="Ann")
+        self.post("generic:vanilla:relative:delete", self.parent.pk, relative.pk)
+        self.assert_http_302_found(
+            url=self.reverse("generic:vanilla:detail", self.parent.pk)
+        )
+        self.assertCountEqual(self.parent.relative_set.all(), [])
+
+    def test_editing_several_returns_to_the_parent(self):
+        relative = Relative.objects.create(link=self.parent, name="Ann")
+        self.post(
+            "generic:vanilla:relative:edit",
+            self.parent.pk,
+            data={
+                "form-TOTAL_FORMS": 1,
+                "form-INITIAL_FORMS": 1,
+                "form-0-id": relative.pk,
+                "form-0-name": "Bob",
+            },
+        )
+        self.assert_http_302_found(
+            url=self.reverse("generic:vanilla:detail", self.parent.pk)
+        )
+        self.assertCountEqual(
+            self.parent.relative_set.values_list("name", flat=True), ["Bob"]
+        )
+
+    def test_creating_several_returns_to_the_parent(self):
+        self.post(
+            "generic:vanilla:relative:bulk_create",
+            self.parent.pk,
+            data={
+                "form-TOTAL_FORMS": 1,
+                "form-INITIAL_FORMS": 0,
+                "form-0-name": "Ann",
+                "form-0-link": self.parent.pk,
+            },
+        )
+        self.assert_http_302_found(
+            url=self.reverse("generic:vanilla:detail", self.parent.pk)
+        )
+        self.assertCountEqual(
+            self.parent.relative_set.values_list("name", flat=True), ["Ann"]
+        )
+
+    def test_deleting_below_a_script_name_keeps_it(self):
+        # The views are found without the script name; the browser needs it.
+        relative = Relative.objects.create(link=self.parent, name="Ann")
+        self.post(
+            "generic:vanilla:relative:delete",
+            self.parent.pk,
+            relative.pk,
+            extra={"SCRIPT_NAME": "/club"},
+        )
+        with override_script_prefix("/club/"):
+            self.assert_http_302_found(
+                url=self.reverse("generic:vanilla:detail", self.parent.pk)
+            )

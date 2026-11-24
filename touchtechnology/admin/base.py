@@ -4,9 +4,13 @@ from urllib.parse import urlunparse
 from django.contrib import messages
 from django.http import HttpResponseRedirect
 from django.urls import path, reverse
-from django.utils.encoding import smart_str
 from modelforms.forms import ModelForm
 
+from touchtechnology.admin.branding import get_brand
+from touchtechnology.admin.explorer import Explorer
+from touchtechnology.admin.forms import AdminFormControlMixin
+from touchtechnology.admin.shells import ShellTemplatesMixin
+from touchtechnology.admin.sites import site as default_site
 from touchtechnology.common.decorators import (
     never_cache_m,
     staff_login_required_m,
@@ -16,9 +20,16 @@ from touchtechnology.common.forms.mixins import BootstrapFormControlMixin
 from touchtechnology.common.sites import Application
 
 
-class AdminComponentMixin(object):
+class AdminComponentMixin(ShellTemplatesMixin):
     verbose_name = "ExampleComponent"
     visible = True
+    #: The name of the component's icon in the admin's sprite (``None`` picks
+    #: one from the component's ``app_name``).
+    icon = None
+    #: The ``Explorer`` that draws this component's part of the tree in the
+    #: rail. The stock one follows the admin's nested URLs; a subclass may
+    #: name relations, groupings and folders of its own.
+    explorer_class = Explorer
 
     # While adding this new functionality, we'll start out with
     # AdminComponents being unprotected by default, even though we typically
@@ -27,20 +38,34 @@ class AdminComponentMixin(object):
     unprotected = True
 
     def __init__(self, app, name, app_name, *args, **kwargs):
-        super(AdminComponentMixin, self).__init__(
-            name=name, app_name=app_name, *args, **kwargs
-        )
+        super().__init__(name=name, app_name=app_name, *args, **kwargs)
         self.app = app
 
     @property
     def current_app(self):
         return self.app
 
+    #: The site this component is registered with (set by ``AdminSite.register``).
+    admin_site = None
+
+    @property
+    def shell(self):
+        """The shell the admin site this component belongs to wears."""
+        site = self.admin_site
+        return site.shell if site is not None else default_site.shell
+
+    def admin_template(self, filename):
+        return self.shell.template(filename)
+
     def _template_path(self, filename, *args):
-        i = super(AdminComponentMixin, self)._template_path(filename, *args)
-        for t in i:
-            yield t
+        """
+        For each place the component's pages may be, the same place without the
+        shell (where a deployment overrides it) first and the shell's own next;
+        the admin's own pages come last, neutral before the shell's.
+        """
+        yield from super()._template_path(filename, *args)
         yield os.path.join("touchtechnology/admin", filename)
+        yield self.shell.template(filename)
 
     @never_cache_m
     @staff_login_required_m
@@ -52,16 +77,22 @@ class AdminComponentMixin(object):
         Ensure that the AdminComponent will redirect the user if it is deemed
         to be hidden for this tenant. Will have no impact on single-tenant
         installs.
+
+        The admin site passes itself to each view of a component as ``admin``,
+        and a view that does not hand it on to its context still gets the site
+        the component is registered with.
         """
-        if hasattr(request, "tenant"):
-            admin = context.get("admin")
-            if admin._hidden_component(self):
-                messages.error(
-                    request,
-                    'Attempt to access component "%s" '
-                    "is not allowed for this tenant." % smart_str(self.verbose_name),
-                )
-                return HttpResponseRedirect(reverse("admin:index"))
+        admin = context.get("admin")
+        if admin is None:
+            admin = context["admin"] = self.admin_site or default_site
+
+        if hasattr(request, "tenant") and admin._hidden_component(self):
+            messages.error(
+                request,
+                f'Attempt to access component "{self.verbose_name}" '
+                "is not allowed for this tenant.",
+            )
+            return HttpResponseRedirect(reverse("admin:index"))
 
         if SITEMAP_HTTPS_OPTION and not request.is_secure():
             host = request.META.get("HTTP_HOST")
@@ -69,14 +100,61 @@ class AdminComponentMixin(object):
             redirect_to = urlunparse(("https", host, path, "", "", ""))
             return HttpResponseRedirect(redirect_to)
 
-        return super(AdminComponentMixin, self).render(
-            request, templates, context, *args, **kwargs
-        )
+        # Resolve the brand here so the shell is branded even when the
+        # ``brand`` context processor has not been configured.
+        if "brand" not in context:
+            context["brand"] = get_brand(request)
+        context.setdefault("shell", self.shell)
+        context.setdefault("field_template", self.shell.field_template)
+
+        return super().render(request, templates, context, *args, **kwargs)
+
+    def explorer(self):
+        """This component's ``Explorer``."""
+        explorer = getattr(self, "_explorer", None)
+        if explorer is None:
+            explorer = self._explorer = self.explorer_class(self)
+        return explorer
 
     def reverse(self, name, args=(), kwargs={}, prefix=None):
         if prefix is None:
             prefix = self.app
-        return super(AdminComponentMixin, self).reverse(name, args, kwargs, prefix)
+        return super().reverse(name, args, kwargs, prefix)
+
+    def tasks(self, request):
+        """
+        The jobs this component offers on the admin's home page, most common
+        first: an iterable of mappings with ``label``, ``url`` and optionally
+        ``note`` (a line saying more), ``icon`` (a name in the admin's icon
+        sprite) and ``priority`` (lower comes first; 50 when not given). By
+        default, one job: the component itself, naming its sections.
+        """
+        sections = self.sections(request)
+        if not sections:
+            return ()
+        return (
+            {
+                "label": self.verbose_name,
+                "url": sections[0].url,
+                "note": ", ".join(section.label for section in sections),
+                "icon": getattr(self, "icon", None),
+                "priority": 80,
+            },
+        )
+
+    def sections(self, request):
+        """
+        The sections of this component's menu (``dropdowns``) that
+        ``request.user`` is shown, in order: ``Explorer.sections`` filtered by
+        ``Explorer.shown``, so that the menu, the rail, the jobs and a
+        component's own pages agree on who sees a section.
+        """
+        explorer = self.explorer()
+        return [
+            section
+            for section in explorer.sections()
+            if explorer.shown(request, section)
+        ]
 
     def dropdowns(self):
         """
@@ -85,12 +163,16 @@ class AdminComponentMixin(object):
         a component dealing with Users & Groups should return an iterable of
         tuples:
 
-            (name, path, optional font awesome icon name)
+            (name, path, optional icon name, optional permission)
 
         For example:
 
             [("Users", "/admin/auth/users/", "user"),
              ("Groups", "/admin/auth/groups/", "group")]
+
+        A section that names a permission (``"content.view_file"``) is drawn,
+        in the menu and the rail, only for a person who holds it. The view
+        behind it still checks for itself.
         """
         return ()
 
@@ -102,7 +184,22 @@ class AdminComponent(AdminComponentMixin, Application):
     and backwards compatibility.
     """
 
-    model_form_bases = (BootstrapFormControlMixin, ModelForm)
+    model_form_bases = (AdminFormControlMixin, ModelForm)
+
+    def get_required_form_bases(self):
+        """
+        The bases a form must inherit: ``model_form_bases``, with the common
+        ``BootstrapFormControlMixin`` accepted in place of the admin's own mixin
+        (which subclasses it), so explicit forms on either satisfy the check.
+        A component that overrides ``model_form_bases`` is checked against its
+        own bases. Setting ``required_form_bases`` takes precedence.
+        """
+        if self.required_form_bases is not None:
+            return self.required_form_bases
+        return tuple(
+            BootstrapFormControlMixin if base is AdminFormControlMixin else base
+            for base in self.model_form_bases
+        )
 
     def get_urls(self):
         urlpatterns = [
@@ -128,16 +225,22 @@ class AdminComponent(AdminComponentMixin, Application):
         Our standard template directory for AdminComponent's will be 'admin'
         within the projects normally namespaced template directory.
         """
-        return os.path.join(super(AdminComponent, self).template_base, "admin")
+        return os.path.join(super().template_base, "admin")
 
 
-class DashboardWidget(object):
+class DashboardWidget:
     verbose_name = NotImplemented
     template = NotImplemented
     half = True
 
     @classmethod
     def show(cls):
+        """
+        Whether the widget has anything to show. The home page asks before it
+        draws the widget (``AdminSite.dashboard``) and leaves it out when the
+        answer is false. Asked of the class: the page instantiates only the
+        widgets it draws.
+        """
         return True
 
     def _get_context(self):

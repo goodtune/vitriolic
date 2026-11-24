@@ -12,14 +12,14 @@ class Settings(AdminComponent):
     visible = False
 
     def __init__(self, app, name="settings", app_name="settings"):
-        super(Settings, self).__init__(app, name, app_name)
+        super().__init__(app, name, app_name)
 
     @property
     def template_base(self):
-        return "touchtechnology/admin/settings"
+        return "touchtechnology/admin"
 
     def get_urls(self):
-        urlpatterns = super(Settings, self).get_urls()
+        urlpatterns = super().get_urls()
         urlpatterns += [
             path("site/", self.edit_site, name="site"),
         ]
@@ -27,7 +27,7 @@ class Settings(AdminComponent):
 
     @superuser_login_required_m
     def index(self, request, *args, **kwargs):
-        templates = self.template_path("index.html")
+        templates = self.template_path("index.html", "settings")
         return self.render(request, templates, kwargs)
 
     @superuser_login_required_m

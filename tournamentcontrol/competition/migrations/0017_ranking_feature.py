@@ -7,7 +7,6 @@ import tournamentcontrol.competition.models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("competition", "0016_season_forfeit_notifications"),
     ]

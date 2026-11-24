@@ -1,0 +1,461 @@
+"""
+The ops site's reads. Day-shaped: the day's matches grouped into result
+slots, the scored matches whose statistics do not yet balance, and the
+current and next match on each streamed ground. And the way down to a day:
+the seasons by when they are played, and the days of one season. Pure
+functions over the ORM; no request objects, no rendering.
+
+The state of a match's result lives on ``MatchQuerySet.with_result_state()``
+and time zones on the models (``get_tzinfo()`` and ``local_date()``).
+"""
+
+import dataclasses
+import datetime
+
+from django.db.models import (
+    BooleanField,
+    Case,
+    Count,
+    Exists,
+    F,
+    Max,
+    Min,
+    OuterRef,
+    Q,
+    Subquery,
+    Sum,
+    Value,
+    When,
+)
+from django.db.models.functions import Coalesce
+from django.utils import timezone
+
+from tournamentcontrol.competition.models import (
+    Ground,
+    LiveStreamEvent,
+    Match,
+    Season,
+    SimpleScoreMatchStatistic,
+)
+
+SELECT_RELATED = (
+    "stage__division__season",
+    "play_at",
+    "home_team__club",
+    "away_team__club",
+    "home_team_undecided",
+    "away_team_undecided",
+)
+
+# The stream thumbnails are blobs CompOps never shows; a season's would
+# otherwise ride along with every match row (#654).
+DEFER = (
+    "live_stream_thumbnail_image",
+    "stage__division__season__live_stream_thumbnail_image",
+)
+
+
+def _with_related(queryset):
+    return queryset.select_related(*SELECT_RELATED).defer(*DEFER)
+
+
+@dataclasses.dataclass
+class Slot:
+    key: str
+    time: datetime.time | None
+    label: str
+    matches: list
+    state: str = "pending"
+    entered: int = 0
+    total: int = 0
+    open: bool = False
+    is_byes: bool = False
+
+
+@dataclasses.dataclass
+class GroundStreams:
+    ground: Ground
+    current: Match | None
+    next: Match | None
+
+
+@dataclasses.dataclass
+class Events:
+    """
+    The seasons as the home page shows them. Those being played carry
+    ``compops_next_day``, their next day with matches (today, when it has
+    any); the others carry ``compops_days``, the days until they start or
+    since they ended.
+    """
+
+    current: list
+    upcoming: list
+    recent: list
+    competitions: list
+    unscheduled: list
+
+
+@dataclasses.dataclass
+class Day:
+    date: datetime.date
+    matches: int
+    entered: int
+    status: str
+
+    @property
+    def outstanding(self):
+        return self.matches - self.entered
+
+
+def events(now, limit=5, seasons=None):
+    """
+    Every season (or those of the queryset ``seasons``), grouped by when it
+    is played: from its first match day to its last (``current``), still to
+    start (``upcoming``, soonest first) or finished (``recent``, latest
+    first), the last two cut to ``limit`` unless it is ``None``. A season is
+    placed by the date where it is played, and one with no dated match is
+    ``unscheduled``. ``competitions`` lists them all.
+    """
+    if seasons is None:
+        seasons = Season.objects.all()
+    seasons = list(
+        seasons.select_related("competition")
+        .defer("live_stream_thumbnail_image")
+        .annotate(
+            first_day=Min("divisions__stages__matches__date"),
+            last_day=Max("divisions__stages__matches__date"),
+        )
+        .order_by(
+            "competition__title",
+            "competition",
+            F("first_day").desc(nulls_last=True),
+            "title",
+        )
+    )
+    current, upcoming, recent, competitions, unscheduled = [], [], [], [], []
+    for season in seasons:
+        if not competitions or competitions[-1][0] != season.competition:
+            competitions.append((season.competition, []))
+        competitions[-1][1].append(season)
+        if season.first_day is None:
+            unscheduled.append(season)
+            continue
+        season.compops_today = season.local_date(now)
+        if season.compops_today < season.first_day:
+            season.compops_days = (season.first_day - season.compops_today).days
+            upcoming.append(season)
+        elif season.compops_today > season.last_day:
+            season.compops_days = (season.compops_today - season.last_day).days
+            recent.append(season)
+        else:
+            current.append(season)
+    if current:
+        # One query for the days still to play of every current season.
+        earliest = min(season.compops_today for season in current)
+        days = {}
+        for pk, day in (
+            Match.objects.filter(
+                stage__division__season__in=current, date__gte=earliest
+            )
+            .order_by()
+            .values_list("stage__division__season", "date")
+            .distinct()
+        ):
+            days.setdefault(pk, []).append(day)
+        for season in current:
+            season.compops_next_day = min(
+                day for day in days[season.pk] if day >= season.compops_today
+            )
+    current.sort(key=lambda season: season.compops_next_day)
+    upcoming.sort(key=lambda season: season.first_day)
+    recent.sort(key=lambda season: season.last_day, reverse=True)
+    return Events(current, upcoming[:limit], recent[:limit], competitions, unscheduled)
+
+
+def season_days(season, now):
+    """
+    The season's days with matches, in order, and the number of its matches
+    with no date. A day's ``status`` is ``complete`` once every result is in;
+    otherwise ``upcoming``, ``today`` or (for a day gone by) ``overdue``.
+    """
+    today = season.local_date(now)
+    rows = (
+        Match.objects.filter(stage__division__season=season)
+        .with_result_state()
+        .order_by()
+        .values("date")
+        .annotate(matches=Count("pk"), entered=Count("pk", filter=Q(has_result=True)))
+        .order_by("date")
+    )
+    days = []
+    undated = 0
+    for row in rows:
+        if row["date"] is None:
+            undated = row["matches"]
+        elif row["date"] > today:
+            days.append(Day(status="upcoming", **row))
+        elif row["matches"] == row["entered"]:
+            days.append(Day(status="complete", **row))
+        else:
+            status = "today" if row["date"] == today else "overdue"
+            days.append(Day(status=status, **row))
+    return days, undated
+
+
+def adjacent_days(season, day, ground=None):
+    """
+    The season's nearest days with matches before and after ``day``; with a
+    ``ground``, the nearest with matches on it.
+    """
+    matches = Match.objects.filter(stage__division__season=season)
+    if ground is not None:
+        matches = matches.filter(play_at=ground)
+    found = matches.aggregate(
+        previous=Max("date", filter=Q(date__lt=day)),
+        following=Min("date", filter=Q(date__gt=day)),
+    )
+    return found["previous"], found["following"]
+
+
+def day_matches(season, day):
+    return (
+        _with_related(Match.objects.filter(stage__division__season=season, date=day))
+        .with_result_state()
+        .order_by("time", "play_at__order", "pk")
+    )
+
+
+def _slot_state(matches):
+    entered = sum(1 for m in matches if m.has_result)
+    if entered == len(matches):
+        return "complete", entered
+    if entered:
+        return "in_progress", entered
+    return "pending", entered
+
+
+def day_results(season, day):
+    timed = {}
+    unscheduled = []
+    byes = []
+    for match in day_matches(season, day):
+        if match.is_bye:
+            byes.append(match)
+        elif match.time is None:
+            unscheduled.append(match)
+        else:
+            timed.setdefault(match.time, []).append(match)
+
+    slots = []
+    for time, matches in sorted(timed.items()):
+        slots.append(Slot(time.strftime("%H%M"), time, time.strftime("%H:%M"), matches))
+    if unscheduled:
+        slots.append(Slot("unscheduled", None, "Unscheduled", unscheduled))
+    for slot in slots:
+        slot.state, slot.entered = _slot_state(slot.matches)
+        slot.total = len(slot.matches)
+    for slot in slots:
+        if slot.state != "complete":
+            slot.open = True
+            break
+    if byes:
+        state, entered = _slot_state(byes)
+        slots.append(
+            Slot("byes", None, "Byes", byes, state, entered, len(byes), False, True)
+        )
+    return slots
+
+
+def slot_for(season, day, slot_key):
+    for slot in day_results(season, day):
+        if slot.key == slot_key:
+            return slot
+    return None
+
+
+def _team_points(side):
+    """
+    Sum of recorded points for one side of the match, 0 when no statistic
+    rows exist for that side (NULL would make the balance test unknowable).
+    """
+    stats = SimpleScoreMatchStatistic.objects.filter(
+        match=OuterRef("pk"), player__teamassociation__team=OuterRef(f"{side}_team")
+    ).order_by()
+    total = stats.values("match").annotate(total=Sum("points")).values("total")
+    return Coalesce(Subquery(total), 0)
+
+
+def day_scorers(season, day):
+    """
+    The day's scored matches still wanting scorers: those with no statistics
+    recorded, and those annotated ``out_of_balance`` because the points
+    recorded for a side differ from its score.
+    """
+    if not season.statistics:
+        return Match.objects.none()
+    return (
+        day_matches(season, day)
+        .filter(
+            is_bye=False,
+            is_forfeit=False,
+            upstream_id__isnull=True,
+            home_team__isnull=False,
+            away_team__isnull=False,
+            home_team_score__isnull=False,
+            away_team_score__isnull=False,
+        )
+        .annotate(
+            home_points=_team_points("home"),
+            away_points=_team_points("away"),
+            recorded=Exists(
+                SimpleScoreMatchStatistic.objects.filter(match=OuterRef("pk"))
+            ),
+        )
+        .annotate(
+            out_of_balance=Case(
+                When(recorded=False, then=Value(False)),
+                When(
+                    home_points=F("home_team_score"),
+                    away_points=F("away_team_score"),
+                    then=Value(False),
+                ),
+                default=Value(True),
+                output_field=BooleanField(),
+            )
+        )
+        .filter(Q(recorded=False) | Q(out_of_balance=True))
+    )
+
+
+def _scheduled_matches(day, **filters):
+    return _with_related(
+        Match.objects.filter(date=day, is_bye=False, **filters)
+        .exclude(time=None)
+        .exclude(datetime=None)
+    )
+
+
+def _ground_matches(ground, day):
+    return _scheduled_matches(day, play_at=ground).order_by("time", "pk")
+
+
+def _streamed_matches(day, **filters):
+    """
+    The scheduled matches opted into streaming. ``external_identifier`` alone
+    does not say so: it can outlive the opt-in until the broadcast is removed.
+    """
+    return _scheduled_matches(day, live_stream=True, **filters)
+
+
+def venue_matches(venue, day):
+    """Every scheduled match of the day on a ground of the venue, in ground order."""
+    return _scheduled_matches(day, play_at__ground__venue=venue).order_by(
+        "time", "play_at__ground__order", "pk"
+    )
+
+
+def ground_matches(ground):
+    """Every scheduled match on the ground, on any day: one is looked up by pk."""
+    return _with_related(
+        Match.objects.filter(play_at=ground, is_bye=False)
+        .exclude(time=None)
+        .exclude(datetime=None)
+    )
+
+
+def _split_day(matches, now):
+    """
+    The previous, current and next match of one ground's day, from its
+    matches in kick-off order.
+    """
+    started = [m for m in matches if m.datetime <= now]
+    upcoming = [m for m in matches if m.datetime > now]
+    current = started[-1] if started else None
+    previous = started[-2] if len(started) > 1 else None
+    following = upcoming[0] if upcoming else None
+    return previous, current, following
+
+
+def ground_day(ground, day, now):
+    matches = _streamed_matches(day, play_at=ground).order_by("time", "pk")
+    return _split_day(list(matches), now)
+
+
+def day_streams(season, day, now):
+    grounds = list(
+        Ground.objects.filter(venue__season=season, live_stream=True).order_by(
+            "venue__order", "order"
+        )
+    )
+    # One query for every streamed ground's matches, grouped here, rather
+    # than one per ground on each render and push.
+    matches = _streamed_matches(day, play_at__in=grounds).order_by(
+        "play_at_id", "time", "pk"
+    )
+    by_ground = {}
+    for match in matches:
+        by_ground.setdefault(match.play_at_id, []).append(match)
+    streams = []
+    for ground in grounds:
+        _, current, following = _split_day(by_ground.get(ground.pk, []), now)
+        streams.append(GroundStreams(ground, current, following))
+    return streams, day_events(season, day)
+
+
+def day_events(season, day):
+    """
+    The season's events starting on the day whose broadcast is still on
+    YouTube; ``live_stream=False`` means it was removed for good.
+    """
+    start = timezone.make_aware(
+        datetime.datetime.combine(day, datetime.time.min), season.get_tzinfo()
+    )
+    end = start + datetime.timedelta(days=1)
+    return LiveStreamEvent.objects.filter(
+        season=season, live_stream=True, start__gte=start, start__lt=end
+    ).order_by("start")
+
+
+def team_results(team):
+    return _with_related(team.matches.filter(is_bye=False)).order_by("datetime", "pk")
+
+
+def division_leaders(division, limit=10):
+    base = (
+        SimpleScoreMatchStatistic.objects.for_division(division)
+        .filter(played=1, player__teamassociation__team__division=division)
+        .totals(
+            "player_id",
+            "player__first_name",
+            "player__last_name",
+            "player__teamassociation__team__title",
+        )
+    )
+
+    def rows(queryset):
+        return [
+            {
+                "name": f"{r['player__first_name']} {r['player__last_name']}",
+                "team": r["player__teamassociation__team__title"],
+                "points": r["points"] or 0,
+                "mvp": r["mvp"] or 0,
+            }
+            for r in queryset
+        ]
+
+    scorers = rows(
+        base.exclude(points=None)
+        .exclude(points=0)
+        .order_by("-points", "player__last_name")[:limit]
+    )
+    mvps = rows(
+        base.exclude(mvp=None)
+        .exclude(mvp=0)
+        .order_by("-mvp", "player__last_name")[:limit]
+    )
+    return scorers, mvps
+
+
+def ground_runsheet(ground, day):
+    """Every scheduled match on the ground, streamed or not."""
+    return _ground_matches(ground, day)

@@ -11,7 +11,6 @@ def strict_show_toolbar_callback(request):
     :return: bool
     """
     if hasattr(request, "user") and request.user.has_perm("debug_toolbar.show"):
-
         logger.debug(
             'DjDT allowed for "%s" <%s>',
             request.user.get_full_name(),

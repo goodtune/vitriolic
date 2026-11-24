@@ -17,7 +17,6 @@ def initial_uuid(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("competition", "0023_competition__add__match_uuid"),
     ]

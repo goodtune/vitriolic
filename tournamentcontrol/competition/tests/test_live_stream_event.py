@@ -6,14 +6,23 @@ import datetime
 from unittest import mock
 from zoneinfo import ZoneInfo
 
-from django.contrib.messages import get_messages
+from django.contrib import messages
+from django.contrib.messages import Message, get_messages
+from django.contrib.messages.test import MessagesTestMixin
 from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError
 from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
 from test_plus import TestCase
 
+from touchtechnology.admin.tests.shells import by_shell
+from touchtechnology.common.tests.caches import WarmCachesMixin
 from touchtechnology.common.tests.factories import UserFactory
+from tournamentcontrol.competition.admin import (
+    YOUTUBE_AUTH_EXPIRED_MESSAGE,
+    YOUTUBE_NOT_AUTHORISED_MESSAGE,
+    YOUTUBE_NOT_UPDATED_MESSAGE,
+)
 from tournamentcontrol.competition.forms import LiveStreamEventForm
 from tournamentcontrol.competition.models import LiveStreamEvent, LiveStreamKey
 from tournamentcontrol.competition.tasks import (
@@ -27,9 +36,71 @@ from tournamentcontrol.competition.tests import factories
 UTC = ZoneInfo("UTC")
 
 
+#: What the season's edit page costs, with the site, the content types and the
+#: sitemap's URL tree already looked up (see ``WarmCachesMixin``). The Explorer
+#: shell draws fewer panels.
+def season_edit_queries():
+    return by_shell(workbook=28, explorer=22)
+
+
 def _http_error(status, message):
     resp = mock.Mock(status=status, reason=message)
     return HttpError(resp=resp, content=message.encode())
+
+
+#: The button that copies an event's video link, as its row in the season's
+#: list of events draws it.
+def copy_video_link():
+    return by_shell(
+        workbook=(
+            '<button type="button" class="wb-button wb-button-small" '
+            'data-wb-copy="https://youtu.be/adhoc123" data-wb-copied="Copied">'
+            '<svg class="wb-icon" aria-hidden="true" focusable="false">'
+            '<use href="/static/touchtechnology/admin/workbook/icons.svg#link"></use>'
+            "</svg><span>Copy video link</span></button>"
+        ),
+        explorer=(
+            '<button type="button" class="button compact" '
+            'data-copy="https://youtu.be/adhoc123" data-copied="Copied">'
+            '<svg class="icon" aria-hidden="true" focusable="false">'
+            '<use href="/static/touchtechnology/admin/explorer/img/icons.svg#copy">'
+            '</use></svg><span class="copy-label">Copy video link</span></button>'
+        ),
+    )
+
+
+#: The link to an object from its row in one of the season's lists.
+def row_link(url, text, icon):
+    return by_shell(
+        workbook=f'<a href="{url}">{text}</a>',
+        explorer=(
+            f'<a href="{url}"><svg class="icon" aria-hidden="true" focusable="false">'
+            f'<use href="/static/touchtechnology/admin/explorer/img/icons.svg#{icon}">'
+            f"</use></svg><span>{text}</span></a>"
+        ),
+    )
+
+
+#: The season's tab of live stream events, holding ``count`` of them.
+def events_tab(count):
+    return by_shell(
+        workbook=(
+            '<a class="wb-tab" role="tab" id="live_stream_events-tab" '
+            'href="#live_stream_events-pane" aria-controls="live_stream_events-pane" '
+            'aria-selected="false" aria-label="Live stream events">Live stream events '
+            f'<span class="wb-tab-count" aria-hidden="true">{count}</span></a>'
+        ),
+        explorer=(
+            '<a class="tab" role="tab" id="live_stream_events-tab-link" '
+            'href="#live_stream_events-tab" aria-controls="live_stream_events-tab" '
+            'aria-selected="false" tabindex="-1">'
+            '<svg class="icon" aria-hidden="true" focusable="false">'
+            '<use href="/static/touchtechnology/admin/explorer/img/icons.svg#video">'
+            "</use></svg><span>Live stream events</span>"
+            '<span class="count" aria-hidden="true" '
+            'data-count-of="live_stream_events-tab" hidden></span></a>'
+        ),
+    )
 
 
 class LiveStreamEventModelTests(TestCase):
@@ -101,9 +172,7 @@ class LiveStreamEventModelTests(TestCase):
         self.assertCountEqual(event.season.live_stream_events.all(), [event])
 
     def test_video_url(self):
-        event = factories.LiveStreamEventFactory.create(
-            external_identifier="adhoc123"
-        )
+        event = factories.LiveStreamEventFactory.create(external_identifier="adhoc123")
         self.assertEqual(event.video_url, "https://youtu.be/adhoc123")
 
 
@@ -210,12 +279,8 @@ class LiveStreamEventFormTests(TestCase):
         event = form.save()
         self.assertEqual(event.pk, "adhoc999")
         self.assertEqual(event.season, season)
-        self.assertEqual(
-            event.start, datetime.datetime(2025, 5, 1, 19, 0, tzinfo=UTC)
-        )
-        self.assertEqual(
-            event.stop, datetime.datetime(2025, 5, 1, 20, 30, tzinfo=UTC)
-        )
+        self.assertEqual(event.start, datetime.datetime(2025, 5, 1, 19, 0, tzinfo=UTC))
+        self.assertEqual(event.stop, datetime.datetime(2025, 5, 1, 20, 30, tzinfo=UTC))
         self.assertEqual(event.stream_key, stream_key)
 
     def test_times_are_implied_in_season_timezone(self):
@@ -317,6 +382,7 @@ class SyncLiveStreamEventTests(TestCase):
         kwargs.setdefault("season__live_stream", True)
         kwargs.setdefault("season__live_stream_client_id", "client-id")
         kwargs.setdefault("season__live_stream_client_secret", "client-secret")
+        kwargs.setdefault("season__live_stream_refresh_token", "refresh-token")
         return factories.LiveStreamEventFactory.create(**kwargs)
 
     @mock.patch(
@@ -380,9 +446,7 @@ class SyncLiveStreamEventTests(TestCase):
         sync_live_stream_event(event.pk)
 
         mock_youtube.liveBroadcasts.return_value.update.assert_called_once()
-        body = mock_youtube.liveBroadcasts.return_value.update.call_args.kwargs[
-            "body"
-        ]
+        body = mock_youtube.liveBroadcasts.return_value.update.call_args.kwargs["body"]
         self.assertEqual(body["id"], "adhoc123")
         mock_youtube.liveBroadcasts.return_value.insert.assert_not_called()
 
@@ -414,9 +478,7 @@ class SyncLiveStreamEventTests(TestCase):
         "tournamentcontrol.competition.models.Season.youtube",
         new_callable=mock.PropertyMock,
     )
-    def test_disable_live_stream_tolerates_missing_broadcast(
-        self, mock_youtube_prop
-    ):
+    def test_disable_live_stream_tolerates_missing_broadcast(self, mock_youtube_prop):
         mock_youtube = mock.MagicMock()
         mock_youtube_prop.return_value = mock_youtube
         mock_youtube.liveBroadcasts.return_value.delete.return_value.execute.side_effect = _http_error(
@@ -509,6 +571,7 @@ class DeleteYoutubeBroadcastTests(TestCase):
             live_stream=True,
             live_stream_client_id="client-id",
             live_stream_client_secret="client-secret",
+            live_stream_refresh_token="refresh-token",
         )
         delete_youtube_broadcast(season.pk, "adhoc123")
 
@@ -544,11 +607,12 @@ class DeleteYoutubeBroadcastTests(TestCase):
             live_stream=True,
             live_stream_client_id="client-id",
             live_stream_client_secret="client-secret",
+            live_stream_refresh_token="refresh-token",
         )
         self.assertEqual(delete_youtube_broadcast(season.pk, "adhoc123"), None)
 
 
-class LiveStreamEventAdminTests(TestCase):
+class LiveStreamEventAdminTests(WarmCachesMixin, TestCase):
     def setUp(self):
         super().setUp()
         self.superuser = UserFactory.create(is_staff=True, is_superuser=True)
@@ -563,8 +627,10 @@ class LiveStreamEventAdminTests(TestCase):
                 event.season.competition_id,
                 event.season_id,
             )
-            self.assertResponseContains("Opening Ceremony", html=False)
-            self.assertResponseContains("live_stream_events-tab", html=False)
+            self.assertResponseContains(
+                row_link(event.urls["edit"], "Opening Ceremony", "video")
+            )
+            self.assertResponseContains(events_tab(1))
 
     def test_season_edit_offers_copy_video_link(self):
         event = factories.LiveStreamEventFactory.create(
@@ -576,9 +642,7 @@ class LiveStreamEventAdminTests(TestCase):
                 event.season.competition_id,
                 event.season_id,
             )
-            self.assertResponseContains(
-                'data-video-url="https://youtu.be/adhoc123"', html=False
-            )
+            self.assertResponseContains(copy_video_link())
 
     def test_season_edit_hides_copy_video_link_for_removed_broadcast(self):
         event = factories.LiveStreamEventFactory.create(
@@ -586,15 +650,14 @@ class LiveStreamEventAdminTests(TestCase):
             external_identifier="adhoc123",
             live_stream=False,
         )
-        with self.login(self.superuser):
-            self.assertGoodView(
+        self.warm_caches()
+        with self.login(self.superuser), self.assertNumQueries(season_edit_queries()):
+            self.get_check_200(
                 "admin:fixja:competition:season:edit",
                 event.season.competition_id,
                 event.season_id,
             )
-            self.assertResponseNotContains(
-                'data-video-url="https://youtu.be/adhoc123"', html=False
-            )
+        self.assertResponseNotContains(copy_video_link())
 
     def test_season_edit_hides_events_tab_when_not_live_streamed(self):
         season = factories.SeasonFactory.create(live_stream=False)
@@ -604,7 +667,7 @@ class LiveStreamEventAdminTests(TestCase):
                 season.competition_id,
                 season.pk,
             )
-            self.assertResponseNotContains("live_stream_events-tab", html=False)
+            self.assertResponseNotContains(events_tab(0))
 
     def test_add_event_requires_login(self):
         season = factories.SeasonFactory.create(live_stream=True)
@@ -632,6 +695,7 @@ class LiveStreamEventAdminTests(TestCase):
             live_stream=True,
             live_stream_client_id="client-id",
             live_stream_client_secret="client-secret",
+            live_stream_refresh_token="refresh-token",
         )
         with self.login(self.superuser):
             self.post(
@@ -653,7 +717,7 @@ class LiveStreamEventAdminTests(TestCase):
                     "stop_2": "30",
                 },
             )
-            self.response_302()
+            self.assert_http_302_found()
 
         # The broadcast identifier issued by the platform is the primary key
         event = season.live_stream_events.get()
@@ -694,7 +758,7 @@ class LiveStreamEventAdminTests(TestCase):
                     "stop_2": "30",
                 },
             )
-            self.response_302()
+            self.assert_http_302_found()
 
         self.assertEqual(season.live_stream_events.count(), 0)
         mock_youtube.liveBroadcasts.assert_not_called()
@@ -717,6 +781,7 @@ class LiveStreamEventAdminTests(TestCase):
             season__live_stream=True,
             season__live_stream_client_id="client-id",
             season__live_stream_client_secret="client-secret",
+            season__live_stream_refresh_token="refresh-token",
             external_identifier="adhoc123",
         )
         with self.login(self.superuser):
@@ -727,7 +792,7 @@ class LiveStreamEventAdminTests(TestCase):
                     event.season_id,
                     event.pk,
                 )
-            self.response_302()
+            self.assert_http_302_found()
 
         mock_youtube.liveBroadcasts.return_value.delete.assert_called_once_with(
             id="adhoc123"
@@ -738,9 +803,7 @@ class LiveStreamEventAdminTests(TestCase):
         "tournamentcontrol.competition.models.Season.youtube",
         new_callable=mock.PropertyMock,
     )
-    def test_delete_event_blocked_when_platform_delete_fails(
-        self, mock_youtube_prop
-    ):
+    def test_delete_event_blocked_when_platform_delete_fails(self, mock_youtube_prop):
         mock_youtube = mock.MagicMock()
         mock_youtube_prop.return_value = mock_youtube
         mock_youtube.liveBroadcasts.return_value.delete.return_value.execute.side_effect = _http_error(
@@ -751,6 +814,7 @@ class LiveStreamEventAdminTests(TestCase):
             season__live_stream=True,
             season__live_stream_client_id="client-id",
             season__live_stream_client_secret="client-secret",
+            season__live_stream_refresh_token="refresh-token",
             external_identifier="adhoc123",
         )
         with self.login(self.superuser):
@@ -760,7 +824,7 @@ class LiveStreamEventAdminTests(TestCase):
                 event.season_id,
                 event.pk,
             )
-            self.response_302()
+            self.assert_http_302_found()
 
         # Destruction on the platform was not confirmed, the record stays.
         self.assertEqual(LiveStreamEvent.objects.count(), 1)
@@ -769,9 +833,7 @@ class LiveStreamEventAdminTests(TestCase):
         "tournamentcontrol.competition.models.Season.youtube",
         new_callable=mock.PropertyMock,
     )
-    def test_delete_event_proceeds_when_broadcast_already_gone(
-        self, mock_youtube_prop
-    ):
+    def test_delete_event_proceeds_when_broadcast_already_gone(self, mock_youtube_prop):
         mock_youtube = mock.MagicMock()
         mock_youtube_prop.return_value = mock_youtube
         mock_youtube.liveBroadcasts.return_value.delete.return_value.execute.side_effect = _http_error(
@@ -782,6 +844,7 @@ class LiveStreamEventAdminTests(TestCase):
             season__live_stream=True,
             season__live_stream_client_id="client-id",
             season__live_stream_client_secret="client-secret",
+            season__live_stream_refresh_token="refresh-token",
             external_identifier="adhoc123",
         )
         with self.login(self.superuser):
@@ -792,7 +855,7 @@ class LiveStreamEventAdminTests(TestCase):
                     event.season_id,
                     event.pk,
                 )
-            self.response_302()
+            self.assert_http_302_found()
 
         # Already absent from the platform is equally confirmation.
         self.assertEqual(LiveStreamEvent.objects.count(), 0)
@@ -813,7 +876,7 @@ class LiveStreamEventAdminTests(TestCase):
                 event.season_id,
                 event.pk,
             )
-            self.response_302()
+            self.assert_http_302_found()
 
         # Without credentials destruction cannot be confirmed, the record
         # stays and the platform is never touched.
@@ -824,9 +887,7 @@ class LiveStreamEventAdminTests(TestCase):
         "tournamentcontrol.competition.models.Season.youtube",
         new_callable=mock.PropertyMock,
     )
-    def test_add_event_with_expired_authorisation_is_graceful(
-        self, mock_youtube_prop
-    ):
+    def test_add_event_with_expired_authorisation_is_graceful(self, mock_youtube_prop):
         mock_youtube_prop.side_effect = RefreshError(
             "invalid_grant: Token has been expired or revoked."
         )
@@ -836,6 +897,7 @@ class LiveStreamEventAdminTests(TestCase):
             live_stream=True,
             live_stream_client_id="client-id",
             live_stream_client_secret="client-secret",
+            live_stream_refresh_token="refresh-token",
         )
         with self.login(self.superuser):
             self.post(
@@ -857,7 +919,7 @@ class LiveStreamEventAdminTests(TestCase):
                     "stop_2": "30",
                 },
             )
-            self.response_302()
+            self.assert_http_302_found()
 
         self.assertEqual(season.live_stream_events.count(), 0)
         self.assertIn(
@@ -883,6 +945,7 @@ class LiveStreamEventAdminTests(TestCase):
             season__live_stream=True,
             season__live_stream_client_id="client-id",
             season__live_stream_client_secret="client-secret",
+            season__live_stream_refresh_token="refresh-token",
             external_identifier="adhoc123",
         )
         with self.login(self.superuser):
@@ -892,7 +955,7 @@ class LiveStreamEventAdminTests(TestCase):
                 event.season_id,
                 event.pk,
             )
-            self.response_302()
+            self.assert_http_302_found()
 
         # Destruction on the platform cannot be confirmed, the record stays.
         self.assertEqual(LiveStreamEvent.objects.count(), 1)
@@ -906,15 +969,14 @@ class LiveStreamEventAdminTests(TestCase):
             season__live_stream=True,
             season__live_stream_client_id="client-id",
             season__live_stream_client_secret="client-secret",
+            season__live_stream_refresh_token="refresh-token",
             external_identifier="adhoc123",
         )
 
         with self.captureOnCommitCallbacks(execute=True):
             event.delete()
 
-        mock_broadcast_task.s.assert_called_once_with(
-            event.season.pk, "adhoc123"
-        )
+        mock_broadcast_task.s.assert_called_once_with(event.season.pk, "adhoc123")
 
 
 class DeleteYoutubeStreamTests(TestCase):
@@ -930,6 +992,7 @@ class DeleteYoutubeStreamTests(TestCase):
             live_stream=True,
             live_stream_client_id="client-id",
             live_stream_client_secret="client-secret",
+            live_stream_refresh_token="refresh-token",
         )
         delete_youtube_stream(season.pk, "stream456")
 
@@ -965,11 +1028,12 @@ class DeleteYoutubeStreamTests(TestCase):
             live_stream=True,
             live_stream_client_id="client-id",
             live_stream_client_secret="client-secret",
+            live_stream_refresh_token="refresh-token",
         )
         self.assertEqual(delete_youtube_stream(season.pk, "stream456"), None)
 
 
-class LiveStreamKeyAdminTests(TestCase):
+class LiveStreamKeyAdminTests(MessagesTestMixin, WarmCachesMixin, TestCase):
     def setUp(self):
         super().setUp()
         self.superuser = UserFactory.create(is_staff=True, is_superuser=True)
@@ -978,14 +1042,36 @@ class LiveStreamKeyAdminTests(TestCase):
         stream_key = factories.LiveStreamKeyFactory.create(
             title="Roaming Camera", season__live_stream=True
         )
-        with self.login(self.superuser):
-            self.assertGoodView(
+        self.warm_caches()
+        with self.login(self.superuser), self.assertNumQueries(season_edit_queries()):
+            self.get_check_200(
                 "admin:fixja:competition:season:edit",
                 stream_key.season.competition_id,
                 stream_key.season_id,
             )
-            self.assertResponseContains("Roaming Camera", html=False)
-            self.assertResponseContains("live_stream_keys-tab", html=False)
+        self.assertResponseContains(
+            row_link(stream_key.urls["edit"], "Roaming Camera", "key")
+        )
+        self.assertResponseContains(
+            by_shell(
+                workbook=(
+                    '<a class="wb-tab" role="tab" id="live_stream_keys-tab" '
+                    'href="#live_stream_keys-pane" aria-controls="live_stream_keys-pane" '
+                    'aria-selected="false" aria-label="Stream keys">Stream keys '
+                    '<span class="wb-tab-count" aria-hidden="true">1</span></a>'
+                ),
+                explorer=(
+                    '<a class="tab" role="tab" id="live_stream_keys-tab-link" '
+                    'href="#live_stream_keys-tab" aria-controls="live_stream_keys-tab" '
+                    'aria-selected="false" tabindex="-1">'
+                    '<svg class="icon" aria-hidden="true" focusable="false">'
+                    '<use href="/static/touchtechnology/admin/explorer/img/icons.svg#key">'
+                    "</use></svg><span>Stream keys</span>"
+                    '<span class="count" aria-hidden="true" '
+                    'data-count-of="live_stream_keys-tab" hidden></span></a>'
+                ),
+            )
+        )
 
     def test_edit_view_renders(self):
         stream_key = factories.LiveStreamKeyFactory.create(season__live_stream=True)
@@ -996,7 +1082,7 @@ class LiveStreamKeyAdminTests(TestCase):
                 stream_key.season_id,
                 stream_key.pk,
             )
-            self.response_200()
+            self.assert_http_200_ok()
 
     @mock.patch(
         "tournamentcontrol.competition.models.Season.youtube",
@@ -1014,6 +1100,7 @@ class LiveStreamKeyAdminTests(TestCase):
             live_stream=True,
             live_stream_client_id="client-id",
             live_stream_client_secret="client-secret",
+            live_stream_refresh_token="refresh-token",
         )
         with self.login(self.superuser):
             self.post(
@@ -1022,7 +1109,7 @@ class LiveStreamKeyAdminTests(TestCase):
                 season.pk,
                 data={"title": "Roaming Camera"},
             )
-            self.response_302()
+            self.assert_http_302_found()
 
         # The liveStream identifier issued by the platform is the primary key
         stream_key = season.live_stream_keys.get()
@@ -1045,6 +1132,7 @@ class LiveStreamKeyAdminTests(TestCase):
             live_stream=True,
             live_stream_client_id="client-id",
             live_stream_client_secret="client-secret",
+            live_stream_refresh_token="refresh-token",
         )
         with self.login(self.superuser):
             self.post(
@@ -1053,7 +1141,7 @@ class LiveStreamKeyAdminTests(TestCase):
                 season.pk,
                 data={"title": "Roaming Camera"},
             )
-            self.response_302()
+            self.assert_http_302_found()
 
         self.assertEqual(season.live_stream_keys.count(), 0)
 
@@ -1061,9 +1149,7 @@ class LiveStreamKeyAdminTests(TestCase):
         "tournamentcontrol.competition.models.Season.youtube",
         new_callable=mock.PropertyMock,
     )
-    def test_add_stream_key_without_credentials_is_refused(
-        self, mock_youtube_prop
-    ):
+    def test_add_stream_key_without_credentials_is_refused(self, mock_youtube_prop):
         mock_youtube = mock.MagicMock()
         mock_youtube_prop.return_value = mock_youtube
 
@@ -1075,10 +1161,70 @@ class LiveStreamKeyAdminTests(TestCase):
                 season.pk,
                 data={"title": "Roaming Camera"},
             )
-            self.response_302()
+            self.assert_http_302_found()
 
         mock_youtube.liveStreams.assert_not_called()
         self.assertEqual(season.live_stream_keys.count(), 0)
+
+    @mock.patch(
+        "tournamentcontrol.competition.models.Season.youtube",
+        new_callable=mock.PropertyMock,
+    )
+    def test_add_stream_key_before_authorisation_is_refused(self, mock_youtube_prop):
+        # Client details alone cannot reach YouTube: nobody has completed the
+        # authorisation that grants the refresh token (#658).
+        season = factories.SeasonFactory.create(
+            live_stream=True,
+            live_stream_client_id="client-id",
+            live_stream_client_secret="client-secret",
+        )
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:competition:season:livestreamkey:add",
+                season.competition_id,
+                season.pk,
+                data={"title": "Roaming Camera"},
+            )
+            self.assert_http_302_found()
+        self.assertMessages(
+            self.last_response,
+            [Message(messages.ERROR, str(YOUTUBE_NOT_AUTHORISED_MESSAGE))],
+        )
+        mock_youtube_prop.assert_not_called()
+        self.assertEqual(season.live_stream_keys.count(), 0)
+
+    @mock.patch(
+        "tournamentcontrol.competition.models.Season.youtube",
+        new_callable=mock.PropertyMock,
+    )
+    def test_edit_stream_key_before_authorisation_saves_with_a_warning(
+        self, mock_youtube_prop
+    ):
+        stream_key = factories.LiveStreamKeyFactory.create(
+            title="Roaming Camera",
+            season__live_stream=True,
+            season__live_stream_client_id="client-id",
+            season__live_stream_client_secret="client-secret",
+        )
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:competition:season:livestreamkey:edit",
+                stream_key.season.competition_id,
+                stream_key.season_id,
+                stream_key.pk,
+                data={"title": "Drone"},
+            )
+            self.assert_http_302_found()
+        self.assertEqual(
+            [
+                (m.level, m.message)
+                for m in get_messages(self.last_response.wsgi_request)
+            ][0],
+            (messages.WARNING, str(YOUTUBE_NOT_UPDATED_MESSAGE)),
+        )
+        mock_youtube_prop.assert_not_called()
+        stream_key.refresh_from_db()
+        self.assertEqual(stream_key.title, "Drone")
 
     @mock.patch(
         "tournamentcontrol.competition.signals.live_streams.delete_youtube_stream"
@@ -1097,6 +1243,7 @@ class LiveStreamKeyAdminTests(TestCase):
             season__live_stream=True,
             season__live_stream_client_id="client-id",
             season__live_stream_client_secret="client-secret",
+            season__live_stream_refresh_token="refresh-token",
             external_identifier="stream456",
             stream_key="abcd-1234",
         )
@@ -1108,7 +1255,7 @@ class LiveStreamKeyAdminTests(TestCase):
                     stream_key.season_id,
                     stream_key.pk,
                 )
-            self.response_302()
+            self.assert_http_302_found()
 
         mock_youtube.liveStreams.return_value.delete.assert_called_once_with(
             id="stream456"
@@ -1132,6 +1279,7 @@ class LiveStreamKeyAdminTests(TestCase):
             season__live_stream=True,
             season__live_stream_client_id="client-id",
             season__live_stream_client_secret="client-secret",
+            season__live_stream_refresh_token="refresh-token",
             external_identifier="stream456",
             stream_key="abcd-1234",
         )
@@ -1142,7 +1290,7 @@ class LiveStreamKeyAdminTests(TestCase):
                 stream_key.season_id,
                 stream_key.pk,
             )
-            self.response_302()
+            self.assert_http_302_found()
 
         # Destruction on the platform was not confirmed, the record stays.
         self.assertEqual(LiveStreamKey.objects.count(), 1)
@@ -1159,6 +1307,7 @@ class LiveStreamKeyAdminTests(TestCase):
             season__live_stream=True,
             season__live_stream_client_id="client-id",
             season__live_stream_client_secret="client-secret",
+            season__live_stream_refresh_token="refresh-token",
             external_identifier="stream456",
             stream_key="abcd-1234",
         )
@@ -1172,9 +1321,211 @@ class LiveStreamKeyAdminTests(TestCase):
                 stream_key.season_id,
                 stream_key.pk,
             )
-            self.response_302()
+            self.assert_http_302_found()
 
         # The record is protected while an event references it, so it must
         # still exist and the platform must never be touched.
         self.assertEqual(LiveStreamKey.objects.count(), 1)
         mock_youtube.liveStreams.assert_not_called()
+
+
+class GroundLiveStreamAdminTests(MessagesTestMixin, TestCase):
+    """A streamed ground's YouTube stream, made and kept by the ground editor."""
+
+    AUTHORISED = {
+        "season__live_stream": True,
+        "season__live_stream_client_id": "client-id",
+        "season__live_stream_client_secret": "client-secret",
+        "season__live_stream_refresh_token": "refresh-token",
+    }
+    # Client details saved, but nobody has completed the authorisation.
+    NOT_AUTHORISED = {**AUTHORISED, "season__live_stream_refresh_token": None}
+
+    def setUp(self):
+        super().setUp()
+        self.superuser = UserFactory.create(is_staff=True, is_superuser=True)
+
+    def data(self, **changes):
+        return {
+            "title": "Field 1",
+            "short_title": "",
+            "abbreviation": "",
+            "timezone": "Australia/Brisbane",
+            "latlng_0": "-27.470125",
+            "latlng_1": "153.021072",
+            "latlng_2": "0",
+            "slug": "field-1",
+            "slug_locked": "0",
+            "live_stream": "1",
+            **changes,
+        }
+
+    def add(self, venue):
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:competition:season:venue:ground:add",
+                venue.season.competition_id,
+                venue.season_id,
+                venue.pk,
+                data=self.data(),
+            )
+
+    def edit(self, ground, **changes):
+        venue = ground.venue
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:competition:season:venue:ground:edit",
+                venue.season.competition_id,
+                venue.season_id,
+                venue.pk,
+                ground.pk,
+                data=self.data(**changes),
+            )
+
+    def streamed_ground(self, **season):
+        return factories.GroundFactory.create(
+            title="Field 1",
+            live_stream=True,
+            external_identifier="stream123",
+            stream_key="abcd-1234",
+            **{f"venue__{key}": value for key, value in season.items()},
+        )
+
+    @mock.patch(
+        "tournamentcontrol.competition.models.Season.youtube",
+        new_callable=mock.PropertyMock,
+    )
+    def test_add_streamed_ground_makes_its_stream(self, mock_youtube_prop):
+        insert = mock_youtube_prop.return_value.liveStreams.return_value.insert
+        insert.return_value.execute.return_value = {
+            "id": "stream123",
+            "cdn": {"ingestionInfo": {"streamName": "abcd-1234"}},
+        }
+        venue = factories.VenueFactory.create(**self.AUTHORISED)
+        self.add(venue)
+        self.assert_http_302_found(url=str(venue.urls["edit"]))
+        ground = venue.grounds.get()
+        self.assertEqual(
+            (ground.external_identifier, ground.stream_key), ("stream123", "abcd-1234")
+        )
+
+    @mock.patch(
+        "tournamentcontrol.competition.models.Season.youtube",
+        new_callable=mock.PropertyMock,
+    )
+    def test_add_streamed_ground_before_authorisation_is_refused(
+        self, mock_youtube_prop
+    ):
+        venue = factories.VenueFactory.create(**self.NOT_AUTHORISED)
+        self.add(venue)
+        self.assert_http_302_found()
+        self.assertMessages(
+            self.last_response,
+            [Message(messages.ERROR, str(YOUTUBE_NOT_AUTHORISED_MESSAGE))],
+        )
+        mock_youtube_prop.assert_not_called()
+        self.assertEqual(venue.grounds.count(), 0)
+
+    @mock.patch(
+        "tournamentcontrol.competition.models.Season.youtube",
+        new_callable=mock.PropertyMock,
+    )
+    def test_add_ground_that_is_not_streamed_needs_no_authorisation(
+        self, mock_youtube_prop
+    ):
+        venue = factories.VenueFactory.create(**self.NOT_AUTHORISED)
+        with self.login(self.superuser):
+            self.post(
+                "admin:fixja:competition:season:venue:ground:add",
+                venue.season.competition_id,
+                venue.season_id,
+                venue.pk,
+                data=self.data(live_stream="0"),
+            )
+        self.assert_http_302_found(url=str(venue.urls["edit"]))
+        mock_youtube_prop.assert_not_called()
+        self.assertEqual(venue.grounds.count(), 1)
+
+    @mock.patch(
+        "tournamentcontrol.competition.models.Season.youtube",
+        new_callable=mock.PropertyMock,
+    )
+    def test_add_streamed_ground_with_expired_authorisation_is_graceful(
+        self, mock_youtube_prop
+    ):
+        # Raised by the request itself, as in production, not by the property.
+        insert = mock_youtube_prop.return_value.liveStreams.return_value.insert
+        insert.return_value.execute.side_effect = RefreshError(
+            "The credentials do not contain the necessary fields need to "
+            "refresh the access token."
+        )
+        venue = factories.VenueFactory.create(**self.AUTHORISED)
+        self.add(venue)
+        self.assert_http_302_found()
+        self.assertMessages(
+            self.last_response,
+            [Message(messages.ERROR, str(YOUTUBE_AUTH_EXPIRED_MESSAGE))],
+        )
+        self.assertEqual(venue.grounds.count(), 0)
+
+    @mock.patch(
+        "tournamentcontrol.competition.models.Season.youtube",
+        new_callable=mock.PropertyMock,
+    )
+    def test_edit_streamed_ground_with_expired_authorisation_is_graceful(
+        self, mock_youtube_prop
+    ):
+        update = mock_youtube_prop.return_value.liveStreams.return_value.update
+        update.return_value.execute.side_effect = RefreshError(
+            "invalid_grant: Token has been expired or revoked."
+        )
+        ground = self.streamed_ground(**self.AUTHORISED)
+        self.edit(ground, title="Main Field")
+        self.assert_http_302_found()
+        self.assertMessages(
+            self.last_response,
+            [Message(messages.ERROR, str(YOUTUBE_AUTH_EXPIRED_MESSAGE))],
+        )
+        ground.refresh_from_db()
+        self.assertEqual(ground.title, "Field 1")
+
+    @mock.patch(
+        "tournamentcontrol.competition.models.Season.youtube",
+        new_callable=mock.PropertyMock,
+    )
+    def test_edit_streamed_ground_before_authorisation_saves_with_a_warning(
+        self, mock_youtube_prop
+    ):
+        ground = self.streamed_ground(**self.NOT_AUTHORISED)
+        self.edit(ground, title="Main Field")
+        self.assert_http_302_found(url=str(ground.venue.urls["edit"]))
+        self.assertEqual(
+            [
+                (m.level, m.message)
+                for m in get_messages(self.last_response.wsgi_request)
+            ][0],
+            (messages.WARNING, str(YOUTUBE_NOT_UPDATED_MESSAGE)),
+        )
+        mock_youtube_prop.assert_not_called()
+        ground.refresh_from_db()
+        self.assertEqual(
+            (ground.title, ground.external_identifier), ("Main Field", "stream123")
+        )
+
+    @mock.patch(
+        "tournamentcontrol.competition.models.Season.youtube",
+        new_callable=mock.PropertyMock,
+    )
+    def test_ground_taken_off_stream_before_authorisation_keeps_its_stream(
+        self, mock_youtube_prop
+    ):
+        # The stream cannot be deleted on YouTube yet, so its identifier is
+        # kept for when it can.
+        ground = self.streamed_ground(**self.NOT_AUTHORISED)
+        self.edit(ground, live_stream="0")
+        self.assert_http_302_found(url=str(ground.venue.urls["edit"]))
+        mock_youtube_prop.assert_not_called()
+        ground.refresh_from_db()
+        self.assertEqual(
+            (ground.live_stream, ground.external_identifier), (False, "stream123")
+        )

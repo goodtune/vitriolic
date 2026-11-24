@@ -1,13 +1,145 @@
+from django import forms
+from django.db.models import Count
 from test_plus import TestCase
 
 from tournamentcontrol.competition.admin import next_related_factory
+from tournamentcontrol.competition.draw.schemas import (
+    DivisionStructure,
+    PoolFixture,
+    StageFixture,
+)
 from tournamentcontrol.competition.forms import (
+    ClubEditForm,
+    DivisionForm,
+    DivisionStructureJSONForm,
     DrawFormatForm,
     MatchEditForm,
     TeamForm,
 )
-from tournamentcontrol.competition.models import Team
+from tournamentcontrol.competition.models import Club, Match, Team
 from tournamentcontrol.competition.tests import factories
+
+
+class DivisionFormTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.division = factories.DivisionFactory.create()
+
+    def _form(self, **data):
+        defaults = {
+            "title": self.division.title,
+            "points_formula_0": "3",
+            "points_formula_1": "2",
+            "points_formula_2": "1",
+            "points_formula_3": "",
+            "points_formula_4": "",
+            "points_formula_5": "",
+            "bonus_points_formula": "",
+            "forfeit_for_score": "5",
+            "forfeit_against_score": "0",
+            "include_forfeits_in_played": "1",
+            "games_per_day": "2",
+            "color": "#ffffff",
+        }
+        defaults.update(data)
+        return DivisionForm(instance=self.division, data=defaults)
+
+    def test_bonus_points_formula_margin(self):
+        "A bonus formula may refer to the margin and diff of the match."
+        form = self._form(
+            bonus_points_formula="[win=1, score_against=0, forfeit_for=0: 1] "
+            "+ [loss=1, margin<=2: 1] + [diff>=10: 1]"
+        )
+        self.assertFormError(form, "bonus_points_formula", [])
+        self.assertEqual(
+            "[win=1, score_against=0, forfeit_for=0: 1] "
+            "+ [loss=1, margin<=2: 1] + [diff>=10: 1]",
+            form.save().bonus_points_formula,
+        )
+
+    def test_bonus_points_formula_unknown_identifier(self):
+        "A bonus formula must not refer to values a ladder entry does not have."
+        form = self._form(bonus_points_formula="[tries>=4: 1] + [loss=1, margin<=7: 1]")
+        self.assertFormError(
+            form,
+            "bonus_points_formula",
+            ["Unknown identifier(s) in this points formula: tries."],
+        )
+
+    def test_points_formula_identifiers_limited_to_widget(self):
+        """
+        The points formula editor is a coefficient per identifier in
+        ``valid_ladder_identifiers``; any other identifier would be dropped
+        the next time the division is edited, so it must be rejected.
+        """
+        form = self._form()
+        form.cleaned_data = {"points_formula": "3*win + 2*draw + 1*loss"}
+        self.assertEqual(form.clean_points_formula(), "3*win + 2*draw + 1*loss")
+        form.cleaned_data = {"points_formula": "3*win + diff"}
+        with self.assertRaisesMessage(
+            forms.ValidationError,
+            "Unknown identifier(s) in this points formula: diff.",
+        ):
+            form.clean_points_formula()
+
+    def test_bonus_points_formula_invalid_syntax(self):
+        form = self._form(bonus_points_formula="loss=1: 1")
+        self.assertFormError(
+            form,
+            "bonus_points_formula",
+            ["Syntax of this points formula is invalid."],
+        )
+
+
+class ClubEditFormTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.club = factories.ClubFactory.create()
+        cls.members = factories.PersonFactory.create_batch(3, club=cls.club)
+        cls.outsider = factories.PersonFactory.create()
+
+    def _data(self, **data):
+        defaults = {
+            "title": self.club.title,
+            "slug": self.club.slug,
+            "status": self.club.status,
+        }
+        defaults.update(data)
+        return defaults
+
+    def test_primary_offers_only_the_clubs_people(self):
+        form = ClubEditForm(instance=self.club)
+        self.assertCountEqual(form.fields["primary"].queryset, self.members)
+
+    def test_primary_still_offers_the_current_primary(self):
+        "A primary contact who has since moved on is not rejected."
+        self.club.primary = self.outsider
+        self.club.save()
+        form = ClubEditForm(instance=self.club)
+        self.assertCountEqual(
+            form.fields["primary"].queryset, [*self.members, self.outsider]
+        )
+
+    def test_new_club_offers_nobody(self):
+        form = ClubEditForm(instance=Club())
+        self.assertQuerySetEqual(form.fields["primary"].queryset, [])
+
+    def test_member_can_be_the_primary(self):
+        form = ClubEditForm(
+            instance=self.club, data=self._data(primary=self.members[0].pk)
+        )
+        self.assertEqual(form.errors, {})
+        self.assertEqual(form.save().primary, self.members[0])
+
+    def test_outsider_cannot_be_the_primary(self):
+        form = ClubEditForm(
+            instance=self.club, data=self._data(primary=self.outsider.pk)
+        )
+        self.assertFormError(
+            form,
+            "primary",
+            ["Select a valid choice. That choice is not one of the available choices."],
+        )
 
 
 class TeamFormTests(TestCase):
@@ -47,7 +179,118 @@ class TeamFormTests(TestCase):
         self.assertFormError(
             form,
             "text",
-            ["Draw formula is invalid: line(s) '1' are not in the correct format."],
+            ["Draw formula is invalid: line(s) '2' are not in the correct format."],
+        )
+
+    def test_drawformat_invalid_lines_are_listed_in_order(self):
+        "The offending lines are listed in the order they appear (#528)."
+        form = DrawFormatForm(
+            data={
+                "name": "Test Draw Format",
+                # Lines 2, 5 and 9 are wrong; a set of them iterates 9, 2, 5.
+                "text": (
+                    "ROUND\n1: 1v2\n2: 3 vs 4\n"
+                    "ROUND\n3: 1 v 3\n4: 2 vs 4\n5: 1 vs 4\n"
+                    "ROUND\n6: 2v3"
+                ),
+                "teams": 4,
+                "is_final": "0",
+            },
+        )
+        self.assertFormError(
+            form,
+            "text",
+            [
+                "Draw formula is invalid: line(s) '2, 5, 9' are not in the correct "
+                "format."
+            ],
+        )
+
+
+class DivisionStructureJSONFormTests(TestCase):
+    """
+    The JSON division builder validates every draw format a stage or pool
+    refers to as the draw format form does, naming the format (#534).
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.season = factories.SeasonFactory.create()
+
+    def form(self, **draw_formats):
+        structure = DivisionStructure(
+            title="Juniors",
+            teams=["Reds", "Blues", "Greens", "Yellows"],
+            draw_formats=draw_formats,
+            stages=[
+                StageFixture(
+                    title="Pools",
+                    pools=[
+                        PoolFixture(
+                            title="Pool 1", teams=[0, 1], draw_format_ref="pool"
+                        ),
+                        PoolFixture(
+                            title="Pool 2", teams=[2, 3], draw_format_ref="pool"
+                        ),
+                    ],
+                ),
+                StageFixture(title="Finals", draw_format_ref="final"),
+            ],
+        )
+        return DivisionStructureJSONForm(
+            self.season, data={"json_data": structure.model_dump_json()}
+        )
+
+    def test_match_before_a_round_is_refused(self):
+        "The first line of the format is line 1 (#565)."
+        form = self.form(pool="1: 1 vs 2\nROUND\n2: 2 vs 1", final="ROUND\n1: P1 vs P2")
+        self.assertEqual(
+            form.errors,
+            {
+                "json_data": [
+                    "Draw format 'pool': Draw formula is invalid: line(s) '1' are "
+                    "not in the correct format."
+                ]
+            },
+        )
+
+    def test_empty_format_is_refused(self):
+        form = self.form(pool="ROUND\n1: 1 vs 2", final="")
+        self.assertEqual(
+            form.errors,
+            {
+                "json_data": [
+                    "Draw format 'final': Draw formula is invalid: it has no ROUND "
+                    "line."
+                ]
+            },
+        )
+
+    def test_each_bad_format_is_reported_once(self):
+        form = self.form(pool="1 vs 2", final="")
+        self.assertEqual(
+            form.errors,
+            {
+                "json_data": [
+                    "Draw format 'pool': Draw formula is invalid: line(s) '1' are "
+                    "not in the correct format.",
+                    "Draw format 'final': Draw formula is invalid: it has no ROUND "
+                    "line.",
+                ]
+            },
+        )
+
+    def test_valid_formats_build(self):
+        form = self.form(
+            pool="ROUND\n1: 1 vs 2\nROUND\n2: 2 vs 1", final="ROUND\n1: P1 vs P2"
+        )
+        self.assertEqual(form.errors, {})
+        division = form.save()
+        self.assertCountEqual(
+            division.stages.annotate(count=Count("matches")).values_list(
+                "title", "count"
+            ),
+            [("Pools", 4), ("Finals", 1)],
         )
 
 
@@ -102,9 +345,9 @@ class MatchEditFormTests(TestCase):
             },
         )
 
-        self.assertTrue(form.is_valid(), f"Form errors: {form.errors}")
+        self.assertEqual(form.errors, {})
         match = form.save()
-        self.assertIsNotNone(match.pk)
+        self.assertEqual(Match.objects.filter(pk=match.pk).count(), 1)
         self.assertIsNone(match.live_stream_thumbnail_image)
 
     def test_match_edit_preserves_existing_thumbnail(self):
@@ -137,7 +380,7 @@ class MatchEditFormTests(TestCase):
             },
         )
 
-        self.assertTrue(form.is_valid(), f"Form errors: {form.errors}")
+        self.assertEqual(form.errors, {})
         form.save()
         match.refresh_from_db()
         self.assertEqual(match.live_stream_thumbnail_image, original_thumbnail)
@@ -174,7 +417,7 @@ class MatchEditFormTests(TestCase):
             },
         )
 
-        self.assertTrue(form.is_valid(), f"Form errors: {form.errors}")
+        self.assertEqual(form.errors, {})
         match = form.save()
-        self.assertIsNotNone(match.pk)
+        self.assertEqual(Match.objects.filter(pk=match.pk).count(), 1)
         self.assertIsNone(match.live_stream_thumbnail_image)

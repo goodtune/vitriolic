@@ -1,0 +1,43 @@
+{% load i18n common admin admin_explorer %}
+{% comment %}
+A formset as a table: one row per object, one column per field. Each field
+keeps a label of its own (read by assistive technology, and by the pickers)
+that names its row.
+{% endcomment %}
+{{ formset.management_form }}
+{% if formset.non_form_errors %}
+	<div class="form-errors" role="alert">{% icon "alert" %}<ul>{% for error in formset.non_form_errors %}<li>{{ error }}</li>{% endfor %}</ul></div>
+{% endif %}
+{% if formset.forms %}
+	<section class="formset form-section">
+		{% if formset_title %}<h2>{{ formset_title }}</h2>{% elif formset.model %}<h2>{{ formset.model|types|capfirst }}</h2>{% endif %}
+		<div class="table-wrap">
+			<table class="listing formset-table">
+				<thead>
+					<tr>
+						{% with first=formset.forms.0 %}
+							{% for f in first.visible_fields %}<th>{{ f.label }}</th>{% endfor %}
+						{% endwith %}
+					</tr>
+				</thead>
+				<tbody>
+					{% for form in formset.forms %}
+						<tr>
+							{% for f in form.visible_fields %}
+								<td>
+									<label class="visually-hidden" for="{{ f.id_for_label }}">{{ f.label }} ({% blocktrans with n=forloop.parentloop.counter %}row {{ n }}{% endblocktrans %})</label>
+									{% if forloop.first %}{% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}{% endif %}
+									{{ f|widget }}
+									{% if f.errors %}<ul class="field-errors" id="{{ f.auto_id }}-errors">{% for error in f.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+								</td>
+							{% endfor %}
+						</tr>
+						{% if form.non_field_errors %}
+							<tr><td colspan="{{ form.visible_fields|length }}"><ul class="field-errors">{% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}</ul></td></tr>
+						{% endif %}
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+	</section>
+{% endif %}

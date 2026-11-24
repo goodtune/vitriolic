@@ -6,7 +6,6 @@ import touchtechnology.common.db.models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("common", "0001_initial"),
     ]

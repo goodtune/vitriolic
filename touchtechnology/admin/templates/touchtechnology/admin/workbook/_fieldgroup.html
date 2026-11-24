@@ -1,0 +1,16 @@
+{% load common %}{% comment %}
+	A group of fields under a heading: ``fields`` (from fields_in or
+	fields_besides), ``title``, ``hint``, and ``folded`` to tuck a group of
+	rarely used fields behind its heading (it opens itself when one of them
+	has a problem).
+{% endcomment %}{% if fields %}{% if folded %}
+<details class="wb-group wb-group-folded"{% for f in fields %}{% if f.errors %} open{% endif %}{% endfor %}>
+	<summary class="wb-group-title">{{ title }}{% if hint %} <span class="wb-group-hint">{{ hint }}</span>{% endif %}</summary>
+	<div class="wb-fields">{% for f in fields %}{% field f %}{% endfor %}</div>
+</details>
+{% else %}
+<div class="{% if not first %}wb-group{% endif %}" role="group"{% if title %} aria-label="{{ title }}"{% endif %}>
+	{% if title %}<h3 class="wb-group-title">{{ title }}{% if hint %} <span class="wb-group-hint">{{ hint }}</span>{% endif %}</h3>{% endif %}
+	<div class="wb-fields">{% for f in fields %}{% field f %}{% endfor %}</div>
+</div>
+{% endif %}{% endif %}

@@ -9,6 +9,17 @@
 /uv.lock
 __pycache__
 
+# Translation catalogues compiled from the .po files when the package is built
+*.mo
+
 # E2E test screenshots
 screenshots/
 tests/screenshots/
+
+# Demo project uploads
+tests/media/
+
+# Vale packages, downloaded by `vale sync`; the house style and vocabulary are ours
+/.vale/styles/*
+!/.vale/styles/Vitriolic/
+!/.vale/styles/config/

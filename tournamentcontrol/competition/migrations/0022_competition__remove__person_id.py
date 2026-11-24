@@ -9,7 +9,6 @@ import touchtechnology.common.db.models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("competition", "0021_competition__data__person_uuid"),
     ]

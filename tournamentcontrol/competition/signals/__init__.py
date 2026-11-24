@@ -2,7 +2,7 @@ from django.db import models
 
 from tournamentcontrol.competition.signals.custom import match_forfeit  # noqa
 from tournamentcontrol.competition.signals.ladders import (  # noqa
-    changed_points_formula,
+    changed_ladder_formula,
     scale_ladder_entry,
     team_ladder_entry_aggregation,
 )
@@ -10,13 +10,16 @@ from tournamentcontrol.competition.signals.matches import (  # noqa
     match_saved_handler,
     notify_match_forfeit_email,
 )
+from tournamentcontrol.competition.signals.ordering import (  # noqa
+    close_order_gap,
+    refresh_order,
+)
 from tournamentcontrol.competition.signals.places import (  # noqa
     capture_timezone_before_save,
     set_ground_latlng,
     set_ground_timezone,
     update_match_datetimes_on_place_timezone_change,
 )
-from tournamentcontrol.competition.signals.teams import delete_team  # noqa
 
 
 def delete_related(sender, instance, *args, **kwargs):

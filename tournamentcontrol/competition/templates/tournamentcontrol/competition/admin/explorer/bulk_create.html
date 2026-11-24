@@ -1,0 +1,54 @@
+{% extends "touchtechnology/admin/explorer/form_page.html" %}
+{% load i18n common admin admin_explorer %}
+
+{% block page_title %}{% blocktrans with types=model|types %}Add {{ types }}{% endblocktrans %}{% endblock %}
+{% block page_kind %}{% blocktrans with types=model|types %}One row for each; rows left blank are skipped, and the new {{ types }} follow any there already.{% endblocktrans %}{% endblock %}
+{% block page_icon %}<span class="title-icon">{% icon "plus-many" %}</span>{% endblock %}
+
+{% block form-body %}
+	{{ formset.management_form }}
+	{% if formset.non_form_errors %}
+		<div class="form-errors" role="alert">{% icon "alert" %}<ul>{% for error in formset.non_form_errors %}<li>{{ error }}</li>{% endfor %}</ul></div>
+	{% endif %}
+	<div class="table-wrap">
+		<table class="listing formset-table bulk-table" data-formset="{{ formset.prefix }}">
+			<thead>
+				<tr>
+					<th class="num">{% trans "Order" %}</th>
+					{% for field in formset.empty_form.visible_fields %}
+						<th>{{ field.label }}{% if field.field.required %}{% else %} <span class="muted">{% trans "optional" %}</span>{% endif %}</th>
+					{% endfor %}
+				</tr>
+			</thead>
+			<tbody>
+				{% for form in formset %}
+					<tr>
+						<td class="num muted">{{ form.instance.order|default:forloop.counter }}{% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}</td>
+						{% for field in form.visible_fields %}
+							<td>
+								<label class="visually-hidden" for="{{ field.id_for_label }}">{{ field.label }} ({% blocktrans with n=forloop.parentloop.counter %}row {{ n }}{% endblocktrans %})</label>
+								{{ field|widget }}
+								{% if field.errors %}<ul class="field-errors">{% for error in field.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+							</td>
+						{% endfor %}
+					</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+	<template id="{{ formset.prefix }}-empty-row">
+		<tr>
+			<td class="num muted">+</td>
+			{% for field in formset.empty_form.visible_fields %}
+				<td>
+					<label class="visually-hidden" for="{{ field.id_for_label }}">{{ field.label }}</label>
+					{% if forloop.first %}{% for hidden in formset.empty_form.hidden_fields %}{{ hidden }}{% endfor %}{% endif %}
+					{{ field|widget }}
+				</td>
+			{% endfor %}
+		</tr>
+	</template>
+	<p class="add-row-line">
+		<button type="button" class="button compact quiet" data-add-row="{{ formset.prefix }}">{% icon "plus" %}<span>{% trans "Another row" %}</span></button>
+	</p>
+{% endblock %}

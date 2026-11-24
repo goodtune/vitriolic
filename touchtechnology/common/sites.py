@@ -18,7 +18,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.template import RequestContext
 from django.template.loader import render_to_string
 from django.template.response import TemplateResponse
-from django.urls import NoReverseMatch, path, reverse, reverse_lazy
+from django.urls import NoReverseMatch, is_valid_path, path, reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.encoding import smart_str
 from django.utils.http import urlencode
@@ -29,6 +29,8 @@ from guardian.shortcuts import get_objects_for_user
 from guardian.utils import get_40x_or_None
 from modelforms.forms import ModelForm
 
+from touchtechnology.admin.sites import site as admin_site
+from touchtechnology.admin.templatetags.admin_lists import related as related_filter
 from touchtechnology.common.decorators import (
     login_required_m,
     node2extracontext,
@@ -47,14 +49,27 @@ from touchtechnology.common.utils import (
 
 logger = logging.getLogger(__name__)
 
+# How many objects a related tab lists at a time when loaded through HTMX, unless
+# TOUCHTECHNOLOGY_HTMX_ADMIN_TAB_PAGINATE_BY says otherwise.
+HTMX_ADMIN_TAB_PAGINATE_BY = 25
+
 
 class AlreadyRegistered(Exception):
     pass
 
 
-class Application(object):
+class Application:
     kwargs_form_class = None
     model_form_bases = (ModelForm,)
+    required_form_bases = None
+
+    def get_required_form_bases(self):
+        """
+        The bases a form must inherit, defaulting to ``model_form_bases``.
+        """
+        if self.required_form_bases is None:
+            return self.model_form_bases
+        return self.required_form_bases
 
     def __init__(self, name, app_name, node=None, **kwargs):
         self.name = name
@@ -65,12 +80,9 @@ class Application(object):
         self._spawned = timezone.now()
 
     def __repr__(self):
-        return "<{0}: {1}/{2}/{3}?{4}>".format(
-            self.__class__.__name__,
-            self.name,
-            self.app_name,
-            self.node or "",
-            urlencode(self.kwargs),
+        return (
+            f"<{self.__class__.__name__}: {self.name}/{self.app_name}/"
+            f"{self.node or ''}?{urlencode(self.kwargs)}>"
         )
 
     def _get_namespace(self, cls=None):
@@ -96,29 +108,6 @@ class Application(object):
         return cls().app_name.title()
 
     @property
-    def version(self):
-        """
-        Identify version number of the Application. If it is defined as a
-        module we look up the import path until we find the module level
-        ``get_version`` function, to a maximum depth of 4 levels.
-        """
-        ver = ""
-        for depth in range(1, 5):
-            parts = self.__module__.rsplit(".", depth)
-            mod = parts[0]
-            try:
-                ver = import_string("%s.__version__" % mod)
-            except ImportError:
-                logger.warning('"__version__" not found at "%s"', mod)
-            else:
-                logger.debug('Identified version "%s" for "%s"', ver, mod)
-                break
-        name = self.verbose_name
-        if callable(name):
-            name = name()
-        return "{name} {ver}".format(name=_(name), ver=ver)
-
-    @property
     def current_app(self):
         return self.name
 
@@ -127,9 +116,9 @@ class Application(object):
             args = ()
         if kwargs is None:
             kwargs = {}
-        named_url = "%s:%s" % (self.app_name, name)
+        named_url = f"{self.app_name}:{name}"
         if prefix:
-            named_url = "%s:%s" % (prefix, named_url)
+            named_url = f"{prefix}:{named_url}"
         for key in self.kwargs:
             kwargs.pop(key, None)
         return reverse_lazy(
@@ -139,6 +128,22 @@ class Application(object):
     def redirect(self, *args, **kwargs):
         "Thin wrapper around django.shortcuts.redirect to save on imports"
         return redirect(*args, **kwargs)
+
+    def redirect_up(self, request, relative):
+        """
+        Redirect to the page ``relative`` (``..`` or ``../..``) leads to from
+        the one requested or, when no view answers there, the nearest page
+        above it. Objects nested under another with no list of their own (a
+        match's score sheets) go back to the page of the object they are in.
+        """
+        # As CommonMiddleware does: resolve the path without the script name,
+        # and redirect to the address with it.
+        urlconf = getattr(request, "urlconf", None)
+        url = urljoin(request.path_info, relative)
+        while url != "/" and not is_valid_path(url, urlconf):
+            url = urljoin(url, "..")
+        script_name = request.path.removesuffix(request.path_info)
+        return self.redirect(f"{script_name}{url}")
 
     def _template_path(self, filename, *args):
         args = list(reversed([a for a in args if a]))
@@ -150,6 +155,14 @@ class Application(object):
 
     def template_path(self, *args, **kwargs):
         return list(self._template_path(*args, **kwargs))
+
+    def admin_template(self, filename):
+        """
+        The path of one of the admin's own templates, for the generic views to
+        fall back on: the shell of the admin site (an admin component names the
+        one its own site wears).
+        """
+        return admin_site.shell.template(filename)
 
     def generic_permissions(
         self,
@@ -185,6 +198,9 @@ class Application(object):
         extra_context.update(
             {
                 "model": model,
+                # The object the permissions are of, so the page can say where
+                # it is in the admin.
+                "object": instance,
             }
         )
 
@@ -287,19 +303,19 @@ class Application(object):
             extra_context = {}
 
         if object_list_name is None:
-            object_list_name = "{0}_list".format(model._meta.model_name)
+            object_list_name = f"{model._meta.model_name}_list"
 
         if templates is None:
             templates = self.template_path("list.html", model._meta.model_name)
 
         if list_templates is None:
             list_templates = self.template_path("list.inc.html", model._meta.model_name)
-            # Always tack the mvp theme version on the end as a fallback.
-            list_templates.append("mvp/list.inc.html")
+            # Always tack the admin's own version on the end as a fallback.
+            list_templates.append(self.admin_template("list.inc.html"))
 
         # Determine the namespace of this Application, so we can construct
         # view names to pass to the template engine to reverse CRUD URI's.
-        create_url_name = "%s:add" % request.resolver_match.namespace
+        create_url_name = f"{request.resolver_match.namespace}:add"
         create_url_kwargs = request.resolver_match.kwargs.copy()
         create_url_kwargs.pop("admin", None)
         create_url_kwargs.pop("component", None)
@@ -315,6 +331,10 @@ class Application(object):
             )
         except NoReverseMatch:
             create_url = None
+
+        add_perm, change_perm, delete_perm, view_perm = get_perms_for_model(
+            model, True, True, True, "view"
+        )
 
         context = {
             "queryset": queryset,
@@ -332,12 +352,10 @@ class Application(object):
             "search": request.GET.get("search", ""),
             # Pass to template the name permissions, so we can re-use template
             # code to generically list and add/change/delete objects
-            "add_perm": "%s.add_%s" % (model._meta.app_label, model._meta.model_name),
-            "view_perm": "%s.view_%s" % (model._meta.app_label, model._meta.model_name),
-            "change_perm": "%s.change_%s"
-            % (model._meta.app_label, model._meta.model_name),
-            "delete_perm": "%s.delete_%s"
-            % (model._meta.app_label, model._meta.model_name),
+            "add_perm": add_perm,
+            "view_perm": view_perm,
+            "change_perm": change_perm,
+            "delete_perm": delete_perm,
             "create_url": create_url,
         }
 
@@ -393,6 +411,60 @@ class Application(object):
 
         return self.render(request, templates, context)
 
+    def _is_htmx_request(self, request):
+        """Check if the request is an HTMX request."""
+        return (
+            getattr(request, "htmx", False)
+            or request.META.get("HTTP_HX_REQUEST") == "true"
+        )
+
+    def _render_htmx_tab_content(
+        self, request, model, manager, tab_name, instance, related, extra_context
+    ):
+        """
+        Render partial HTML content for a specific tab pane via HTMX.
+        Returns a TemplateResponse with just the tab's content fragment.
+        """
+        context = {
+            "model": manager.none(),
+            "object": instance,
+            "related": related,
+            "htmx_admin_tabs": True,
+            "tab_paginate_by": int(
+                getattr(
+                    settings,
+                    "TOUCHTECHNOLOGY_HTMX_ADMIN_TAB_PAGINATE_BY",
+                    HTMX_ADMIN_TAB_PAGINATE_BY,
+                )
+            ),
+        }
+        context.update(extra_context or {})
+
+        # A view that names no relations (``related=None``) has a tab for each
+        # of them, exactly as the page lists them.
+        if instance and instance.pk:
+            for mgr, name in related_filter(instance, related):
+                if name == tab_name:
+                    context.update(
+                        {
+                            "tab_manager": mgr,
+                            "tab_name": name,
+                        }
+                    )
+                    templates = [
+                        self.admin_template("_htmx_tab_related.html"),
+                    ]
+                    response = self.render(request, templates, context)
+                    # A page of a tab is not a page of its own, so tell htmx not
+                    # to record it in the history.
+                    response["HX-Push-Url"] = "false"
+                    return response
+
+        # Tab not found - return empty content
+        return TemplateResponse(
+            request, self.admin_template("_htmx_tab_empty.html"), context
+        )
+
     def generic_edit(
         self,
         request,
@@ -407,7 +479,7 @@ class Application(object):
         post_save_callback=lambda o: None,
         post_save_redirect=None,
         templates=None,
-        changed_messages=((messages.SUCCESS, _("Your {model} has been " "saved.")),),
+        changed_messages=((messages.SUCCESS, _("Your {model} has been saved.")),),
         unchanged_messages=((messages.INFO, _("Your {model} was not changed.")),),
         permission_required=False,
         perms=None,
@@ -436,22 +508,26 @@ class Application(object):
             extra_context = {}
 
         if post_save_redirect is None:
-            redirect_to = urljoin(request.path, "..") if pk is None else request.path
-            post_save_redirect = self.redirect(redirect_to)
+            post_save_redirect = (
+                self.redirect_up(request, "..")
+                if pk is None
+                else self.redirect(request.path)
+            )
 
         # Implement permission checking for specified object instance, throw
         # an HTTP 403 (using django-guardian configuration) when the user is
         # not entitled to edit the instance.
         if permission_required:
-
             # If no perms are specified, build sensible default using built in
             # permission types that come batteries included with Django.
             if perms is None:
                 perms = get_perms_for_model(model, change=True)
 
-                # When there is no pk value, we're doing a creation and should
-                # have permission to create the object.
-                if pk is None or instance.pk is None:
+                # When the instance has not been saved yet, we're doing a
+                # creation and should have permission to create the object.
+                # Decide on the instance alone (not the ``pk`` argument) as
+                # most callers pass an existing ``instance`` without ``pk``.
+                if instance is None or instance.pk is None:
                     perms = get_perms_for_model(model, add=True)
 
             # Determine the user's permission to edit this object using the
@@ -470,6 +546,15 @@ class Application(object):
             if has_permission is not None:
                 return has_permission
 
+        # Handle HTMX tab content requests - return partial HTML for a
+        # specific tab pane when the _htmx_tab query parameter is present.
+        htmx_tab = request.GET.get("_htmx_tab")
+        htmx_admin_tabs = getattr(settings, "TOUCHTECHNOLOGY_HTMX_ADMIN_TABS", False)
+        if htmx_tab and htmx_admin_tabs and self._is_htmx_request(request):
+            return self._render_htmx_tab_content(
+                request, model, manager, htmx_tab, instance, related, extra_context
+            )
+
         # If the developer has not provided a custom form, then dynamically
         # construct a default ModelForm for them.
         if form_class is None:
@@ -485,7 +570,7 @@ class Application(object):
         # Whether we've dynamically constructed our form_class or not, check to
         # ensure that we've inherited from all the bases. Log when we haven't,
         # but don't raise any exceptions.
-        for base in self.model_form_bases:
+        for base in self.get_required_form_bases():
             if not issubclass(form_class, base):
                 logger.error('"%s" does not inherit "%s"', form_class, base)
 
@@ -498,6 +583,7 @@ class Application(object):
         # Vanilla form processing here, take the post data and files, create
         # an instance of form_class, save and redirect.
         if request.method == "POST":
+            adding = instance is None or instance.pk is None
             form = form_class(data=request.POST, files=request.FILES, **form_kwargs)
             if form.is_valid():
                 replace = dict(
@@ -517,6 +603,9 @@ class Application(object):
                 else:
                     for level, message in unchanged_messages:
                         messages.add_message(request, level, message.format(**replace))
+                # "Save and add another" comes back to an empty form.
+                if adding and "_addanother" in request.POST:
+                    return self.redirect(request.get_full_path())
                 return post_save_redirect
         else:
             form = form_class(**form_kwargs)
@@ -630,8 +719,7 @@ class Application(object):
             formset_class = modelformset_factory(model, extra=0, fields=formset_fields)
 
         if post_save_redirect is None:
-            redirect_to = urljoin(request.path, "..")
-            post_save_redirect = self.redirect(redirect_to)
+            post_save_redirect = self.redirect_up(request, "..")
 
         # Vanilla formset processing here, take the post data and files, create
         # an instance of formset_class, save and redirect.
@@ -911,7 +999,7 @@ class Application(object):
         # Whether we've dynamically constructed our form_class or not, check to
         # ensure that we've inherited from all the bases. Log when we haven't,
         # but don't raise any exceptions.
-        for base in self.model_form_bases:
+        for base in self.get_required_form_bases():
             if not issubclass(form_class, base):
                 logger.error('"%s" does not inherit "%s"', form_class, base)
 
@@ -927,8 +1015,7 @@ class Application(object):
             )
 
         if post_save_redirect is None:
-            redirect_to = urljoin(request.path, "..")
-            post_save_redirect = self.redirect(redirect_to)
+            post_save_redirect = self.redirect_up(request, "..")
 
         # Vanilla formset processing here, take the post data and files, create
         # an instance of formset_class, save and redirect.
@@ -981,6 +1068,7 @@ class Application(object):
         permission_required=False,
         accept_global_perms=True,
         return_403=None,
+        pre_delete_callback=lambda o: None,
         **kwargs,
     ):
 
@@ -998,7 +1086,6 @@ class Application(object):
         # an HTTP 403 (using django-guardian configuration) when the user is
         # not entitled to edit the instance.
         if permission_required:
-
             # If no perms are specified, build sensible default using built in
             # permission types that come batteries included with Django.
             if perms is None:
@@ -1021,8 +1108,13 @@ class Application(object):
                 return has_permission
 
         if post_delete_redirect is None:
-            redirect_to = urljoin(request.path, "../..")
-            post_delete_redirect = self.redirect(redirect_to)
+            post_delete_redirect = self.redirect_up(request, "../..")
+
+        # Once the person may delete it, the view may still refuse to, as
+        # ``pre_save_callback`` may refuse a save: its response is sent instead.
+        refused = pre_delete_callback(instance)
+        if isinstance(refused, HttpResponse):
+            return refused
 
         try:
             instance.delete()
@@ -1080,11 +1172,7 @@ class Application(object):
         return render_to_string(templates, context, context_instance, **kwargs)
 
     def render(self, request, templates, context, tz=None, **kwargs):
-        logger.debug(
-            "{app}.render: {request.path}".format(
-                app=self.__class__.__name__, request=request
-            )
-        )
+        logger.debug("%s.render: %s", self.__class__.__name__, request.path)
         context.update({"application": self})
         kwargs.setdefault("context", context)
 
@@ -1102,7 +1190,7 @@ class Application(object):
 
 class AccountsSite(Application):
     def __init__(self, name="accounts", app_name="accounts", *args, **kwargs):
-        super(AccountsSite, self).__init__(name=name, app_name=app_name)
+        super().__init__(name=name, app_name=app_name)
         self.profile_form_class = kwargs.pop("profile_form_class", PROFILE_FORM_CLASS)
         self.user_model = get_user_model()
 
@@ -1110,7 +1198,7 @@ class AccountsSite(Application):
     def set_password_form(self):
         class SetPasswordForm(forms.SetPasswordForm):
             def __init__(slf, user, *a, **kw):
-                super(SetPasswordForm, slf).__init__(user, *a, **kw)
+                super().__init__(user, *a, **kw)
                 if user:
                     slf.user = self.user_model.objects.get(pk=user.pk)
 
@@ -1120,7 +1208,7 @@ class AccountsSite(Application):
     def password_change_form(self):
         class PasswordChangeForm(forms.PasswordChangeForm):
             def __init__(slf, user, *a, **kw):
-                super(PasswordChangeForm, slf).__init__(user, *a, **kw)
+                super().__init__(user, *a, **kw)
                 if user:
                     slf.user = self.user_model.objects.get(pk=user.pk)
 

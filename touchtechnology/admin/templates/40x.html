@@ -1,29 +1,10 @@
-{% extends "touchtechnology/admin/base.html" %}
-
-{% block mainnav %}{% endblock %}
-
-{% block full_content %}
-	<hr class="spacer-md">
-	<hr class="spacer-xs">
-
-	<div class="error-container">
-		<div class="error-code">{% block error-code %}{% endblock %}</div> <!-- /.error-code -->
-
-		<div class="error-details">
-			{% block error-details %}{% endblock %}
-
-			{% block search-form %}
-				<form action="#" class="form">
-					<div class="input-group">
-						<input type="text" class="form-control" placeholder="Search...">
-						<span class="input-group-btn">
-							<button class="btn btn-secondary" type="button">
-								<i class="fa fa-search"></i>
-							</button>
-						</span>
-					</div><!-- /input-group -->
-				</form>
-			{% endblock %}
-		</div> <!-- /.error-details -->
-	</div>
-{% endblock %}
+{% extends shell.template_dir|default:"touchtechnology/admin/workbook"|add:"/40x.html" %}
+{% comment %}
+	Kept so a template that extends "40x.html", as the error pages of a project
+	did before the admin had shells, still works. This page adds nothing. It is
+	the error page of the shell the admin wears: the shell in the context (the
+	"touchtechnology.admin.context_processors.brand" context processor puts it
+	there for every page), or Workbook, the default shell, when the context has
+	none. Extend that page by its own name instead (see docs/upgrading.md). This
+	file will be removed in a later release.
+{% endcomment %}

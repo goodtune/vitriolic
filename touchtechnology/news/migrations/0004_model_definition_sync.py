@@ -6,7 +6,6 @@ import touchtechnology.common.db.models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("news", "0003_category_last_modified"),
     ]

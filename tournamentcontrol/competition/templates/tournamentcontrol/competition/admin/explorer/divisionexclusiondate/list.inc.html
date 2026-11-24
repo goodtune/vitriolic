@@ -1,0 +1,16 @@
+{% extends "touchtechnology/admin/explorer/list.inc.html" %}
+{% load i18n admin admin_explorer %}
+
+{% block table-headings %}
+	<th>{% trans "Date" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	<td class="title-cell">
+		{% if change_perm in object_perms %}
+			<a href="{{ obj.urls.edit }}">{% icon "ban" %}<span>{{ obj.date|date:"l j F Y" }}</span></a>
+		{% else %}
+			<span>{{ obj.date|date:"l j F Y" }}</span>
+		{% endif %}
+	</td>
+{% endblock %}

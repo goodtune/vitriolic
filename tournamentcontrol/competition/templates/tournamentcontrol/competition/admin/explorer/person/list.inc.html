@@ -1,0 +1,32 @@
+{% extends "touchtechnology/admin/explorer/list.inc.html" %}
+{% load i18n admin admin_explorer %}
+
+{% block table-headings %}
+	<th>{% trans "Name" %}</th>
+	<th class="num">{% trans "Age" %}</th>
+	<th class="num">{% trans "Played" %}</th>
+	<th class="num wide-only">{% trans "Scored" %}</th>
+	<th class="wide-only">{% trans "Debut" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	{{ block.super }}
+	<td class="num">{{ obj.age|default_if_none:"&ndash;" }}</td>
+	<td class="num">{{ obj.stats_played|default_if_none:"&ndash;" }} / {{ obj.teams_count }}</td>
+	<td class="num wide-only">{{ obj.stats_points|default_if_none:"&ndash;" }}</td>
+	<td class="wide-only">{{ obj.debut|default_if_none:"&ndash;" }}</td>
+{% endblock %}
+
+{% block row-buttons-extra %}
+	{% if obj.user_id %}
+		<a class="button quiet icon-only compact" href="{% url 'admin:auth:users:edit' obj.user_id %}" title="{% trans "Their account" %}">{% icon "user" %}<span class="visually-hidden">{% blocktrans %}The account of {{ obj }}{% endblocktrans %}</span></a>
+	{% endif %}
+{% endblock %}
+
+{% block row-buttons-items %}
+	<a href="{% url 'admin:fixja:club:person:merge' club.pk obj.pk %}">{% icon "merge" %}{% trans "Merge" %}</a>
+	<a href="{% url 'admin:fixja:club:person:transfer' club.pk obj.pk %}">{% icon "transfer" %}{% trans "Transfer" %}</a>
+	{{ block.super }}
+{% endblock %}
+
+{% block empty-row-colspan %}6{% endblock %}

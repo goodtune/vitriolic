@@ -13,5 +13,5 @@ register = Library()
 def chunk(slug):
     instance, created = Chunk.objects.get_or_create(slug=slug)
     if created:
-        logger.debug("Created %r" % instance)
+        logger.debug("Created %r", instance)
     return mark_safe(instance.copy)

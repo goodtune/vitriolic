@@ -2,13 +2,14 @@ import datetime
 import inspect
 import logging
 import time
+from functools import wraps
 from urllib.parse import ParseResult
 
 from dateutil.parser import parse
-from django.db.models import Count
+from django.db.models import Count, Prefetch
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
-from django.utils.functional import wraps
 
 from tournamentcontrol.competition.models import (
     Club,
@@ -212,12 +213,15 @@ def competition_by_slug(f, *a, **kw):
         division_slug = kwargs.pop("division", None)
         pool_slug = kwargs.pop("pool", None)
         season_slug = kwargs.pop("season", None)
+
+        venue_slug = kwargs.pop("venue", None)
+        ground_slug = kwargs.pop("ground", None)
+
         stage_slug = kwargs.pop("stage", None)
         team_slug = kwargs.pop("team", None)
         match_pk = kwargs.pop("match", None)
 
         datestr = kwargs.pop("datestr", None)
-        timestr = kwargs.pop("timestr", None)
 
         # see if there is an original node, we might need it later
         o_node = kwargs.pop("node", None)
@@ -225,6 +229,9 @@ def competition_by_slug(f, *a, **kw):
         # Resolve the deepest model in a single query using select_related,
         # then derive all parent objects from the result. This replaces the
         # previous approach of level-by-level resolution with prefetch_related.
+        #
+        # Live-stream thumbnail blobs are only needed by the thumbnail views,
+        # never drag them out of the database for public pages.
 
         if competition_slug:
             allowed = manager.filter(slug=competition_slug)
@@ -236,6 +243,8 @@ def competition_by_slug(f, *a, **kw):
                     pool = get_object_or_404(
                         StageGroup.objects.select_related(
                             "stage__division__season__competition"
+                        ).defer(
+                            "stage__division__season__live_stream_thumbnail_image",
                         ),
                         slug=pool_slug,
                         stage__slug=stage_slug,
@@ -244,9 +253,7 @@ def competition_by_slug(f, *a, **kw):
                         stage__division__season__competition__in=allowed,
                     )
                     stage = pool.stage
-                    stage.pool_count = StageGroup.objects.filter(
-                        stage=stage
-                    ).count()
+                    stage.pool_count = StageGroup.objects.filter(stage=stage).count()
                     division = stage.division
                     season = division.season
                     competition = season.competition
@@ -255,9 +262,9 @@ def competition_by_slug(f, *a, **kw):
 
                 elif stage_slug:
                     stage = get_object_or_404(
-                        Stage.objects.select_related(
-                            "division__season__competition"
-                        ).annotate(pool_count=Count("pools")),
+                        Stage.objects.select_related("division__season__competition")
+                        .defer("division__season__live_stream_thumbnail_image")
+                        .annotate(pool_count=Count("pools")),
                         slug=stage_slug,
                         division__slug=division_slug,
                         division__season__slug=season_slug,
@@ -272,7 +279,7 @@ def competition_by_slug(f, *a, **kw):
                     team = get_object_or_404(
                         Team.objects.select_related(
                             "club", "division__season__competition"
-                        ),
+                        ).defer("division__season__live_stream_thumbnail_image"),
                         slug=team_slug,
                         division__slug=division_slug,
                         division__season__slug=season_slug,
@@ -288,6 +295,7 @@ def competition_by_slug(f, *a, **kw):
                         team.people.select_related("person")
                         .prefetch_related("person__user")
                         .filter(is_player=True)
+                        .with_statistics(team)
                     )
                     players = players.extra(
                         select={"has_number": "number IS NULL"},
@@ -304,6 +312,9 @@ def competition_by_slug(f, *a, **kw):
                     match = get_object_or_404(
                         Match.objects.select_related(
                             "stage__division__season__competition"
+                        ).defer(
+                            "live_stream_thumbnail_image",
+                            "stage__division__season__live_stream_thumbnail_image",
                         ),
                         pk=match_pk,
                         stage__division__slug=division_slug,
@@ -317,8 +328,8 @@ def competition_by_slug(f, *a, **kw):
 
                 else:
                     division = get_object_or_404(
-                        Division.objects.select_related(
-                            "season__competition"
+                        Division.objects.select_related("season__competition").defer(
+                            "season__live_stream_thumbnail_image"
                         ),
                         slug=division_slug,
                         season__slug=season_slug,
@@ -343,29 +354,23 @@ def competition_by_slug(f, *a, **kw):
                     select_params=(division.pk,),
                 )
 
-            elif season_slug and match_pk:
-                match = get_object_or_404(
-                    Match.objects.select_related(
-                        "stage__division__season__competition"
-                    ),
-                    pk=match_pk,
-                    stage__division__season__slug=season_slug,
-                    stage__division__season__competition__in=allowed,
-                )
-                season = match.stage.division.season
-                competition = season.competition
-                kwargs["match"] = match
-
             elif season_slug:
                 season = get_object_or_404(
-                    Season.objects.select_related("competition"),
+                    Season.objects.select_related("competition").defer(
+                        "live_stream_thumbnail_image"
+                    ),
                     slug=season_slug,
                     competition__in=allowed,
                 )
                 competition = season.competition
 
             else:
-                competition = get_object_or_404(manager, slug=competition_slug)
+                competition = get_object_or_404(
+                    manager.prefetch_related(
+                        Prefetch("seasons", Season.objects.navigation())
+                    ),
+                    slug=competition_slug,
+                )
 
             kwargs["competition"] = competition
 
@@ -378,20 +383,31 @@ def competition_by_slug(f, *a, **kw):
                 ).distinct()
 
                 # We should deprecate this if it is unused in templates.
-                kwargs["other_seasons"] = competition.seasons.exclude(
+                kwargs["other_seasons"] = competition.seasons.navigation().exclude(
                     slug=season_slug
                 )
 
                 # So we can build a navigation hierarchy, select extra column
                 # which tells us if the season in a list of seasons is the
                 # current scope.
-                kwargs["seasons"] = competition.seasons.extra(
+                kwargs["seasons"] = competition.seasons.navigation().extra(
                     select={"current": "id = %s"},
                     select_params=(season.pk,),
                 )
 
                 # List of venues setup for this season.
                 kwargs["venues"] = season.venues.all()
+
+                if venue_slug:
+                    venue = get_object_or_404(season.venues, slug=venue_slug)
+                    kwargs["venue"] = venue
+
+                    # List of grounds for this venue.
+                    kwargs["grounds"] = venue.grounds.all()
+
+                    if ground_slug:
+                        ground = get_object_or_404(venue.grounds, slug=ground_slug)
+                        kwargs["ground"] = ground
 
         if club_slug:
             club = get_object_or_404(Club, slug=club_slug)
@@ -403,13 +419,15 @@ def competition_by_slug(f, *a, **kw):
                 ).prefetch_related("division", "stage_group")
 
         if datestr:
-            kwargs["date"] = parse(datestr).date()
-            if timestr:
-                kwargs["time"] = datetime.time(*time.strptime(timestr, "%H%M")[3:5])
+            # the url patterns only promise eight digits, not a real date
+            try:
+                kwargs["date"] = parse(datestr).date()
+            except ValueError:
+                raise Http404("Invalid date.")
 
-        logger.debug("o_node = {0}".format(o_node))
+        logger.debug("o_node = %s", o_node)
 
-        logger.debug('kwargs["node"] = {node}'.format(node=o_node))
+        logger.debug('kwargs["node"] = %s', o_node)
 
         extra_context = kwargs.pop("extra_context", {})
         extra_context.update(kwargs)

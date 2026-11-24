@@ -1,0 +1,12 @@
+{% extends "touchtechnology/admin/explorer/base.html" %}
+{% load i18n admin admin_explorer %}
+
+{% block page_title %}{% trans "Settings" %}{% endblock %}
+{% block page_kind %}{% trans "For the whole site" %}{% endblock %}
+{% block page_icon %}<span class="title-icon">{% icon "settings" %}</span>{% endblock %}
+
+{% block content %}
+	<ul class="folder-view">
+		<li><a href="{% url 'admin:settings:site' %}">{% icon "home" %}<span>{% trans "Domain name" %}<small>{% trans "The address and name the site goes by" %}</small></span></a></li>
+	</ul>
+{% endblock %}

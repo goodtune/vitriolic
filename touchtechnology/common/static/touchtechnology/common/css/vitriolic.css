@@ -1,0 +1,482 @@
+/*
+ * Default stylesheet for the stock Vitriolic templates.
+ *
+ * Deployments normally replace the look and feel entirely by overriding the
+ * ``basecss`` block of ``base.html`` (or the whole template). This sheet
+ * exists so that the templates as shipped are pleasant to read and serve as
+ * a reference for the class names the templates emit. It has no
+ * dependencies, respects the operating system's light/dark preference and
+ * degrades to a single column on narrow screens.
+ *
+ * Everything hangs off a handful of custom properties, so a deployment that
+ * only wants to recolour can override ``:root`` in its own ``extracss``.
+ */
+
+:root {
+	--vi-font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+	--vi-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	--vi-measure: 72rem;
+
+	--vi-bg: #f6f7f9;
+	--vi-surface: #ffffff;
+	--vi-text: #1c2430;
+	--vi-muted: #5f6b7a;
+	--vi-line: #dfe3e8;
+	--vi-line-strong: #c5ccd5;
+	--vi-accent: #0b5d8a;
+	--vi-accent-text: #ffffff;
+	--vi-accent-soft: #e6f0f7;
+	--vi-stripe: #f2f4f7;
+	--vi-highlight: #fff6d6;
+	--vi-radius: 6px;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--vi-bg: #14181d;
+		--vi-surface: #1d2229;
+		--vi-text: #e6e9ed;
+		--vi-muted: #9aa5b1;
+		--vi-line: #2e353e;
+		--vi-line-strong: #414a55;
+		--vi-accent: #6cb4e4;
+		--vi-accent-text: #0f1418;
+		--vi-accent-soft: #223140;
+		--vi-stripe: #20262d;
+		--vi-highlight: #3a3418;
+	}
+}
+
+/* ------------------------------------------------------------------ base */
+
+html {
+	box-sizing: border-box;
+	-webkit-text-size-adjust: 100%;
+}
+
+*, *::before, *::after {
+	box-sizing: inherit;
+}
+
+body {
+	margin: 0;
+	background: var(--vi-bg);
+	color: var(--vi-text);
+	font: 16px/1.5 var(--vi-font);
+}
+
+a {
+	color: var(--vi-accent);
+	text-decoration: none;
+}
+
+a:hover, a:focus {
+	text-decoration: underline;
+}
+
+h1, h2, h3, h4 {
+	line-height: 1.25;
+	margin: 1.5em 0 0.5em;
+	font-weight: 650;
+}
+
+h1 { font-size: 1.75rem; margin-top: 0.5em; }
+h2 { font-size: 1.35rem; }
+h3 { font-size: 1.1rem; }
+h4 {
+	font-size: 0.85rem;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--vi-muted);
+}
+
+h1 + h2 {
+	margin-top: 0;
+	color: var(--vi-muted);
+	font-weight: 500;
+}
+
+p {
+	margin: 0 0 1em;
+}
+
+/* ---------------------------------------------------------------- layout */
+
+#project {
+	max-width: var(--vi-measure);
+	margin: 0 auto;
+	padding: 0 1rem;
+}
+
+#header {
+	display: flex;
+	align-items: baseline;
+	gap: 1rem;
+	padding: 1.25rem 0 0.75rem;
+}
+
+#header h1 {
+	margin: 0;
+	font-size: 1.15rem;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+}
+
+#header h1 a {
+	color: inherit;
+}
+
+#tabs ul.navigation {
+	list-style: none;
+	margin: 0 0 1.5rem;
+	padding: 0;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.25rem;
+	border-bottom: 2px solid var(--vi-line);
+}
+
+#tabs ul.navigation ul {
+	display: none;
+}
+
+#tabs ul.navigation > li > a {
+	display: block;
+	padding: 0.4rem 0.9rem;
+	margin-bottom: -2px;
+	border-bottom: 2px solid transparent;
+	color: var(--vi-muted);
+	font-weight: 500;
+}
+
+#tabs ul.navigation > li > a:hover {
+	color: var(--vi-text);
+	text-decoration: none;
+}
+
+#tabs ul.navigation > li.current > a,
+#tabs ul.navigation > li.parent > a {
+	color: var(--vi-accent);
+	border-bottom-color: var(--vi-accent);
+}
+
+#main {
+	background: var(--vi-surface);
+	border: 1px solid var(--vi-line);
+	border-radius: var(--vi-radius);
+	padding: 1.25rem 1.5rem 2rem;
+}
+
+#main > :first-child {
+	margin-top: 0;
+}
+
+#footer {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5rem 1.5rem;
+	padding: 1.5rem 0 2.5rem;
+	color: var(--vi-muted);
+	font-size: 0.8rem;
+}
+
+#footer ul {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	gap: 1rem;
+}
+
+#footer form {
+	margin-left: auto;
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+}
+
+#footer form p {
+	margin: 0;
+}
+
+#footer form label {
+	display: none;
+}
+
+#footer select,
+#footer button {
+	font: inherit;
+	padding: 0.2rem 0.5rem;
+	border: 1px solid var(--vi-line-strong);
+	border-radius: var(--vi-radius);
+	background: var(--vi-surface);
+	color: var(--vi-text);
+}
+
+/* Notices such as the timezone banner sit between the tabs and the page. */
+.competitions #tabs + .container_16 p {
+	margin: -0.75rem 0 1rem;
+	padding: 0.5rem 0.9rem;
+	border-left: 3px solid var(--vi-accent);
+	background: var(--vi-accent-soft);
+	border-radius: 0 var(--vi-radius) var(--vi-radius) 0;
+	font-size: 0.9rem;
+}
+
+/* ---------------------------------------------------------------- lists */
+
+#divisions,
+#clubs,
+#seasons,
+#competitions {
+	list-style: none;
+	margin: 0 0 1.5rem;
+	padding: 0;
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+	gap: 0.5rem;
+}
+
+#divisions > li,
+#clubs > li,
+#seasons > li,
+#competitions > li {
+	border: 1px solid var(--vi-line);
+	border-radius: var(--vi-radius);
+	background: var(--vi-bg);
+}
+
+#divisions > li > a,
+#clubs > li > a,
+#seasons > li > a,
+#competitions > li > a {
+	display: block;
+	padding: 0.6rem 0.9rem;
+	font-weight: 500;
+}
+
+#divisions ul.pools {
+	list-style: none;
+	margin: 0;
+	padding: 0 0.9rem 0.6rem;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.3rem;
+}
+
+#divisions ul.pools a {
+	display: inline-block;
+	padding: 0.05rem 0.5rem;
+	border-radius: 999px;
+	background: var(--vi-accent-soft);
+	font-size: 0.8rem;
+}
+
+a.calendar {
+	float: right;
+	font-size: 1.4rem;
+	line-height: 1;
+	margin: 0.4rem 0 0 1rem;
+	text-decoration: none;
+	opacity: 0.7;
+}
+
+a.calendar:hover {
+	opacity: 1;
+}
+
+/* --------------------------------------------------------------- tables */
+
+table {
+	width: 100%;
+	border-collapse: collapse;
+	margin: 0 0 1.5rem;
+	font-size: 0.925rem;
+	font-variant-numeric: tabular-nums;
+}
+
+th, td {
+	padding: 0.4rem 0.6rem;
+	text-align: left;
+	vertical-align: middle;
+	border-bottom: 1px solid var(--vi-line);
+}
+
+th {
+	font-size: 0.75rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--vi-muted);
+	border-bottom: 2px solid var(--vi-line-strong);
+	white-space: nowrap;
+}
+
+tbody tr.even {
+	background: var(--vi-stripe);
+}
+
+tbody tr:hover {
+	background: var(--vi-accent-soft);
+}
+
+tbody tr.current {
+	background: var(--vi-highlight);
+}
+
+caption {
+	caption-side: bottom;
+	padding: 0.5rem 0.6rem;
+	color: var(--vi-muted);
+	font-size: 0.8rem;
+	text-align: left;
+}
+
+/* Ladders: team name left, every statistic right-aligned and narrow. */
+table.ladder th,
+table.ladder td {
+	text-align: right;
+	width: 4.5%;
+}
+
+table.ladder th.team,
+table.ladder td.team {
+	text-align: left;
+	width: auto;
+}
+
+table.ladder th.team a {
+	font-size: 0.9rem;
+	text-transform: none;
+	letter-spacing: 0;
+	font-weight: 650;
+}
+
+table.ladder td.team a {
+	font-weight: 500;
+	color: var(--vi-text);
+}
+
+table.ladder td:last-child,
+table.ladder th:last-child {
+	font-weight: 700;
+	color: var(--vi-text);
+	padding-left: 1rem;
+}
+
+.stage + .stage {
+	margin-top: 1rem;
+}
+
+/* Draws: rounds are grouped by a heavier rule on the first match. */
+table.draw td.label {
+	width: 9rem;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+table.draw td.time,
+table.draw td.field,
+table.draw td.stage,
+table.draw td.pool {
+	color: var(--vi-muted);
+	white-space: nowrap;
+}
+
+table.draw td.time {
+	font-family: var(--vi-font-mono);
+	font-size: 0.85rem;
+}
+
+table.draw td.team {
+	width: 30%;
+}
+
+table.draw td.team a,
+table.draw td.team span {
+	font-weight: 500;
+	color: var(--vi-text);
+}
+
+table.draw td.right {
+	text-align: right;
+}
+
+table.draw td.center {
+	text-align: center;
+}
+
+table.draw td.score {
+	width: 2.5rem;
+	font-weight: 700;
+	font-size: 1rem;
+}
+
+table.draw td.versus {
+	width: 2rem;
+	color: var(--vi-muted);
+	font-size: 0.75rem;
+	text-transform: uppercase;
+}
+
+table.draw td.forfeit {
+	color: var(--vi-muted);
+	font-style: italic;
+}
+
+table.draw td.report {
+	width: 4rem;
+	text-align: right;
+	font-size: 0.8rem;
+}
+
+table.draw td.report.none a {
+	color: var(--vi-muted);
+}
+
+table.draw tr.group td {
+	border-top: 2px solid var(--vi-line-strong);
+}
+
+table.draw tr.first td {
+	border-top: 0;
+}
+
+/* ----------------------------------------------------------- responsive */
+
+@media (max-width: 40rem) {
+	body {
+		font-size: 15px;
+	}
+
+	#main {
+		padding: 1rem;
+		border-radius: 0;
+		margin: 0 -1rem;
+		border-left: 0;
+		border-right: 0;
+	}
+
+	table {
+		display: block;
+		overflow-x: auto;
+		white-space: nowrap;
+	}
+
+	table.draw td.team {
+		width: auto;
+	}
+
+	table.ladder th.percentage,
+	table.ladder td.percentage {
+		display: none;
+	}
+}
+
+@media print {
+	body { background: #fff; color: #000; }
+	#tabs, #footer form, a.calendar { display: none; }
+	#main { border: 0; padding: 0; }
+	a { color: inherit; }
+}
