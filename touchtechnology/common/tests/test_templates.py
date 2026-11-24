@@ -1,6 +1,7 @@
 import platform
 import sys
 from importlib import import_module, metadata
+from unittest.mock import patch
 
 import django
 from django.template import Context, Template, engines
@@ -128,6 +129,24 @@ class NavigationTest(TestCase):
         template = Template("{% load common %}{% navigation %}")
         with self.assertNumQueries(1):
             template.render(Context())
+
+    @patch("touchtechnology.common.templatetags.common.sentry_sdk")
+    def test_sentry_sdk_2_span(self, sentry_sdk):
+        sentry_sdk.VERSION = "2.57.0"
+        template = Template("{% load common %}{% navigation %}")
+        template.render(Context())
+        sentry_sdk.start_span.assert_called_once_with(
+            op="template.tag", name="do_navigation"
+        )
+
+    @patch("touchtechnology.common.templatetags.common.sentry_sdk")
+    def test_sentry_sdk_3_span(self, sentry_sdk):
+        sentry_sdk.VERSION = "3.0.0"
+        template = Template("{% load common %}{% navigation %}")
+        template.render(Context())
+        sentry_sdk.start_span.assert_called_once_with(
+            name="do_navigation", attributes={"sentry.op": "template.tag"}
+        )
 
     def test_the_children_of_a_hidden_node_are_hidden_too(self):
         """
