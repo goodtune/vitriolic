@@ -71,6 +71,7 @@ from tournamentcontrol.competition.admin import (
     YOUTUBE_NOT_AUTHORISED_MESSAGE,
     next_related_factory,
 )
+from tournamentcontrol.competition.compops.scoreboard import timing
 from tournamentcontrol.competition.dashboard import (
     matches_require_basic_results,
 )
@@ -235,6 +236,16 @@ them; a team can only be given a club linked to its competition, so use
 `link_competition_clubs` (or `create_club(competition_ids=…)`) before
 `update_team(club_id=…)`; `unlink_competition_clubs` withdraws a club.
 
+Scoreboards: a division's `periods`, `period_minutes`, `break_minutes` and
+`half_time_minutes` time the scoreboard clock of its matches; without
+`period_minutes` a board has a score and no clock. A stage or a match may
+give any of them, and `period_name`, for itself (`create_stage`,
+`update_stage`, `create_match`, `update_match`); left empty, each is the
+parent's, and the `clear_*` arguments empty one again. `scoreboard_template`
+on a competition, season, division or stage draws its boards in place of the
+usual one, and a venue's `scoreboard_auto_start` starts each clock at the
+scheduled time. `get_season` and `get_match` report them.
+
 Withdrawals: `withdraw_team` takes a team out of its division part way
 through a season, turning its unplayed matches into byes for the opponents
 and leaving every other match untouched; `delete_team` is only for a team
@@ -338,6 +349,12 @@ class DivisionSpec(BulkSpec):
     forfeit_against_score: int | None = None
     include_forfeits_in_played: bool = True
     games_per_day: int | None = None
+    periods: int | None = None
+    period_minutes: int | None = None
+    break_minutes: int | None = None
+    half_time_minutes: int | None = None
+    period_name: str | None = None
+    scoreboard_template: str | None = None
     color: str | None = None
     # "copy" would shadow ``BaseModel.copy``.
     copy_: str | None = Field(None, alias="copy")
@@ -384,6 +401,12 @@ class StageSpec(BulkSpec):
     carry_ladder: bool = False
     keep_mvp: bool = True
     follows_id: int | None = None
+    periods: int | None = None
+    period_minutes: int | None = None
+    break_minutes: int | None = None
+    half_time_minutes: int | None = None
+    period_name: str | None = None
+    scoreboard_template: str | None = None
     color: str | None = None
     slug: str | None = None
 
@@ -592,6 +615,54 @@ def _perm(model, action):
     return f"{model._meta.app_label}.{action}_{model._meta.model_name}"
 
 
+def _clearable(name, value, clear):
+    """
+    The change for the optional number ``name``: ``value``, or an empty
+    value when ``clear`` (``None`` leaves the field as it is, see ``_bind``).
+    """
+    if clear and value is not None:
+        raise ToolError(f"Give {name} or clear_{name}, not both.")
+    return "" if clear else value
+
+
+def _timing(owner):
+    """
+    The scoreboard timing a division, stage or match gives itself; on a
+    stage or match ``None`` is its parent's (see ``scoreboard.timing``).
+    """
+    return {
+        "periods": owner.periods,
+        "period_minutes": owner.period_minutes,
+        "break_minutes": owner.break_minutes,
+        "half_time_minutes": owner.half_time_minutes,
+        "period_name": owner.period_name or None,
+    }
+
+
+def _scoreboard(owner):
+    """The scoreboard timing and template of a division or stage."""
+    return {
+        **_timing(owner),
+        "scoreboard_template": owner.scoreboard_template or None,
+    }
+
+
+def _match_timing(match):
+    """A match's own scoreboard timing, and the timing its scoreboard runs."""
+    periods, period_minutes, break_minutes, period_name, half_time_minutes = timing(
+        match
+    )
+    res = _timing(match)
+    res["scoreboard_timing"] = {
+        "periods": periods,
+        "period_minutes": period_minutes,
+        "break_minutes": break_minutes,
+        "half_time_minutes": half_time_minutes,
+        "period_name": period_name or None,
+    }
+    return res
+
+
 def _label(obj):
     return obj._meta.verbose_name
 
@@ -642,6 +713,7 @@ def _season_summary(season):
             season.live_stream_client_id and season.live_stream_client_secret
         ),
         "youtube_authorised": bool(season.live_stream_refresh_token),
+        "scoreboard_template": season.scoreboard_template or None,
     }
 
 
@@ -652,6 +724,7 @@ def _competition_summary(competition, seasons=True):
         "short_title": competition.short_title or None,
         "slug": competition.slug,
         "enabled": competition.enabled,
+        "scoreboard_template": competition.scoreboard_template or None,
         "clubs": [_ref(club) for club in competition.clubs.all()],
     }
     if seasons:
@@ -677,6 +750,7 @@ def _place_summary(place):
 def _venue_summary(venue):
     res = _place_summary(venue)
     res["season"] = _ref(venue.season)
+    res["scoreboard_auto_start"] = venue.scoreboard_auto_start
     res["grounds"] = [_ground_summary(g) for g in venue.grounds.order_by("order")]
     return res
 
@@ -705,6 +779,7 @@ def _division_summary(division):
         "forfeit_against_score": division.forfeit_against_score,
         "include_forfeits_in_played": division.include_forfeits_in_played,
         "games_per_day": division.games_per_day,
+        **_scoreboard(division),
         "stages": [_ref(stage) for stage in division.stages.order_by("order")],
         "team_count": division.teams.count(),
     }
@@ -801,6 +876,7 @@ def _stage_summary(stage):
         "scale_group_points": stage.scale_group_points,
         "carry_ladder": stage.carry_ladder,
         "keep_mvp": stage.keep_mvp,
+        **_scoreboard(stage),
         "pools": [_pool_summary(pool) for pool in stage.pools.order_by("order")],
     }
 
@@ -1283,6 +1359,7 @@ class AdminToolset(CompetitionToolset):
         copy: str | None = None,
         club_ids: list[int] | None = None,
         upstream_url: str | None = None,
+        scoreboard_template: str | None = None,
         slug: str | None = None,
     ) -> dict[str, Any]:
         """
@@ -1290,6 +1367,11 @@ class AdminToolset(CompetitionToolset):
         Championships"). ``club_ids`` restricts which clubs may enter teams;
         leave it empty for a competition without clubs. ``slug`` can only be
         set by a superuser; otherwise it is derived from the title.
+
+        ``scoreboard_template`` is a whole page, a Django template, that
+        draws the competition's scoreboards in place of the usual one; it
+        must mark the part the live updates replace with ``{% board %}`` and
+        ``{% endboard %}``, and is tried out before it is saved.
         """
         self._require("add", Competition)
         competition = next_related_factory(Competition)
@@ -1303,6 +1385,7 @@ class AdminToolset(CompetitionToolset):
                 "copy": copy,
                 "clubs": club_ids,
                 "upstream_url": upstream_url,
+                "scoreboard_template": scoreboard_template,
                 "slug": slug,
             },
             user=self._user(),
@@ -1319,12 +1402,14 @@ class AdminToolset(CompetitionToolset):
         copy: str | None = None,
         club_ids: list[int] | None = None,
         upstream_url: str | None = None,
+        scoreboard_template: str | None = None,
         slug: str | None = None,
         slug_locked: bool | None = None,
     ) -> dict[str, Any]:
         """
         Change a competition. Only the arguments given are changed; ``club_ids``
-        replaces the full list of clubs.
+        replaces the full list of clubs. ``scoreboard_template`` is that of
+        ``create_competition``; an empty one goes back to the usual board.
         """
         competition = self._competition(competition_id)
         self._require("change", Competition, competition)
@@ -1338,6 +1423,7 @@ class AdminToolset(CompetitionToolset):
                 "copy": copy,
                 "clubs": club_ids,
                 "upstream_url": upstream_url,
+                "scoreboard_template": scoreboard_template,
                 "slug": slug,
                 "slug_locked": slug_locked,
             },
@@ -1738,6 +1824,39 @@ class AdminToolset(CompetitionToolset):
     # Seasons
     # ======================================================================
 
+    def get_season(self, season_id: int) -> dict[str, Any]:
+        """
+        Describe one season (event): its divisions with their stages and
+        pools, the venues and grounds it is played at, the span of match
+        dates, and how many matches are scheduled, completed, still to come
+        and live streamed.
+
+        Use the division, stage, pool and venue identifiers it returns to
+        filter ``list_matches``, ``count_matches`` and ``get_ladder``.
+
+        The scoreboard settings are included: the season's
+        ``scoreboard_template``, each division's and stage's timing and
+        template (on a stage ``null`` is the division's), and each venue's
+        ``scoreboard_auto_start``.
+        """
+        self._staff()
+        res = super().get_season(season_id)
+        if "error" in res:
+            return res
+        season = self._season(season_id)
+        res["scoreboard_template"] = season.scoreboard_template or None
+        divisions = season.divisions.prefetch_related("stages").in_bulk()
+        for division in res["divisions"]:
+            owner = divisions[division["id"]]
+            division.update(_scoreboard(owner))
+            stages = {stage.pk: stage for stage in owner.stages.all()}
+            for stage in division["stages"]:
+                stage.update(_scoreboard(stages[stage["id"]]))
+        venues = season.venues.in_bulk()
+        for venue in res["venues"]:
+            venue["scoreboard_auto_start"] = venues[venue["id"]].scoreboard_auto_start
+        return res
+
     @tool_annotations()
     def create_season(
         self,
@@ -1754,6 +1873,7 @@ class AdminToolset(CompetitionToolset):
         live_stream_privacy: LiveStreamPrivacyName | None = None,
         copy: str | None = None,
         upstream_url: str | None = None,
+        scoreboard_template: str | None = None,
         slug: str | None = None,
     ) -> dict[str, Any]:
         """
@@ -1764,6 +1884,8 @@ class AdminToolset(CompetitionToolset):
         consecutive days. ``start_date`` prevents matches being scheduled
         earlier. Live streaming also needs YouTube credentials
         (``update_season``) and authorisation from the admin site.
+        ``scoreboard_template`` draws the season's scoreboards, in place of
+        the competition's (see ``create_competition``).
         """
         competition = self._competition(competition_id)
         self._require("add", Season)
@@ -1784,6 +1906,7 @@ class AdminToolset(CompetitionToolset):
                 "live_stream_privacy": live_stream_privacy,
                 "copy": copy,
                 "upstream_url": upstream_url,
+                "scoreboard_template": scoreboard_template,
                 "slug": slug,
             },
             user=self._user(),
@@ -1811,6 +1934,7 @@ class AdminToolset(CompetitionToolset):
         live_stream_client_secret: str | None = None,
         copy: str | None = None,
         upstream_url: str | None = None,
+        scoreboard_template: str | None = None,
         slug: str | None = None,
         slug_locked: bool | None = None,
     ) -> dict[str, Any]:
@@ -1819,7 +1943,8 @@ class AdminToolset(CompetitionToolset):
         season ``complete`` stops it appearing as needing results. The
         YouTube project, client id and client secret enable live stream
         management once the season has been authorised with YouTube from
-        the admin site.
+        the admin site. An empty ``scoreboard_template`` goes back to the
+        competition's.
         """
         season = self._season(season_id)
         self._require("change", Season, season)
@@ -1843,6 +1968,7 @@ class AdminToolset(CompetitionToolset):
                 "live_stream_client_secret": live_stream_client_secret,
                 "copy": copy,
                 "upstream_url": upstream_url,
+                "scoreboard_template": scoreboard_template,
                 "slug": slug,
                 "slug_locked": slug_locked,
             },
@@ -1891,12 +2017,15 @@ class AdminToolset(CompetitionToolset):
         latitude: float | None = None,
         longitude: float | None = None,
         zoom: int | None = None,
+        scoreboard_auto_start: bool = True,
         slug: str | None = None,
     ) -> dict[str, Any]:
         """
         Create a venue in a season. ``latitude``, ``longitude`` and map
         ``zoom`` (1-20) locate it and are required; the time zone defaults to
-        the season's.
+        the season's. ``scoreboard_auto_start`` starts the clock of each
+        scoreboard at the venue at the match's scheduled time; false leaves
+        the scorer to start each clock by hand.
         """
         season = self._season(season_id)
         self._require("add", Venue)
@@ -1911,6 +2040,7 @@ class AdminToolset(CompetitionToolset):
                 "abbreviation": abbreviation,
                 "timezone": timezone,
                 "latlng": self._latlng(venue, latitude, longitude, zoom),
+                "scoreboard_auto_start": scoreboard_auto_start,
                 "slug": slug,
             },
             user=self._user(),
@@ -1928,12 +2058,14 @@ class AdminToolset(CompetitionToolset):
         latitude: float | None = None,
         longitude: float | None = None,
         zoom: int | None = None,
+        scoreboard_auto_start: bool | None = None,
         slug: str | None = None,
         slug_locked: bool | None = None,
     ) -> dict[str, Any]:
         """
         Change a venue. Only the arguments given are changed. Changing the
         time zone recomputes the kick-off instant of its matches.
+        ``scoreboard_auto_start`` is that of ``create_venue``.
         """
         venue = self._venue(venue_id)
         self._require("change", Venue, venue)
@@ -1946,6 +2078,7 @@ class AdminToolset(CompetitionToolset):
                 "abbreviation": abbreviation,
                 "timezone": timezone,
                 "latlng": self._latlng(venue, latitude, longitude, zoom),
+                "scoreboard_auto_start": scoreboard_auto_start,
                 "slug": slug,
                 "slug_locked": slug_locked,
             },
@@ -2158,6 +2291,12 @@ class AdminToolset(CompetitionToolset):
         forfeit_against_score: int | None = None,
         include_forfeits_in_played: bool = True,
         games_per_day: int | None = None,
+        periods: int | None = None,
+        period_minutes: int | None = None,
+        break_minutes: int | None = None,
+        half_time_minutes: int | None = None,
+        period_name: str | None = None,
+        scoreboard_template: str | None = None,
         color: str | None = None,
         copy: str | None = None,
         slug: str | None = None,
@@ -2169,6 +2308,17 @@ class AdminToolset(CompetitionToolset):
         bye, forfeit_for and forfeit_against, for example
         "3*win + 2*draw + 1*loss"; ``games_per_day`` only applies to
         tournament seasons.
+
+        The scoreboard clock of its matches counts ``periods`` (2 unless
+        given) of ``period_minutes`` with ``break_minutes`` (0 unless given)
+        between them; ``half_time_minutes`` is the break in the middle of a
+        match with an even number of periods, where it is longer than the
+        others (netball: 4 periods of 15, breaks of 4, half time of 12).
+        Without ``period_minutes`` the board shows the score and no clock.
+        ``period_name`` is what a period is called ("Chukka"); empty, it is
+        named from the number of periods. ``scoreboard_template`` draws the
+        division's boards in place of the season's (see
+        ``create_competition``).
         """
         division = self._create_division(
             season_id,
@@ -2181,6 +2331,12 @@ class AdminToolset(CompetitionToolset):
             forfeit_against_score=forfeit_against_score,
             include_forfeits_in_played=include_forfeits_in_played,
             games_per_day=games_per_day,
+            periods=periods,
+            period_minutes=period_minutes,
+            break_minutes=break_minutes,
+            half_time_minutes=half_time_minutes,
+            period_name=period_name,
+            scoreboard_template=scoreboard_template,
             color=color,
             copy=copy,
             slug=slug,
@@ -2235,6 +2391,14 @@ class AdminToolset(CompetitionToolset):
         forfeit_against_score: int | None = None,
         include_forfeits_in_played: bool | None = None,
         games_per_day: int | None = None,
+        periods: int | None = None,
+        period_minutes: int | None = None,
+        break_minutes: int | None = None,
+        half_time_minutes: int | None = None,
+        period_name: str | None = None,
+        scoreboard_template: str | None = None,
+        clear_period_minutes: bool = False,
+        clear_half_time_minutes: bool = False,
         color: str | None = None,
         copy: str | None = None,
         slug: str | None = None,
@@ -2243,6 +2407,12 @@ class AdminToolset(CompetitionToolset):
         """
         Change a division. Only the arguments given are changed. Changing the
         points formula recalculates every ladder of the division.
+
+        The scoreboard arguments are those of ``create_division``.
+        ``clear_period_minutes`` takes the clock off its boards and
+        ``clear_half_time_minutes`` makes half time as long as the other
+        breaks; ``period_name=""`` and ``scoreboard_template=""`` go back to
+        the usual name and board.
         """
         division = self._division(division_id)
         self._require("change", Division, division)
@@ -2259,6 +2429,16 @@ class AdminToolset(CompetitionToolset):
                 "forfeit_against_score": forfeit_against_score,
                 "include_forfeits_in_played": include_forfeits_in_played,
                 "games_per_day": games_per_day,
+                "periods": periods,
+                "period_minutes": _clearable(
+                    "period_minutes", period_minutes, clear_period_minutes
+                ),
+                "break_minutes": break_minutes,
+                "half_time_minutes": _clearable(
+                    "half_time_minutes", half_time_minutes, clear_half_time_minutes
+                ),
+                "period_name": period_name,
+                "scoreboard_template": scoreboard_template,
                 "color": color,
                 "copy": copy,
                 "slug": slug,
@@ -2856,6 +3036,12 @@ class AdminToolset(CompetitionToolset):
         carry_ladder: bool = False,
         keep_mvp: bool = True,
         follows_id: int | None = None,
+        periods: int | None = None,
+        period_minutes: int | None = None,
+        break_minutes: int | None = None,
+        half_time_minutes: int | None = None,
+        period_name: str | None = None,
+        scoreboard_template: str | None = None,
         color: str | None = None,
         slug: str | None = None,
     ) -> dict[str, Any]:
@@ -2864,6 +3050,12 @@ class AdminToolset(CompetitionToolset):
         "Pool Stage" followed by "Finals"). ``keep_ladder`` keeps standings
         for the stage; ``carry_ladder`` carries points over from the stage
         it ``follows`` (defaults to the previous stage).
+
+        The scoreboard arguments are those of ``create_division``, for the
+        stage's matches; each one left out is the division's (rugby sevens
+        finals: ``period_minutes=10``, the rest from the division).
+        ``scoreboard_template`` draws the stage's boards in place of the
+        division's.
         """
         stage = self._create_stage(
             division_id,
@@ -2874,6 +3066,12 @@ class AdminToolset(CompetitionToolset):
             carry_ladder=carry_ladder,
             keep_mvp=keep_mvp,
             follows_id=follows_id,
+            periods=periods,
+            period_minutes=period_minutes,
+            break_minutes=break_minutes,
+            half_time_minutes=half_time_minutes,
+            period_name=period_name,
+            scoreboard_template=scoreboard_template,
             color=color,
             slug=slug,
         )
@@ -2926,12 +3124,28 @@ class AdminToolset(CompetitionToolset):
         carry_ladder: bool | None = None,
         keep_mvp: bool | None = None,
         follows_id: int | None = None,
+        periods: int | None = None,
+        period_minutes: int | None = None,
+        break_minutes: int | None = None,
+        half_time_minutes: int | None = None,
+        period_name: str | None = None,
+        scoreboard_template: str | None = None,
+        clear_periods: bool = False,
+        clear_period_minutes: bool = False,
+        clear_break_minutes: bool = False,
+        clear_half_time_minutes: bool = False,
         color: str | None = None,
         slug: str | None = None,
         slug_locked: bool | None = None,
     ) -> dict[str, Any]:
         """
         Change a stage. Only the arguments given are changed.
+
+        The scoreboard arguments are those of ``create_stage``. To go back
+        to the division's value, ``clear_periods``, ``clear_period_minutes``,
+        ``clear_break_minutes`` and ``clear_half_time_minutes`` empty a
+        number, and ``period_name=""`` and ``scoreboard_template=""`` the
+        text.
         """
         stage = self._stage(stage_id)
         self._require("change", Stage, stage)
@@ -2946,6 +3160,18 @@ class AdminToolset(CompetitionToolset):
                 "carry_ladder": carry_ladder,
                 "keep_mvp": keep_mvp,
                 "follows": follows_id,
+                "periods": _clearable("periods", periods, clear_periods),
+                "period_minutes": _clearable(
+                    "period_minutes", period_minutes, clear_period_minutes
+                ),
+                "break_minutes": _clearable(
+                    "break_minutes", break_minutes, clear_break_minutes
+                ),
+                "half_time_minutes": _clearable(
+                    "half_time_minutes", half_time_minutes, clear_half_time_minutes
+                ),
+                "period_name": period_name,
+                "scoreboard_template": scoreboard_template,
                 "color": color,
                 "slug": slug,
                 "slug_locked": slug_locked,
@@ -3087,6 +3313,11 @@ class AdminToolset(CompetitionToolset):
         away_team_eval: str | None = None,
         away_team_eval_related_id: int | None = None,
         is_bye: bool = False,
+        periods: int | None = None,
+        period_minutes: int | None = None,
+        break_minutes: int | None = None,
+        half_time_minutes: int | None = None,
+        period_name: str | None = None,
         verbose: bool = True,
     ) -> dict[str, Any]:
         """
@@ -3122,6 +3353,12 @@ class AdminToolset(CompetitionToolset):
         and there is no ``time`` or ``place_id`` (a ``date`` puts the bye in
         its round). ``verbose=false`` returns just the identifiers and
         scheduling fields.
+
+        ``periods``, ``period_minutes``, ``break_minutes``,
+        ``half_time_minutes`` and ``period_name`` time this match's
+        scoreboard clock, as on ``create_division``; each one left out is
+        the stage's, else the division's. ``scoreboard_timing`` in the
+        result is the timing the board runs.
         """
         stage = self._stage(stage_id)
         self._require("add", Match)
@@ -3148,6 +3385,11 @@ class AdminToolset(CompetitionToolset):
             "label": label,
             "date": date,
             "include_in_ladder": include_in_ladder,
+            "periods": periods,
+            "period_minutes": period_minutes,
+            "break_minutes": break_minutes,
+            "half_time_minutes": half_time_minutes,
+            "period_name": period_name,
         }
         changes.update(
             self._eval_changes(
@@ -3190,6 +3432,15 @@ class AdminToolset(CompetitionToolset):
         clear_home_team: bool = False,
         clear_away_team: bool = False,
         is_bye: bool | None = None,
+        periods: int | None = None,
+        period_minutes: int | None = None,
+        break_minutes: int | None = None,
+        half_time_minutes: int | None = None,
+        period_name: str | None = None,
+        clear_periods: bool = False,
+        clear_period_minutes: bool = False,
+        clear_break_minutes: bool = False,
+        clear_half_time_minutes: bool = False,
         verbose: bool = True,
     ) -> dict[str, Any]:
         """
@@ -3210,6 +3461,12 @@ class AdminToolset(CompetitionToolset):
         a forfeit or a live stream. ``is_bye=false`` with the empty side
         given a team turns a bye back into a match, left unscheduled;
         refused once the bye has been processed.
+
+        The scoreboard timing arguments are those of ``create_match``. To go
+        back to the stage's value, ``clear_periods``,
+        ``clear_period_minutes``, ``clear_break_minutes`` and
+        ``clear_half_time_minutes`` empty a number, and ``period_name=""``
+        the name.
         """
         match = self._match(match_id)
         self._require("change", Match, match)
@@ -3223,6 +3480,17 @@ class AdminToolset(CompetitionToolset):
             "round": round,
             "label": label,
             "include_in_ladder": include_in_ladder,
+            "periods": _clearable("periods", periods, clear_periods),
+            "period_minutes": _clearable(
+                "period_minutes", period_minutes, clear_period_minutes
+            ),
+            "break_minutes": _clearable(
+                "break_minutes", break_minutes, clear_break_minutes
+            ),
+            "half_time_minutes": _clearable(
+                "half_time_minutes", half_time_minutes, clear_half_time_minutes
+            ),
+            "period_name": period_name,
         }
         clearing = (
             ("home", clear_home_team, home_team_eval, home_team_eval_related_id),
@@ -3406,6 +3674,23 @@ class AdminToolset(CompetitionToolset):
         self._require("delete", Match, match)
         return self._delete(f"match {match.pk}", match)
 
+    def get_match(self, match_id: int) -> dict[str, Any]:
+        """
+        Full detail of one match by its identifier: teams, local kick-off
+        time, venue and ground with coordinates and time zone, scores and
+        result, live stream and video links.
+
+        Its scoreboard timing is included: ``periods``, ``period_minutes``,
+        ``break_minutes``, ``half_time_minutes`` and ``period_name`` as the
+        match gives them (``null`` is the stage's), and
+        ``scoreboard_timing``, the timing its board runs.
+        """
+        self._staff()
+        res = super().get_match(match_id)
+        if "error" not in res:
+            res.update(_match_timing(self._match(match_id)))
+        return res
+
     def _admin_match(self, match):
         match = self._match(match.pk)
         now, today = self._now()
@@ -3417,6 +3702,7 @@ class AdminToolset(CompetitionToolset):
         res["bye_processed"] = match.bye_processed
         res["include_in_ladder"] = match.include_in_ladder
         res["youtube_broadcast_id"] = match.external_identifier or None
+        res.update(_match_timing(match))
         res["referees"] = [
             _referee_summary(r) for r in match.referees.select_related("person", "club")
         ]
