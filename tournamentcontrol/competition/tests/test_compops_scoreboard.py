@@ -23,6 +23,7 @@ from tournamentcontrol.competition.forms import (
     CompetitionForm,
     DivisionForm,
     MatchEditForm,
+    MatchStreamForm,
     SeasonForm,
     StageForm,
     VenueForm,
@@ -921,6 +922,13 @@ class TimekeeperTests(ScoreboardFixture):
 
 
 class SettingsFormTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.superuser = factories.UserFactory.create(is_staff=True, is_superuser=True)
+        cls.streamed = factories.MatchFactory.create(
+            stage__division__season__live_stream=True, label="Final", round=3
+        )
+
     def test_division_form_has_the_timing_of_its_matches(self):
         fields = DivisionForm(instance=factories.DivisionFactory.create()).fields
         self.assertEqual(
@@ -997,6 +1005,7 @@ class SettingsFormTests(TestCase):
         for form in (
             StageForm(instance=match.stage),
             MatchEditForm(instance=match),
+            MatchStreamForm(instance=self.streamed),
         ):
             with self.subTest(type(form).__name__):
                 self.assertEqual(
@@ -1006,6 +1015,69 @@ class SettingsFormTests(TestCase):
                     ),
                     (timing, [False, False, False, False, False]),
                 )
+
+    def test_stream_form_has_every_field_of_the_edit_form_but_the_videos(self):
+        # A live streamed season trades the video links for the broadcast.
+        self.assertEqual(
+            (
+                [
+                    name
+                    for name in MatchEditForm.base_fields
+                    if name not in MatchStreamForm.base_fields
+                ],
+                [
+                    name
+                    for name in MatchStreamForm.base_fields
+                    if name not in MatchEditForm.base_fields
+                ],
+            ),
+            (["videos"], ["live_stream"]),
+        )
+
+    def test_match_page_of_a_live_streamed_season_shows_the_timing(self):
+        css, help_id = by_shell(
+            workbook=('class="wb-input" ', "id_period_minutes_help"),
+            explorer=("", "id_period_minutes_helptext"),
+        )
+        with self.login(self.superuser):
+            self.get_check_200(self.streamed.urls["edit"])
+        self.assertResponseContains(
+            f'<input type="number" name="period_minutes" min="0" {css}'
+            f'aria-describedby="{help_id}" id="id_period_minutes">'
+        )
+
+    def test_match_of_a_live_streamed_season_is_given_its_own_timing(self):
+        match = self.streamed
+        edit = match.url_names["edit"]
+        data = {
+            "home_team": match.home_team.pk,
+            "away_team": match.away_team.pk,
+            "label": match.label,
+            "round": match.round,
+            "date": match.date.isoformat(),
+            "include_in_ladder": "1" if match.include_in_ladder else "0",
+            "periods": "2",
+            "period_minutes": "25",
+            "break_minutes": "",
+            "half_time_minutes": "10",
+            "period_name": "Half",
+            "live_stream": "0",
+            "live_stream_thumbnail_image": "",
+        }
+        with self.login(self.superuser):
+            self.post(edit.url_name, *edit.args, data=data)
+        self.assert_http_302_found(url=match.stage.urls["edit"])
+        match.refresh_from_db()
+        self.assertEqual(
+            (
+                match.periods,
+                match.period_minutes,
+                match.break_minutes,
+                match.half_time_minutes,
+                match.period_name,
+            ),
+            (2, 25, None, 10, "Half"),
+        )
 
     def test_venue_form_has_whether_its_clocks_start_on_time(self):
         form = VenueForm(instance=factories.VenueFactory.create())
