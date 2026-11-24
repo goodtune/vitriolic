@@ -46,11 +46,12 @@ venue / field      ``Venue`` / ``Ground`` (matched by title, created when
 """
 
 import logging
+from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Max, ProtectedError, Q
 from django.utils.text import slugify
 
@@ -337,6 +338,15 @@ class _SeasonReconciler:
     # -- season ------------------------------------------------------------
 
     def apply(self, snapshots: list[RemoteCompetition]) -> None:
+        # Which competitions list each team. A team the backend has moved to
+        # another competition is moved by the division it now belongs to,
+        # not removed by the one it left.
+        self.listings = defaultdict(set)
+        for snapshot in snapshots:
+            for team in snapshot.teams:
+                self.listings[self.backend.identifier(team.id)].add(
+                    self.backend.identifier(snapshot.id)
+                )
         existing = {
             division.upstream_id: division
             for division in self.season.divisions.filter(upstream_id__isnull=False)
@@ -435,6 +445,7 @@ class _DivisionReconciler:
         self.season = parent.season
         self.backend = parent.backend
         self.result = parent.result
+        self.listings = parent.listings
         self.division = division
         self.snapshot = snapshot
         self.teams: dict[str, Team] = {}
@@ -519,18 +530,44 @@ class _DivisionReconciler:
             pool = self.pools.get(remote.pool) if remote.pool else None
             upstream_id = self.backend.identifier(remote.id)
             team = local.pop(upstream_id, None)
-            if team is None:
-                team = self._adopt_or_create_team(upstream_id, remote.name, pool)
-            _set_attrs(
-                team,
-                self.result,
-                division_id=self.division.pk,
-                stage_group_id=pool.pk if pool else None,
-                **_title_attrs(team, remote.name, self.division.teams, self.result),
-            )
+            try:
+                if team is None:
+                    team = self._adopt_or_create_team(upstream_id, remote.name, pool)
+                moved = team.division_id != self.division.pk
+                if moved and self._listed_where_it_is(team):
+                    # Listed by its own competition too (a fixture against
+                    # a team of another competition, say): it stays there,
+                    # and that division reconciles it.
+                    self.teams[remote.id] = team
+                    continue
+                if moved:
+                    team.move_to(self.division)
+                changed = _set_attrs(
+                    team,
+                    self.result,
+                    stage_group_id=pool.pk if pool else None,
+                    **_title_attrs(team, remote.name, self.division.teams, self.result),
+                )
+            except IntegrityError as exc:
+                # The season is reconciled in one transaction, which this
+                # error has already doomed; say which team it was.
+                exc.add_note(
+                    f"{self.backend.name} team {remote.name!r} ({upstream_id}) "
+                    f"could not be saved in division {self.division.title!r}."
+                )
+                raise
+            if moved and not changed:
+                self.result.add_updated(team)
             self.teams[remote.id] = team
         for team in local.values():
-            self._remove_team(team)
+            if team.upstream_id not in self.listings:
+                self._remove_team(team)
+
+    def _listed_where_it_is(self, team: Team) -> bool:
+        return (
+            team.division_id is not None
+            and team.division.upstream_id in self.listings.get(team.upstream_id, ())
+        )
 
     def _adopt_or_create_team(
         self, upstream_id: str, name: str, pool: Optional[StageGroup]

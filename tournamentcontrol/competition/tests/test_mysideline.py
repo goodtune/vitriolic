@@ -1448,7 +1448,9 @@ class RemovalTests(SyncTestCase):
 
     def test_division_with_native_data_is_marked_draft(self):
         division = self.season.divisions.get(upstream_id="mysideline:200")
-        native_team = factories.TeamFactory.create(division=division, title="Locals")
+        native_team = factories.TeamFactory.create(
+            division=division, title="Locals", order=10
+        )
         native = factories.MatchFactory.create(
             stage=division.stages.get(),
             home_team=native_team,
@@ -1510,6 +1512,124 @@ class RemovalTests(SyncTestCase):
         self.assertEqual(result.deleted["division"], 2)
         self.assertEqual(Division.objects.count(), 1)
         self.assertEqual(Match.objects.filter(pk=native_match.pk).count(), 1)
+
+
+class DivisionChangeTests(SyncTestCase):
+    """
+    A team MySideline moves to another competition keeps its identity and
+    takes the next free place in its new division (#682).
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.populate()
+        self.sync()
+
+    def move(self, team_id, source, target):
+        """Regrade a team: its fixtures in the old competition go with it."""
+        team = self.remote.team(source, team_id)
+        competition = self.remote.competition(source)
+        competition["teams"].remove(team)
+        competition["matches"] = [
+            m
+            for m in competition["matches"]
+            if team_id not in (m["homeTeam"]["_id"], m["awayTeam"]["_id"])
+        ]
+        self.remote.competition(target)["teams"].append(dict(team, pool=None))
+
+    def orders(self, upstream_id):
+        return list(
+            Team.objects.filter(division__upstream_id=upstream_id)
+            .order_by("order")
+            .values_list("title", "order")
+        )
+
+    def test_team_moved_into_a_division_reconciled_before_its_old_one(self):
+        reds = Team.objects.get(upstream_id="mysideline:11")
+        self.move(11, 200, 100)
+        self.sync()
+        self.assertEqual(
+            self.orders("mysideline:100"),
+            [("Sharks", 1), ("Dolphins", 2), ("Whales", 3), ("Reds", 4)],
+        )
+        self.assertEqual(
+            self.orders("mysideline:200"),
+            [("Blues", 1), ("Greens", 2), ("Golds", 3)],
+        )
+        reds.refresh_from_db()
+        self.assertEqual(
+            (reds.division.upstream_id, reds.stage_group), ("mysideline:100", None)
+        )
+
+    def test_teams_swap_divisions(self):
+        sharks = Team.objects.get(upstream_id="mysideline:1")
+        reds = Team.objects.get(upstream_id="mysideline:11")
+        self.move(1, 100, 200)
+        self.move(11, 200, 100)
+        result = self.sync()
+        self.assertEqual(result.deleted.get("team"), None)
+        self.assertEqual(result.created.get("team"), None)
+        self.assertEqual(
+            self.orders("mysideline:100"),
+            [("Dolphins", 1), ("Whales", 2), ("Reds", 3)],
+        )
+        self.assertEqual(
+            self.orders("mysideline:200"),
+            [("Blues", 1), ("Greens", 2), ("Golds", 3), ("Sharks", 4)],
+        )
+        self.assertEqual(
+            Team.objects.get(pk=sharks.pk).division.upstream_id, "mysideline:200"
+        )
+        self.assertEqual(
+            Team.objects.get(pk=reds.pk).division.upstream_id, "mysideline:100"
+        )
+
+    def test_team_moved_into_a_division_with_gaps(self):
+        Team.objects.filter(upstream_id="mysideline:3").update(order=7)
+        self.move(11, 200, 100)
+        self.sync()
+        self.assertEqual(
+            self.orders("mysideline:100"),
+            [("Sharks", 1), ("Dolphins", 2), ("Whales", 7), ("Reds", 8)],
+        )
+
+    def test_team_listed_by_two_competitions_stays_in_its_division(self):
+        # A fixture in another competition lists the team there too; it is
+        # not moved back and forth on every sync.
+        reds = Team.objects.get(upstream_id="mysideline:11")
+        crossover = self.remote.add_match(
+            100, 1007, 3, 1, 2, sydney(2026, 9, 26, 18, 0)
+        )
+        crossover["homeTeam"] = {"_id": 11, "name": "Reds"}
+        self.sync()
+        reds.refresh_from_db()
+        self.assertEqual(
+            (reds.division.upstream_id, reds.order, reds.stage_group.title),
+            ("mysideline:200", 1, "Pool A"),
+        )
+        self.assertEqual(
+            Match.objects.get(upstream_id="mysideline:1007").home_team, reds
+        )
+        result = self.sync()
+        self.assertEqual(result.updated, {})
+
+    def test_team_that_cannot_be_saved_is_named(self):
+        mens = self.season.divisions.get(upstream_id="mysideline:100")
+        factories.TeamFactory.create(division=mens, title="Reds", order=10)
+        self.move(11, 200, 100)
+        with self.assertRaises(IntegrityError) as raised:
+            self.sync()
+        self.assertEqual(
+            raised.exception.__notes__,
+            [
+                "MySideline team 'Reds' (mysideline:11) could not be saved in "
+                "division 'Mens Div 1'."
+            ],
+        )
+        self.assertEqual(
+            Team.objects.get(upstream_id="mysideline:11").division.upstream_id,
+            "mysideline:200",
+        )
 
 
 class FailureTests(SyncTestCase):
