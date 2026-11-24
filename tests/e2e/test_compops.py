@@ -886,6 +886,9 @@ def test_public_match_page_follows_the_live_score_without_a_reload(
     )
     division = match.stage.division
     base = asgi_live_server.url
+    # The competition pages hang off the sitemap node made above, so their
+    # names are not in this process's URLconf: the address is spelt out, as
+    # test_mysideline.py spells out its pages.
     match_url = (
         f"{base}/competitions/pacific-cup/pc26/{division.slug}/match:{match.pk}/"
     )
