@@ -18,6 +18,8 @@ from googleapiclient.errors import HttpError
 from guardian.shortcuts import assign_perm
 from playwright.sync_api import expect
 
+from touchtechnology.common.models import SitemapNode
+from touchtechnology.content.models import Placeholder
 from tournamentcontrol.competition.compops import events, streams
 from tournamentcontrol.competition.compops.scoreboard import Clock
 from tournamentcontrol.competition.compops.sites import CompOpsSite
@@ -769,6 +771,152 @@ def test_scoreboard_drawn_by_a_template_written_in_the_admin(
         path=str(screenshot_dir / "compops_scoreboard_custom_overlay.png"),
         omit_background=True,
     )
+
+
+SCORER_NAMES = {"competition": "pacific-cup", "season": "pc26", "ground": "field-1"}
+
+
+@contextmanager
+def scorer_phone(browser, login, base, season, django_user_model):
+    """A scorer, who is not staff, signed in on a phone at Field 1's scorer page."""
+    scorer = django_user_model.objects.create_user(
+        username="scorer", password="password"
+    )
+    assign_perm("competition.score_season", scorer, season)
+    phone = browser.new_context(viewport={"width": 390, "height": 844})
+    scoring = phone.new_page()
+    try:
+        login(scoring, base, "scorer")
+        scoring.goto(base + reverse("compops:scorer", kwargs=SCORER_NAMES))
+        yield scoring
+    finally:
+        phone.close()
+
+
+def test_scorer_says_who_scored_and_the_score_shows_it(
+    browser, login, asgi_live_server, tournament, django_user_model, screenshot_dir
+):
+    match = tournament["match"]
+    seven = TeamAssociation.objects.get(team=match.home_team, number=7)
+    with scorer_phone(
+        browser, login, asgi_live_server.url, tournament["season"], django_user_model
+    ) as scoring:
+        scoring.get_by_role("button", name="Add one to Australia").click()
+        # The score is in at once; the question comes after it.
+        expect(scoring.locator("#sc-home-score")).to_have_text("1")
+        pick = scoring.locator("#sc-pick-home")
+        expect(pick).to_be_visible()
+        expect(pick.get_by_role("button")).to_have_count(SQUAD + 2)
+        scoring.screenshot(path=str(screenshot_dir / "compops_scorer_who_scored.png"))
+        pick.get_by_role("button", name=seven.numbered_name).click()
+        expect(pick).to_be_hidden()
+        expect(scoring.locator(".sc-who-name").first).to_have_text(seven.numbered_name)
+        scoring.screenshot(
+            path=str(screenshot_dir / "compops_scorer_who_scored_named.png")
+        )
+
+        # It can be changed while it is the team's latest, or skipped.
+        scoring.get_by_role("button", name="Change").click()
+        expect(pick).to_be_visible()
+        pick.get_by_role("button", name="Skip").click()
+        expect(pick).to_be_hidden()
+    (event,) = match.events.all()
+    assert (event.kind, event.side, event.player_id) == (
+        "score",
+        "home",
+        seven.person_id,
+    )
+
+
+def test_turning_the_question_off_lasts_through_a_reload(
+    browser, login, asgi_live_server, tournament, django_user_model
+):
+    with scorer_phone(
+        browser, login, asgi_live_server.url, tournament["season"], django_user_model
+    ) as scoring:
+        toggle = scoring.locator(".sc-ask")
+        expect(toggle).to_have_attribute("aria-pressed", "true")
+        toggle.click()
+        expect(toggle).to_have_attribute("aria-pressed", "false")
+        expect(toggle).to_have_text(
+            "Not asking who scored · turn on", use_inner_text=True
+        )
+
+        scoring.reload()
+        expect(scoring.locator(".sc-ask")).to_have_attribute("aria-pressed", "false")
+        scoring.get_by_role("button", name="Add one to Australia").click()
+        expect(scoring.locator("#sc-home-score")).to_have_text("1")
+        # Asked or not, the score was the press's; give a question the time
+        # it would take to come, and see it did not.
+        scoring.wait_for_timeout(500)
+        expect(scoring.locator("#sc-pick-home")).to_be_hidden()
+        # The scorer can still name the scorer, by asking for it.
+        scoring.get_by_role("button", name="Who scored?").first.click()
+        expect(scoring.locator("#sc-pick-home")).to_be_visible()
+
+        # On again, and the next score asks.
+        scoring.locator(".sc-ask").click()
+        expect(scoring.locator(".sc-ask")).to_have_attribute("aria-pressed", "true")
+        scoring.get_by_role("button", name="Skip").click()
+        scoring.get_by_role("button", name="Add one to Australia").click()
+        expect(scoring.locator("#sc-home-score")).to_have_text("2")
+        expect(scoring.locator("#sc-pick-home")).to_be_visible()
+
+
+def test_public_match_page_follows_the_live_score_without_a_reload(
+    page,
+    browser,
+    login,
+    asgi_live_server,
+    tournament,
+    django_user_model,
+    screenshot_dir,
+):
+    placeholder, _ = Placeholder.objects.get_or_create(
+        path="tournamentcontrol.competition.sites.CompetitionSite",
+        namespace="competition",
+    )
+    SitemapNode.objects.create(
+        title="Competitions", slug="competitions", object=placeholder
+    )
+    match = tournament["match"]
+    # Halves of 25 minutes: 20 minutes in, the first has 5 left.
+    Division.objects.filter(pk=match.stage.division_id).update(
+        period_minutes=25, break_minutes=5
+    )
+    division = match.stage.division
+    base = asgi_live_server.url
+    match_url = (
+        f"{base}/competitions/pacific-cup/pc26/{division.slug}/match:{match.pk}/"
+    )
+    with scorer_phone(
+        browser, login, base, tournament["season"], django_user_model
+    ) as scoring:
+        # At a venue whose clocks start on time, the first score starts it.
+        scoring.get_by_role("button", name="Add one to Australia").click()
+        expect(scoring.locator("#sc-home-score")).to_have_text("1")
+
+        page.goto(match_url)
+        live = page.locator("#match-live")
+        expect(live.locator(".live-flag")).to_have_text("Live")
+        expect(live.locator(".points").first).to_have_text("1")
+        expect(live.locator(".live-event")).to_have_count(1)
+
+        scoring.get_by_role("button", name="Add one to New Zealand").click()
+        scoring.get_by_role("button", name="Add one to Australia").click()
+        expect(live.locator(".points").first).to_have_text("2")
+        expect(live.locator(".points").last).to_have_text("1")
+        expect(live.locator(".live-event")).to_have_count(3)
+        expect(live.locator(".live-event .clock").first).to_have_text(
+            re.compile(r"^0[0-5]:\d\d · P1$")
+        )
+        page.screenshot(
+            path=str(screenshot_dir / "match_page_live_score.png"), full_page=True
+        )
+
+        scoring.get_by_role("button", name="Take one off Australia").click()
+        expect(live.locator(".points").first).to_have_text("1")
+        expect(live.locator(".live-event")).to_have_count(2)
 
 
 def hold(page, button):
