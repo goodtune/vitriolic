@@ -21,7 +21,6 @@ from django.db.models import (
     Exists,
     F,
     Func,
-    Max,
     OuterRef,
     Q,
     Subquery,
@@ -959,12 +958,7 @@ def regrade(team, to, from_date=None):
     if from_date is None:
         from_date = team.matches.filter(match_unplayed).earliest("date").date
 
-    # Move the team to the end of the new division's list first, so the teams
-    # below it in the old one can close the gap without sharing its value.
-    order = (to.teams.aggregate(order=Max("order"))["order"] or 0) + 1
-    Team.objects.filter(pk=team.pk).update(division=to, order=order)
-    team.close_gap()
-    team.division, team.order = to, order
+    team.move_to(to)
 
     # All unplayed matches that this team is assigned to play need to be turned
     # into byes, removing them from the home_team and away_team fields. Strip
