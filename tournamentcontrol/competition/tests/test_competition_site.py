@@ -428,6 +428,84 @@ class FrontEndTests(TestCase):
             ),
         )
 
+    def test_team_schedule_dates_an_unscheduled_day_tba(self):
+        """
+        Matches that have no date are grouped under no date at all, and
+        that group is headed TBA rather than the literal ``None``.
+        """
+        stage = factories.StageFactory.create()
+        team = factories.TeamFactory.create(division=stage.division)
+        # Both games unscheduled, so both land in the ``None`` group.
+        for index, title in enumerate(("Fiji", "Samoa"), start=1):
+            factories.MatchFactory.create(
+                stage=stage,
+                home_team=team,
+                away_team=factories.TeamFactory.create(
+                    division=stage.division, title=title, club__title=title
+                ),
+                round=index,
+                datetime=None,
+                date=None,
+                time=None,
+            )
+        self.assertGoodView(
+            "competition:team",
+            stage.division.season.competition.slug,
+            stage.division.season.slug,
+            stage.division.slug,
+            team.slug,
+        )
+
+        def opponent(title):
+            href = self.reverse(
+                "competition:team",
+                stage.division.season.competition.slug,
+                stage.division.season.slug,
+                stage.division.slug,
+                title.lower(),
+            )
+            return '<td class="team {0}"><a href="{1}">{2}</a></td>'.format(
+                title.lower(), href, title
+            )
+
+        content = self.last_response.content.decode()
+        self.assertHTMLEqual(
+            content.split('<table class="team draw">')[1].split("</table>")[0],
+            """
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Time</th>
+                    <th>Venue</th>
+                    <th>Opponent</th>
+                    <th>Result</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="first odd">
+                    <td class="date">TBA</td>
+                    <td class="time">TBA</td>
+                    <td class="venue">TBA</td>
+                    {fiji}
+                    <td>-</td>
+                    <td></td>
+                </tr>
+                <tr class="even last">
+                    <td class="date"></td>
+                    <td class="time">TBA</td>
+                    <td class="venue">TBA</td>
+                    {samoa}
+                    <td>-</td>
+                    <td></td>
+                </tr>
+            </tbody>
+            """.format(
+                fiji=opponent("Fiji"),
+                samoa=opponent("Samoa"),
+            ),
+        )
+
     def test_team_calendar(self):
         team = factories.TeamFactory.create()
         factories.MatchFactory.create_batch(
