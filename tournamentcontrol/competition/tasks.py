@@ -821,16 +821,23 @@ def synchronise_upstream_season(season_pk):
 
 
 @shared_task
-def synchronise_upstream():
+def synchronise_upstream(backends=None, exclude_backends=None):
     """
     Synchronise every enabled, incomplete season that names an upstream URL
     within a competition that has one.
+
+    ``backends`` and ``exclude_backends`` are lists of backend keys
+    ("mysideline", "revolutionise") that keep the run to those providers, or
+    leave them out, so that one worker can be given the seasons of a provider
+    that refuses another. With neither, every provider is synchronised.
 
     Intended to be scheduled periodically (for example with Celery beat)
     by the deploying project; each season is isolated so that one failing
     remote fetch does not prevent the others from synchronising.
     """
-    results = _upstream_synchronise_all()
+    results = _upstream_synchronise_all(
+        backends=backends, exclude_backends=exclude_backends
+    )
     return {pk: result.summary() for pk, result in results.items()}
 
 
