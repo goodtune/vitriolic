@@ -40,9 +40,14 @@ from tournamentcontrol.competition.models import (
     Venue,
     upstream_renamed,
 )
-from tournamentcontrol.competition.tasks import synchronise_upstream_season
+from tournamentcontrol.competition.tasks import (
+    synchronise_upstream,
+    synchronise_upstream_season,
+)
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.tests.upstream import (
+    CCHA_MENS_URL,
+    CCHA_URL,
     STATE_CUP_SEASON_URL,
     STATE_CUP_URL,
     FakeResponse,
@@ -1945,6 +1950,72 @@ class InvocationTests(SyncTestCase):
         results = synchronise_all({"mysideline": self.mysideline})
         self.assertEqual(list(results), [self.season.pk])
         self.assertEqual(results[self.season.pk].created, {"division": 1, "stage": 1})
+
+    def other_provider(self):
+        """A season of another provider's, linked and ready to synchronise."""
+        return factories.SeasonFactory.create(
+            competition__upstream_url=CCHA_URL,
+            upstream_url=CCHA_MENS_URL,
+            timezone=SYDNEY,
+        )
+
+    @mock.patch("tournamentcontrol.competition.upstream.sync.synchronise_season")
+    def test_synchronise_all_takes_the_backends_named_and_leaves_those_excluded(
+        self, synchronise
+    ):
+        other = self.other_provider()
+        self.assertEqual(
+            (self.season.upstream_backend.key, other.upstream_backend.key),
+            ("mysideline", "revolutionise"),
+        )
+        clients = {"mysideline": self.mysideline, "revolutionise": object()}
+        both = sorted([self.season.pk, other.pk])
+        self.assertEqual(
+            [
+                sorted(synchronise_all(clients, **filters))
+                for filters in (
+                    {},
+                    {"backends": ["revolutionise"]},
+                    {"exclude_backends": ["revolutionise"]},
+                    {"backends": ["mysideline", "revolutionise"]},
+                    # A backend both named and excluded is excluded.
+                    {
+                        "backends": ["mysideline", "revolutionise"],
+                        "exclude_backends": ["mysideline"],
+                    },
+                    {"backends": []},
+                    {"exclude_backends": []},
+                )
+            ],
+            [both, [other.pk], [self.season.pk], both, [other.pk], [], both],
+        )
+
+    @mock.patch("tournamentcontrol.competition.upstream.sync.synchronise_season")
+    def test_synchronise_all_makes_no_client_for_a_backend_it_leaves(self, synchronise):
+        self.other_provider()
+        with mock.patch(
+            "tournamentcontrol.competition.upstream.backends.revolutionise."
+            "RevolutioniseBackend.new_client"
+        ) as new_client:
+            synchronise_all(
+                {"mysideline": self.mysideline}, exclude_backends=["revolutionise"]
+            )
+        self.assertEqual(new_client.call_count, 0)
+
+    @mock.patch("tournamentcontrol.competition.tasks._upstream_synchronise_all")
+    def test_task_for_every_season_passes_its_filters_on(self, synchronise):
+        synchronise.return_value = {}
+        synchronise_upstream.delay().get()
+        synchronise_upstream.delay(backends=["revolutionise"]).get()
+        synchronise_upstream.delay(exclude_backends=["revolutionise"]).get()
+        self.assertEqual(
+            synchronise.call_args_list,
+            [
+                mock.call(backends=None, exclude_backends=None),
+                mock.call(backends=["revolutionise"], exclude_backends=None),
+                mock.call(backends=None, exclude_backends=["revolutionise"]),
+            ],
+        )
 
     @mock.patch("tournamentcontrol.competition.tasks._upstream_synchronise_season")
     def test_task(self, synchronise):

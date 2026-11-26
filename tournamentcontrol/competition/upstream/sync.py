@@ -48,7 +48,7 @@ venue / field      ``Venue`` / ``Ground`` (matched by title, created when
 import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Iterable, Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.db import IntegrityError, transaction
@@ -845,10 +845,20 @@ def linked_seasons():
     )
 
 
-def synchronise_all(clients: Optional[dict] = None) -> dict[int, SyncResult]:
+def synchronise_all(
+    clients: Optional[dict] = None,
+    backends: Optional[Iterable[str]] = None,
+    exclude_backends: Optional[Iterable[str]] = None,
+) -> dict[int, SyncResult]:
     """
     Synchronise every enabled, incomplete season that names an upstream URL
     within a competition that has one.
+
+    ``backends`` keeps it to the seasons of the backends named, by their key
+    ("mysideline", "revolutionise"), and ``exclude_backends`` leaves out
+    those of the backends named; ``None`` is no filter, and a backend named
+    in both is left out. A worker that a provider refuses can leave that
+    provider to a worker somewhere it does not.
 
     ``clients`` optionally maps a backend key to the client to use for that
     backend (the tests pass canned sessions this way). Failures are
@@ -856,6 +866,8 @@ def synchronise_all(clients: Optional[dict] = None) -> dict[int, SyncResult]:
     logged and skipped, the others still synchronise.
     """
     clients = dict(clients or {})
+    wanted = None if backends is None else set(backends)
+    unwanted = set(exclude_backends or ())
     results = {}
     for season in linked_seasons():
         backend = season.upstream_backend
@@ -865,6 +877,10 @@ def synchronise_all(clients: Optional[dict] = None) -> dict[int, SyncResult]:
                 season,
                 season.competition.upstream_url,
             )
+            continue
+        if backend.key in unwanted or (
+            wanted is not None and backend.key not in wanted
+        ):
             continue
         client = clients.get(backend.key)
         if client is None:
