@@ -3421,13 +3421,18 @@ class Match(
     def reverse_event(self, event, recorded_by=None, moment=None):
         """
         Record a correction that reverses ``event``, and take its points off
-        the progress score. ``event`` is left as it was.
+        the progress score. ``event`` is left as it was. An event that is not
+        live (a correction, or corrected already) raises ``ValidationError``.
         """
         with transaction.atomic():
             self._lock()
             return self._reverse(event, recorded_by, moment)
 
     def _reverse(self, event, recorded_by, moment):
+        # Asked under the match's lock, so of two corrections at once the
+        # second is told, and does not reach the constraint on ``reverses``.
+        if not self.events.live().filter(pk=event.pk).exists():
+            raise ValidationError(_("This event has been corrected already."))
         correction = MatchEvent.objects.create(
             match=self,
             kind=MatchEvent.Kind.CORRECTION,

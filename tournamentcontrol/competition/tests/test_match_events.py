@@ -8,6 +8,7 @@ import datetime
 import threading
 from zoneinfo import ZoneInfo
 
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, connection, transaction
 from django.db.models.signals import post_save
 from django.test import TransactionTestCase
@@ -157,6 +158,17 @@ class MatchEventTests(TestCase):
                 match=self.match, kind=MatchEvent.Kind.CORRECTION, reverses=score
             )
 
+    def test_an_event_corrected_already_or_a_correction_is_not_corrected(self):
+        score = self.score("home")
+        correction = self.match.reverse_event(score)
+        for event in (score, correction):
+            with self.subTest(event=event), self.assertRaises(ValidationError) as cm:
+                self.match.reverse_event(event)
+            self.assertEqual(
+                cm.exception.messages, ["This event has been corrected already."]
+            )
+        self.assertEqual(self.match.events.filter(reverses=score).count(), 1)
+
     def test_events_never_save_the_match(self):
         # The ladders are worked out when a match is saved (see apps.py);
         # the log must never set that off.
@@ -238,10 +250,13 @@ class ConcurrentScorerTests(TransactionTestCase):
             thread.start()
         for thread in threads:
             thread.join()
-        self.assertEqual(errors, [])
+        return errors
 
     def test_two_scores_at_once_both_count(self):
-        self.together(*[lambda m: m.record_event(MatchEvent.Kind.SCORE, "home")] * 2)
+        errors = self.together(
+            *[lambda m: m.record_event(MatchEvent.Kind.SCORE, "home")] * 2
+        )
+        self.assertEqual(errors, [])
         self.match.refresh_from_db()
         self.assertEqual(self.match.home_team_progress_score, 2)
         self.assertEqual(self.match.events.totals(), {"home": 2, "away": 0})
@@ -249,7 +264,21 @@ class ConcurrentScorerTests(TransactionTestCase):
     def test_two_take_backs_at_once_reverse_two_scores(self):
         self.match.record_event(MatchEvent.Kind.SCORE, "home")
         self.match.record_event(MatchEvent.Kind.SCORE, "home")
-        self.together(*[lambda m: m.take_back_score("home")] * 2)
+        errors = self.together(*[lambda m: m.take_back_score("home")] * 2)
+        self.assertEqual(errors, [])
         self.match.refresh_from_db()
         self.assertEqual(self.match.home_team_progress_score, 0)
         self.assertEqual(self.match.events.live().count(), 0)
+
+    def test_two_corrections_of_one_event_at_once_reverse_it_once(self):
+        # The second is told the event is corrected already, not stopped by
+        # the database's constraint on ``reverses``.
+        score = self.match.record_event(MatchEvent.Kind.SCORE, "home")
+        errors = self.together(*[lambda m: m.reverse_event(score)] * 2)
+        self.assertEqual(
+            [(type(error), error.messages) for error in errors],
+            [(ValidationError, ["This event has been corrected already."])],
+        )
+        self.match.refresh_from_db()
+        self.assertEqual(self.match.home_team_progress_score, 0)
+        self.assertEqual(self.match.events.filter(reverses=score).count(), 1)

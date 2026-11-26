@@ -1640,9 +1640,10 @@ class CompetitionAdminComponent(AdminComponent):
         )
         if has_permission is not None:
             return has_permission
-        if not match.events.live().filter(pk=event.pk).exists():
-            return HttpResponseBadRequest(_("This event has been corrected already."))
-        match.reverse_event(event, recorded_by=request.user)
+        try:
+            match.reverse_event(event, recorded_by=request.user)
+        except ValidationError as error:
+            return HttpResponseBadRequest(error.messages[0])
         messages.success(request, _("The event has been corrected."))
         return self.redirect(f"{match.urls['edit']}#events-tab")
 
