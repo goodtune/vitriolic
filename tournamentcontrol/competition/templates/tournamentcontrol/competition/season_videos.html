@@ -15,7 +15,7 @@
 					<td class="label">
 						{% if match.label %}
 							{% trans match.label %}
-						{% elif not match.is_final %}
+						{% elif match.round is not None and not match.is_final %}
 							{% blocktrans with num=match.round %}Round {{ num }}{% endblocktrans %}
 						{% endif %}
 					</td>

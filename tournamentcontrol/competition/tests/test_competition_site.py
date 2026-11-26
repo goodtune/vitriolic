@@ -2363,3 +2363,62 @@ class StaffPagesRemovedTests(TestCase):
             ],
             [],
         )
+
+
+@override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
+class MatchPageResultAndRoundTests(TestCase):
+    """
+    The public match page shows a score only once there is a result, and a
+    round only when the match has one (issue #691).
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.division = factories.DivisionFactory.create(title="Mixed Open")
+        cls.stage = factories.StageFactory.create(division=cls.division)
+
+    def get_match(self, **kwargs):
+        match = factories.MatchFactory.create(stage=self.stage, **kwargs)
+        self.get_check_200(
+            "competition:match",
+            self.division.season.competition.slug,
+            self.division.season.slug,
+            self.division.slug,
+            match.pk,
+        )
+
+    def test_no_result_and_no_round(self):
+        self.get_match(round=None)
+        self.assertResponseContains("<h2>Mixed Open</h2>")
+        self.assertResponseContains(
+            "<tfoot><tr>"
+            '<td colspan="2"></td><td class="points"></td>'
+            '<td colspan="2"></td><td class="points"></td>'
+            "</tr></tfoot>"
+        )
+
+    def test_nil_all_result(self):
+        self.get_match(round=3, home_team_score=0, away_team_score=0)
+        self.assertResponseContains("<h2>Mixed Open - Round 3</h2>")
+        self.assertResponseContains(
+            "<tfoot><tr>"
+            '<td colspan="2"></td><td class="points">0</td>'
+            '<td colspan="2"></td><td class="points">0</td>'
+            "</tr></tfoot>"
+        )
+
+    def test_label(self):
+        self.get_match(round=None, label="Grand Final")
+        self.assertResponseContains("<h2>Mixed Open - Grand Final</h2>")
+
+    def test_season_videos_no_round(self):
+        """The season's videos list a match with no round or label unlabelled."""
+        factories.MatchFactory.create(
+            stage=self.stage, round=None, videos=["https://youtu.be/jNQXAC9IVRw"]
+        )
+        self.get_check_200(
+            "competition:season-videos",
+            self.division.season.competition.slug,
+            self.division.season.slug,
+        )
+        self.assertResponseContains('<td class="label"></td>')
