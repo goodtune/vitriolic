@@ -26,7 +26,17 @@ from tournamentcontrol.competition.utils import (
 )
 
 
+class CompetitionQuerySet(QuerySet):
+    def public(self):
+        """The competitions the public site shows: those enabled."""
+        return self.filter(enabled=True)
+
+
 class SeasonQuerySet(QuerySet):
+    def public(self):
+        """The seasons the public may see: those enabled."""
+        return self.filter(enabled=True)
+
     def navigation(self):
         """
         Only what a list of seasons needs to link to, order and filter each
@@ -174,6 +184,27 @@ class MatchQuerySet(QuerySet):
         return self.annotate(
             has_result=has_result, needs_progressing=needs_progressing
         ).annotate(result_editable=result_editable)
+
+    def public(self):
+        """
+        The matches the public may follow live: of a public competition and
+        season (``CompetitionQuerySet.public``, ``SeasonQuerySet.public``),
+        of a division out of draft (``DivisionQuerySet.public``), not a bye,
+        and with both teams known, as a match page needs. A site that shows
+        only some competitions narrows the competitions further; that is the
+        site's, and is not known here.
+        """
+        Competition = apps.get_model("competition", "Competition")
+        Season = apps.get_model("competition", "Season")
+        Division = apps.get_model("competition", "Division")
+        return self.filter(
+            stage__division__season__competition__in=Competition.objects.public(),
+            stage__division__season__in=Season.objects.public(),
+            stage__division__in=Division.objects.public(),
+            is_bye=False,
+            home_team__isnull=False,
+            away_team__isnull=False,
+        )
 
     def in_progress(self):
         """

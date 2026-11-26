@@ -1578,12 +1578,8 @@ class CompOpsSite(Application):
         every clock there with one event that names the venue alone.
         """
         try:
-            match = await Match.objects.aget(
-                pk=pk,
-                stage__division__season=season,
-                is_bye=False,
-                home_team__isnull=False,
-                away_team__isnull=False,
+            match = await Match.objects.public().aget(
+                pk=pk, stage__division__season=season
             )
         except Match.DoesNotExist:
             raise Http404("No such match.")
@@ -1598,10 +1594,24 @@ class CompOpsSite(Application):
     def match_live_fragments(self, request, match_pk):
         """
         The public match page's live block, as it is now: the same template
-        the page includes, given only the match and whether it is in play.
+        the page includes. A match no longer public (its division put back to
+        draft, say) is sent the block empty.
         """
-        match = Match.objects.select_related("home_team", "away_team").get(pk=match_pk)
-        context = {"match": match, "in_progress": match.in_progress}
+        match = (
+            Match.objects.public()
+            .select_related("home_team", "away_team")
+            .filter(pk=match_pk)
+            .first()
+        )
+        if match is None:
+            context = {"hidden": True}
+        else:
+            in_progress = match.in_progress
+            context = {
+                "match": match,
+                "in_progress": in_progress,
+                "live_events": scoreboard.live_events(match) if in_progress else (),
+            }
         return [render_to_string(LIVE_TEMPLATE, context, request=request)]
 
     # --- timekeeper -------------------------------------------------

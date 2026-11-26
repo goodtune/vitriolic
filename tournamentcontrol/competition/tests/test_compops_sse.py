@@ -23,6 +23,7 @@ from touchtechnology.admin.tests.tenancy import schema_context
 from tournamentcontrol.competition.compops import events, streams
 from tournamentcontrol.competition.compops.scoreboard import SCOPE
 from tournamentcontrol.competition.compops.sites import CompOpsSite
+from tournamentcontrol.competition.forms import MatchResultForm
 from tournamentcontrol.competition.models import Match, MatchEvent
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.tests.test_compops_results import HELD
@@ -1134,3 +1135,61 @@ class MatchLiveEventsTests(SseFixture, TestCase):
             with self.subTest(match=match):
                 response = await self.connect(match)
                 self.assert_http_404_not_found(response)
+
+    async def test_match_that_is_not_public_is_not_found(self):
+        division = self.stage.division
+        competition = self.season.competition
+        hidden = (
+            (competition, "enabled", False),
+            (self.season, "enabled", False),
+            (division, "draft", True),
+        )
+        for obj, field, value in hidden:
+            with self.subTest(obj=obj):
+                await type(obj).objects.filter(pk=obj.pk).aupdate(**{field: value})
+                response = await self.connect()
+                self.assert_http_404_not_found(response)
+                await type(obj).objects.filter(pk=obj.pk).aupdate(**{field: not value})
+        # Public again, it streams again.
+        response = await self.connect()
+        self.assert_http_200_ok(response)
+        await Reader(response).close()
+
+    async def test_division_put_back_to_draft_is_sent_an_empty_block(self):
+        reader = Reader(await self.connect())
+        try:
+            await reader.until("</section>")
+            await (
+                type(self.stage.division)
+                .objects.filter(pk=self.stage.division_id)
+                .aupdate(draft=True)
+            )
+            await self.tap(ground=self.field1.pk, match=self.live.pk)
+            pushed = "".join(await reader.until("</section>"))
+            self.assertIn(
+                'data: elements <section id="match-live" class="match-live" '
+                'aria-live="polite"></section>',
+                pushed,
+            )
+        finally:
+            await reader.close()
+
+    async def test_saving_the_result_tells_the_page(self):
+        reader = Reader(await self.connect())
+        try:
+            await reader.until("</section>")
+
+            def save_result():
+                with self.captureOnCommitCallbacks(execute=True):
+                    form = MatchResultForm(
+                        data={"home_team_score": 1, "away_team_score": 0},
+                        instance=Match.objects.get(pk=self.live.pk),
+                    )
+                    self.assertEqual(form.is_valid(), True)
+                    form.save()
+
+            await sync_to_async(save_result)()
+            pushed = "".join(await reader.until("</section>"))
+            self.assertIn("Full time. Reload the page for the result.", pushed)
+        finally:
+            await reader.close()

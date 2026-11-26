@@ -120,6 +120,26 @@ class LivePageTests(LiveFixture):
         self.get_check_200("competition:match", *self.args)
         self.assertNotIn('id="match-live"', self.content())
 
+    def test_match_of_a_hidden_season_or_division_has_no_live_block(self):
+        self.score("home")
+        division = self.match.stage.division
+        for obj, field, value in (
+            (division.season, "enabled", False),
+            (division, "draft", True),
+        ):
+            with self.subTest(obj=obj):
+                type(obj).objects.filter(pk=obj.pk).update(**{field: value})
+                self.get_check_200("competition:match", *self.args)
+                self.assertNotIn('id="match-live"', self.content())
+                type(obj).objects.filter(pk=obj.pk).update(**{field: not value})
+
+    def test_events_name_the_period_as_the_scoreboard_does(self):
+        division = self.match.stage.division
+        type(division).objects.filter(pk=division.pk).update(period_minutes=20)
+        self.score("home", remaining=754)
+        self.get_check_200("competition:match", *self.args)
+        self.assertResponseContains('<span class="clock">12:34 · 1st Half</span>')
+
 
 @override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")
 class LivePageWithoutTournamentOpsTests(LiveFixture):

@@ -245,6 +245,36 @@ def timing(match):
     )
 
 
+def period_names(match):
+    """
+    What the periods of ``match`` are called on its scoreboard, by number from
+    1: "1st Half", "2nd Quarter" (see ``Clock.names``). Empty for a match that
+    has no clock, as ``clock_for`` gives none.
+    """
+    periods, period_minutes, _break, name, _half = timing(match)
+    if not periods or not period_minutes:
+        return {}
+    clock = Clock(start=None, periods=periods, period=1, pause=0, name=name.strip())
+    named = (
+        label
+        for (kind, _seconds), label in zip(clock.phases, clock.names)
+        if kind == "period"
+    )
+    return dict(enumerate(named, start=1))
+
+
+def live_events(match):
+    """
+    The live events of ``match`` for its chronology, each with
+    ``period_name``: its scoreboard's name for the period, or ``None``.
+    """
+    names = period_names(match)
+    events = list(match.live_events())
+    for event in events:
+        event.period_name = names.get(event.period)
+    return events
+
+
 def clock_for(match, ground):
     """
     The clock of ``match`` on ``ground``, or ``None`` when nothing gives it a

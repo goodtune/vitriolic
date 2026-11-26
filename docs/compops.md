@@ -137,14 +137,18 @@ A match with a result, or with statistics, is never changed by the live score.
 
 ### The public match page
 
-While a match is in progress, the public match page (`match.html`) shows its live score, marked as live and not as the result, and the chronology of its live events: the time on the clock, the team and, where it is known, the player.
+While a match is in progress, the public match page (`match.html`) shows its live score, marked as live and not as the result, and the chronology of its live events: the time on the clock and the period, named as the scoreboard names it ("1st Half"), the team and, where it is known, the player.
 It is drawn by `match_live.html` in the page's `live` block, so a project that overrides `match.html` can place it.
 
 Where Tournament Ops is mounted, the page loads Datastar and opens the match's event stream (`compops:match-live`).
-The stream sends the live block again whenever a scorer's press names the match, or the timekeeper starts the clocks of its venue.
+The stream sends the live block again whenever a scorer's press names the match, the timekeeper starts the clocks of its venue, or the match's result is saved (the block then says "Full time").
 More readers add no polling: each holds the one stream.
-Anyone may open the stream, as anyone may see a scoreboard.
-It serves only a match with a public page (both teams known, not a bye), and sends nothing the page does not show: never who kept the score.
+Anyone may open the stream, but only for a public match (`MatchQuerySet.public()`): its competition and season are enabled, its division is not a draft, it is not a bye and both its teams are known.
+The stream of any other match answers 404, and the page shows no live block for it.
+The check is made again on each send: a match whose division goes back to draft while the stream is open is sent the block empty.
+The stream stays open, because Datastar would only reconnect and get the 404.
+A site that shows only some competitions (the `competition` argument of `CompetitionSite`) is not known to the stream, so the stream checks only what holds for every site.
+It sends nothing the page does not show: never who kept the score.
 
 Tournament Ops needs ASGI and is optional.
 Where it is not mounted, the page shows the live score as it was rendered, with no stream.
@@ -390,7 +394,7 @@ To turn a check off, put its id in `SILENCED_SYSTEM_CHECKS`.
 | See a ground's scoreboard or its overlay | nothing; anyone with the address may |
 | Keep a scoreboard: change the score, start the clock, start a venue's clocks together | login and `competition.score_season` on the season; staff status is not needed |
 | Say who scored the team's latest score, from the scorer's page | login and `competition.score_season` on the season; staff status is not needed |
-| See a match's live score and events on the public match page, and its stream | nothing; anyone may |
+| See a match's live score and events on the public match page, and its stream | nothing; anyone may, for a public match only |
 | Add an event to a match, or correct one, in the admin | `is_staff` and `competition.add_matchevent` |
 | Change an event's player in the admin | `is_staff` and `competition.change_matchevent` |
 | Go on air, end the broadcast or arm the next one from the booth | login and `competition.stream_season` on the season; staff status is not needed |

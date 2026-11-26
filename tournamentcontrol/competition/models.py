@@ -85,6 +85,7 @@ from tournamentcontrol.competition.managers import (
 )
 from tournamentcontrol.competition.mixins import ModelDiffMixin
 from tournamentcontrol.competition.query import (
+    CompetitionQuerySet,
     DivisionQuerySet,
     MatchEventQuerySet,
     PersonQuerySet,
@@ -349,6 +350,8 @@ class Competition(AdminUrlMixin, OrderedSitemapNode):
             revolutionise=RevolutioniseBackend.competition_url_example,
         ),
     )
+
+    objects = CompetitionQuerySet.as_manager()
 
     def _get_admin_namespace(self):
         return "admin:fixja:competition"

@@ -24,6 +24,7 @@ from icalendar import Calendar, Event, vUri
 from touchtechnology.admin.shells import ShellTemplatesMixin
 from touchtechnology.admin.sites import site as admin_site
 from touchtechnology.common.sites import Application
+from tournamentcontrol.competition.compops.scoreboard import live_events
 from tournamentcontrol.competition.decorators import competition_by_slug_m
 from tournamentcontrol.competition.forms import (
     ConfigurationForm,
@@ -109,7 +110,7 @@ class CompetitionSite(Application):
         # store the node for future reference
         self.node = kwargs.get("node")
         super().__init__(name=name, app_name=app_name, **kwargs)
-        self._competitions = Competition.objects.filter(enabled=True)
+        self._competitions = Competition.objects.public()
         if "competition" in kwargs and kwargs["competition"]:
             self._competitions = self._competitions.filter(slug=kwargs["competition"])
 
@@ -1027,8 +1028,12 @@ class CompetitionSite(Application):
         # While the match is played the page shows its live score, kept up to
         # date by Tournament Ops' event stream where it is mounted (it needs
         # ASGI); elsewhere the page shows the live score as it was rendered.
-        extra_context["in_progress"] = match.in_progress
+        # A match of a hidden season or division is not followed live.
+        extra_context["in_progress"] = (
+            Match.objects.filter(pk=match.pk).public().in_progress().exists()
+        )
         if extra_context["in_progress"]:
+            extra_context["live_events"] = live_events(match)
             try:
                 extra_context["live_url"] = reverse(
                     "compops:match-live",
@@ -1117,7 +1122,7 @@ class MultiCompetitionSite(CompetitionSite):
     def __init__(self, name="competition", app_name="competition", **kwargs):
         self.node = kwargs.get("node")  # store the node for future reference
         super().__init__(name=name, app_name=app_name, **kwargs)
-        self._competitions = Competition.objects.filter(enabled=True)
+        self._competitions = Competition.objects.public()
         if "competition" in kwargs:
             q = functools.reduce(or_, [Q(slug=slug) for slug in kwargs["competition"]])
             self._competitions = self._competitions.filter(q)

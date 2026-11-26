@@ -2,20 +2,22 @@
 	The live score of a match being played, and the chronology of its events.
 	The match page includes it in its "live" block, and Tournament Ops' event
 	stream for the match (compops:match-live) sends it again, by its id, as the
-	match is scored. It is given only ``match`` and ``in_progress``.
-{% endcomment %}<section id="match-live" class="match-live" aria-live="polite">
+	match is scored. It is given ``match``, ``in_progress`` and ``live_events``
+	(see compops.scoreboard.live_events), or ``hidden`` for a match that is no
+	longer public, which empties the block.
+{% endcomment %}<section id="match-live" class="match-live" aria-live="polite">{% if not hidden %}
 	{% if in_progress %}
 		{% with home=match.get_home_team away=match.get_away_team %}
 			<p class="live-flag">{% trans "Live" %}</p>
 			<p class="live-score"><span class="team">{{ home.title }}</span> <span class="points">{{ match.home_team_progress_score|default:0 }}</span><span class="dash">–</span><span class="points">{{ match.away_team_progress_score|default:0 }}</span> <span class="team">{{ away.title }}</span></p>
 			<p class="live-note">{% trans "The score kept at the ground while the match is played. It is not the result." %}</p>
 			<ol class="live-events">
-				{% for event in match.live_events %}
-					<li class="live-event {{ event.kind }}"><span class="clock">{% if event.period %}{{ event.clock }} · P{{ event.period }}{% endif %}</span> <span class="kind">{{ event.get_kind_display }}</span> <span class="team">{{ event.team|default:"" }}</span>{% if event.player %} <span class="player">{{ event.player.first_name }} {{ event.player.last_name }}</span>{% endif %}</li>
+				{% for event in live_events %}
+					<li class="live-event {{ event.kind }}"><span class="clock">{% if event.period %}{{ event.clock }} · {% if event.period_name %}{{ event.period_name }}{% else %}P{{ event.period }}{% endif %}{% endif %}</span> <span class="kind">{{ event.get_kind_display }}</span> <span class="team">{{ event.team|default:"" }}</span>{% if event.player %} <span class="player">{{ event.player.first_name }} {{ event.player.last_name }}</span>{% endif %}</li>
 				{% endfor %}
 			</ol>
 		{% endwith %}
 	{% else %}
 		<p class="live-note">{% trans "Full time. Reload the page for the result." %}</p>
 	{% endif %}
-</section>
+{% endif %}</section>
