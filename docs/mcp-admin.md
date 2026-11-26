@@ -173,6 +173,20 @@ A division always has a number of periods and a break length, so `update_divisio
 The records these tools return carry the same fields.
 `get_season` adds them to the season, its divisions, stages and venues, and `get_match` gives a match's own timing and `scoreboard_timing`, the timing its board runs after the match, stage and division are taken in turn.
 
+A scoreboard template is a whole page, so a response that lists many records gives `has_scoreboard_template`, whether the record has a template of its own, in place of the text:
+
+| Tool | Template text | `has_scoreboard_template` |
+| --- | --- | --- |
+| `list_competitions` | | each competition and season |
+| `get_season` | the season | each division and stage |
+| `create_competition`, `update_competition` | the competition | each of its seasons |
+| `link_competition_clubs`, `unlink_competition_clubs` | the competition | |
+| `create_season`, `update_season` | the season | |
+| `create_division`, `update_division`, `create_stage`, `update_stage` | the division or stage | |
+| `create_divisions`, `create_stages` with `verbose=true` | | each division or stage |
+
+The results of the tools that create or update a record carry the text, so a change can be confirmed.
+
 #### Bulk creation
 
 Records of the same kind are best added in one call:

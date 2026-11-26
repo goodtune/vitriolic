@@ -244,7 +244,11 @@ give any of them, and `period_name`, for itself (`create_stage`,
 parent's, and the `clear_*` arguments empty one again. `scoreboard_template`
 on a competition, season, division or stage draws its boards in place of the
 usual one, and a venue's `scoreboard_auto_start` starts each clock at the
-scheduled time. `get_season` and `get_match` report them.
+scheduled time. `get_season` and `get_match` report them. A template is a
+whole page, so a tool that lists many records (`list_competitions`, the
+divisions and stages of `get_season`, `create_divisions` and `create_stages`)
+gives `has_scoreboard_template` instead; the text comes back for one record,
+from `get_season` and from the tools that create or update it.
 
 Withdrawals: `withdraw_team` takes a team out of its division part way
 through a season, turning its unplayed matches into byes for the opponents
@@ -639,12 +643,20 @@ def _timing(owner):
     }
 
 
-def _scoreboard(owner):
+def _scoreboard_template(owner, text=True):
+    """
+    The scoreboard template of a competition, season, division or stage. A
+    template is a whole page, so a record in a list (``text=False``) only
+    says whether it has one.
+    """
+    if text:
+        return {"scoreboard_template": owner.scoreboard_template or None}
+    return {"has_scoreboard_template": bool(owner.scoreboard_template)}
+
+
+def _scoreboard(owner, text=True):
     """The scoreboard timing and template of a division or stage."""
-    return {
-        **_timing(owner),
-        "scoreboard_template": owner.scoreboard_template or None,
-    }
+    return {**_timing(owner), **_scoreboard_template(owner, text)}
 
 
 def _match_timing(match):
@@ -693,7 +705,7 @@ def _stream_body(season, title):
     }
 
 
-def _season_summary(season):
+def _season_summary(season, text=True):
     return {
         "id": season.pk,
         "title": season.title,
@@ -713,23 +725,28 @@ def _season_summary(season):
             season.live_stream_client_id and season.live_stream_client_secret
         ),
         "youtube_authorised": bool(season.live_stream_refresh_token),
-        "scoreboard_template": season.scoreboard_template or None,
+        **_scoreboard_template(season, text),
     }
 
 
-def _competition_summary(competition, seasons=True):
+def _competition_summary(competition, seasons=True, text=True):
+    """
+    A competition and its seasons. A season here is one of a list, so it only
+    says whether it has a scoreboard template.
+    """
     res = {
         "id": competition.pk,
         "title": competition.title,
         "short_title": competition.short_title or None,
         "slug": competition.slug,
         "enabled": competition.enabled,
-        "scoreboard_template": competition.scoreboard_template or None,
+        **_scoreboard_template(competition, text),
         "clubs": [_ref(club) for club in competition.clubs.all()],
     }
     if seasons:
         res["seasons"] = [
-            _season_summary(season) for season in competition.seasons.order_by("order")
+            _season_summary(season, text=False)
+            for season in competition.seasons.order_by("order")
         ]
     return res
 
@@ -765,7 +782,7 @@ def _ground_summary(ground, keys=False):
     return res
 
 
-def _division_summary(division):
+def _division_summary(division, text=True):
     return {
         "id": division.pk,
         "title": division.title,
@@ -779,7 +796,7 @@ def _division_summary(division):
         "forfeit_against_score": division.forfeit_against_score,
         "include_forfeits_in_played": division.include_forfeits_in_played,
         "games_per_day": division.games_per_day,
-        **_scoreboard(division),
+        **_scoreboard(division, text),
         "stages": [_ref(stage) for stage in division.stages.order_by("order")],
         "team_count": division.teams.count(),
     }
@@ -863,7 +880,7 @@ def _squad_member(association):
     }
 
 
-def _stage_summary(stage):
+def _stage_summary(stage, text=True):
     return {
         "id": stage.pk,
         "title": stage.title,
@@ -876,7 +893,7 @@ def _stage_summary(stage):
         "scale_group_points": stage.scale_group_points,
         "carry_ladder": stage.carry_ladder,
         "keep_mvp": stage.keep_mvp,
-        **_scoreboard(stage),
+        **_scoreboard(stage, text),
         "pools": [_pool_summary(pool) for pool in stage.pools.order_by("order")],
     }
 
@@ -1340,12 +1357,16 @@ class AdminToolset(CompetitionToolset):
         """
         Every competition, enabled or not, with its seasons (including
         disabled and completed ones) and whether live streaming and YouTube
-        credentials are configured for each season.
+        credentials are configured for each season. Each competition and
+        season says only whether it has a scoreboard template
+        (``has_scoreboard_template``); the text is a whole page, so it is
+        returned only for one record (``get_season``, and the results of the
+        tools that create or update a competition or season).
         """
         self._staff()
         return {
             "competitions": [
-                _competition_summary(c)
+                _competition_summary(c, text=False)
                 for c in Competition.objects.prefetch_related("clubs").order_by("order")
             ]
         }
@@ -1835,8 +1856,9 @@ class AdminToolset(CompetitionToolset):
         filter ``list_matches``, ``count_matches`` and ``get_ladder``.
 
         The scoreboard settings are included: the season's
-        ``scoreboard_template``, each division's and stage's timing and
-        template (on a stage ``null`` is the division's), and each venue's
+        ``scoreboard_template``, each division's and stage's timing (on a
+        stage ``null`` is the division's) and ``has_scoreboard_template``,
+        whether it has a template of its own, and each venue's
         ``scoreboard_auto_start``.
         """
         self._staff()
@@ -1848,10 +1870,10 @@ class AdminToolset(CompetitionToolset):
         divisions = season.divisions.prefetch_related("stages").in_bulk()
         for division in res["divisions"]:
             owner = divisions[division["id"]]
-            division.update(_scoreboard(owner))
+            division.update(_scoreboard(owner, text=False))
             stages = {stage.pk: stage for stage in owner.stages.all()}
             for stage in division["stages"]:
-                stage.update(_scoreboard(stages[stage["id"]]))
+                stage.update(_scoreboard(stages[stage["id"]], text=False))
         venues = season.venues.in_bulk()
         for venue in res["venues"]:
             venue["scoreboard_auto_start"] = venues[venue["id"]].scoreboard_auto_start
@@ -2355,7 +2377,8 @@ class AdminToolset(CompetitionToolset):
         names every item that failed and why.
 
         ``verbose=false`` returns each division's id, title and slug;
-        ``verbose=true`` the full record, as ``create_division`` does.
+        ``verbose=true`` the full record, as ``create_division`` does, but
+        with ``has_scoreboard_template`` in place of the template's text.
 
         Example: ``divisions=[{"season_id": 4, "title": "Men's Open",
         "points_formula": "3*win + 2*draw + 1*loss", "forfeit_for_score": 5,
@@ -2369,8 +2392,13 @@ class AdminToolset(CompetitionToolset):
             DivisionSpec,
             lambda spec: self._create_division(**spec.model_dump(by_alias=True)),
         )
-        summary = _division_summary if verbose else _ref
-        return {"saved": True, "divisions": [summary(d) for d in created]}
+        return {
+            "saved": True,
+            "divisions": [
+                _division_summary(d, text=False) if verbose else _ref(d)
+                for d in created
+            ],
+        }
 
     def _create_division(self, season_id, **changes):
         season = self._season(season_id)
@@ -3090,7 +3118,8 @@ class AdminToolset(CompetitionToolset):
         none; the error then names every item that failed and why.
 
         ``verbose=false`` returns each stage's id, title and slug;
-        ``verbose=true`` the full record, as ``create_stage`` does.
+        ``verbose=true`` the full record, as ``create_stage`` does, but with
+        ``has_scoreboard_template`` in place of the template's text.
 
         Example: ``stages=[{"division_id": 7, "title": "Pool Stage"},
         {"division_id": 7, "title": "Finals", "keep_ladder": false},
@@ -3103,8 +3132,12 @@ class AdminToolset(CompetitionToolset):
             StageSpec,
             lambda spec: self._create_stage(**spec.model_dump()),
         )
-        summary = _stage_summary if verbose else _ref
-        return {"saved": True, "stages": [summary(s) for s in created]}
+        return {
+            "saved": True,
+            "stages": [
+                _stage_summary(s, text=False) if verbose else _ref(s) for s in created
+            ],
+        }
 
     def _create_stage(self, division_id, follows_id, **changes):
         division = self._division(division_id)

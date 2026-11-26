@@ -844,6 +844,15 @@ UNTIMED_MATCH = {
 }
 
 
+def _scoreboard_keys(record):
+    """The scoreboard template entries of an MCP record, text or boolean."""
+    return {
+        name: record[name]
+        for name in ("scoreboard_template", "has_scoreboard_template")
+        if name in record
+    }
+
+
 @freeze_time(NOW)
 class ScoreboardTests(AdminFixtureMixin, TestCase):
     """The scoreboard fields of the admin forms, set and read through MCP (#681)."""
@@ -856,11 +865,44 @@ class ScoreboardTests(AdminFixtureMixin, TestCase):
         self.assertEqual(competition["scoreboard_template"], SCOREBOARD_TEMPLATE)
         res = admin.update_competition(competition["id"], scoreboard_template="")
         self.assertEqual(res["competition"]["scoreboard_template"], None)
+        self.season.scoreboard_template = SCOREBOARD_TEMPLATE
+        self.season.save()
+        res = admin.update_competition(
+            self.competition.pk, scoreboard_template=SCOREBOARD_TEMPLATE
+        )
+        self.assertEqual(
+            (
+                _scoreboard_keys(res["competition"]),
+                [_scoreboard_keys(s) for s in res["competition"]["seasons"]],
+            ),
+            (
+                {"scoreboard_template": SCOREBOARD_TEMPLATE},
+                [{"has_scoreboard_template": True}],
+            ),
+        )
         self.assertToolError(
             NO_BOARD,
             admin.update_competition,
             competition["id"],
             scoreboard_template="<html></html>",
+        )
+
+    def test_list_competitions_says_only_whether_a_template_is_set(self):
+        self.competition.scoreboard_template = SCOREBOARD_TEMPLATE
+        self.competition.save()
+        competitions = {
+            c["id"]: c for c in self.admin().list_competitions()["competitions"]
+        }
+        nationals = competitions[self.competition.pk]
+        self.assertEqual(
+            (
+                _scoreboard_keys(nationals),
+                [_scoreboard_keys(s) for s in nationals["seasons"]],
+            ),
+            (
+                {"has_scoreboard_template": True},
+                [{"has_scoreboard_template": False}],
+            ),
         )
 
     def test_season_template(self):
@@ -989,11 +1031,14 @@ class ScoreboardTests(AdminFixtureMixin, TestCase):
                     d["period_minutes"],
                     d["break_minutes"],
                     d["period_name"],
-                    d["scoreboard_template"],
+                    _scoreboard_keys(d),
                 )
                 for d in res["divisions"]
             ],
-            [(2, 7, 2, None, None), (6, 7, 0, "Chukka", SCOREBOARD_TEMPLATE)],
+            [
+                (2, 7, 2, None, {"has_scoreboard_template": False}),
+                (6, 7, 0, "Chukka", {"has_scoreboard_template": True}),
+            ],
         )
 
     def test_stage_timing(self):
@@ -1063,10 +1108,13 @@ class ScoreboardTests(AdminFixtureMixin, TestCase):
         )
         self.assertEqual(
             [
-                (s["title"], s["period_minutes"], s["scoreboard_template"])
+                (s["title"], s["period_minutes"], _scoreboard_keys(s))
                 for s in res["stages"]
             ],
-            [("Finals", None, None), ("Grand Final", 10, SCOREBOARD_TEMPLATE)],
+            [
+                ("Finals", None, {"has_scoreboard_template": False}),
+                ("Grand Final", 10, {"has_scoreboard_template": True}),
+            ],
         )
 
     def test_match_timing(self):
@@ -1139,28 +1187,36 @@ class ScoreboardTests(AdminFixtureMixin, TestCase):
         self.mens.save()
         self.mens_finals.period_minutes = 25
         self.mens_finals.period_name = "Half"
+        self.mens_finals.scoreboard_template = SCOREBOARD_TEMPLATE
         self.mens_finals.save()
         self.venue.scoreboard_auto_start = False
         self.venue.save()
         res = self.admin().get_season(self.season.pk)
-        self.assertEqual(res["scoreboard_template"], SCOREBOARD_TEMPLATE)
+        self.assertEqual(
+            _scoreboard_keys(res), {"scoreboard_template": SCOREBOARD_TEMPLATE}
+        )
+        # A season lists many divisions and stages, so each only says whether
+        # it has a template of its own.
         mens = res["divisions"][0]
         self.assertEqual(
-            {name: mens[name] for name in (*NO_TIMING, "scoreboard_template")},
+            {name: mens[name] for name in NO_TIMING} | _scoreboard_keys(mens),
             {
                 **NO_TIMING,
                 "periods": 2,
                 "period_minutes": 20,
                 "break_minutes": 0,
-                "scoreboard_template": None,
+                "has_scoreboard_template": False,
             },
         )
         self.assertEqual(
             [
-                (s["title"], s["period_minutes"], s["period_name"])
+                (s["title"], s["period_minutes"], s["period_name"], _scoreboard_keys(s))
                 for s in mens["stages"]
             ],
-            [("Pool Stage", None, None), ("Finals", 25, "Half")],
+            [
+                ("Pool Stage", None, None, {"has_scoreboard_template": False}),
+                ("Finals", 25, "Half", {"has_scoreboard_template": True}),
+            ],
         )
         self.assertEqual(
             [(v["title"], v["scoreboard_auto_start"]) for v in res["venues"]],
