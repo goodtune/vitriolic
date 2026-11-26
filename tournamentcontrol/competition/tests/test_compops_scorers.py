@@ -8,6 +8,7 @@ from django.utils import timezone
 from freezegun import freeze_time
 from test_plus import TestCase
 
+from touchtechnology.common.tests.caches import WarmCachesMixin
 from tournamentcontrol.competition.compops import events
 from tournamentcontrol.competition.models import SimpleScoreMatchStatistic
 from tournamentcontrol.competition.tests import factories
@@ -235,3 +236,39 @@ class ScorersModalTests(ScorersFixture):
         with self.login(self.staff):
             self.scorers("get")
         self.assert_http_404_not_found()
+
+
+class ScorersModalQueryTests(WarmCachesMixin, ScorersFixture):
+    """
+    The modal has a row for every player of both teams. Each row looked its
+    statistic up on its own; the same query budget now holds however many
+    players the teams have (issue #692).
+    """
+
+    def assertModalQueries(self, players):
+        for team, people in (
+            (self.match.home_team, self.home),
+            (self.match.away_team, self.away),
+        ):
+            people.extend(
+                self.player(team, number)
+                for number in range(len(people) + 1, players + 1)
+            )
+        # The away team's players already have statistics entered.
+        for person in self.away:
+            SimpleScoreMatchStatistic.objects.create(
+                match=self.match, player=person, played=1, points=0
+            )
+        with self.login(self.staff):
+            self.warm_caches()
+            with self.assertNumQueries(11):
+                self.scorers("get", extra=DATASTAR)
+                body = self.body()
+        self.assertIn(f'name="home-TOTAL_FORMS" value="{players}"', body)
+        self.assertIn(f'name="away-TOTAL_FORMS" value="{players}"', body)
+
+    def test_squads_of_two_query_count(self):
+        self.assertModalQueries(2)
+
+    def test_squads_of_ten_query_count(self):
+        self.assertModalQueries(10)

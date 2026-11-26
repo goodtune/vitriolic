@@ -58,11 +58,9 @@ from tournamentcontrol.competition.models import (
     Ground,
     Match,
     Season,
-    SimpleScoreMatchStatistic,
     Team,
     Venue,
 )
-from tournamentcontrol.competition.utils import FauxQueryset
 
 logger = logging.getLogger(__name__)
 
@@ -784,34 +782,17 @@ class CompOpsSite(Application):
     # --- scorers ----------------------------------------------------
 
     def statistic_formsets(self, request, match, data=None):
-        def roster(team):
-            stats = FauxQueryset(SimpleScoreMatchStatistic, team=team)
-            for player in team.people.filter(is_player=True).select_related("person"):
-                try:
-                    statistic = SimpleScoreMatchStatistic.objects.get(
-                        match=match, player=player.person
-                    )
-                except SimpleScoreMatchStatistic.DoesNotExist:
-                    statistic = SimpleScoreMatchStatistic(
-                        match=match,
-                        player=player.person,
-                        number=player.number,
-                        played=1,
-                    )
-                stats.append(statistic)
-            return stats
-
         home = MatchStatisticFormset(
             match.home_team_score,
             data=data,
             prefix="home",
-            queryset=roster(match.home_team),
+            queryset=match.statistics_roster(match.home_team),
         )
         away = MatchStatisticFormset(
             match.away_team_score,
             data=data,
             prefix="away",
-            queryset=roster(match.away_team),
+            queryset=match.statistics_roster(match.away_team),
         )
         for formset, side in ((home, "home"), (away, "away")):
             for form in formset.forms:

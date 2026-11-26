@@ -3353,6 +3353,34 @@ class Match(
     winner = property(lambda self: self._winner_loser("W"))
     loser = property(lambda self: self._winner_loser("L"))
 
+    def statistics_roster(self, team):
+        """
+        The team's players and their statistics for the match, in two queries
+        rather than one for every player. A player with none entered yet has
+        a new, unsaved statistic.
+        """
+        stats = FauxQueryset(SimpleScoreMatchStatistic, team=team)
+        players = list(team.people.filter(is_player=True).select_related("person"))
+        entered = {
+            statistic.player_id: statistic
+            for statistic in self.statistics.filter(
+                player__in=[player.person_id for player in players]
+            )
+        }
+        for player in players:
+            statistic = entered.get(player.person_id)
+            if statistic is None:
+                statistic = SimpleScoreMatchStatistic(
+                    match=self,
+                    player=player.person,
+                    number=player.number,
+                    played=1,
+                )
+            else:
+                statistic.player = player.person
+            stats.append(statistic)
+        return stats
+
     @property
     def statistics_ready(self):
         """
