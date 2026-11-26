@@ -572,9 +572,12 @@ class _DivisionReconciler:
     def _adopt_or_create_team(
         self, upstream_id: str, name: str, pool: Optional[StageGroup]
     ) -> Team:
-        # The identifier is globally unique, so a team may already exist in
-        # another division (eg. moved between competitions remotely).
-        team = Team.objects.filter(upstream_id=upstream_id).first()
+        # A team may already exist in another division of the season (eg.
+        # moved between competitions remotely). One in another season is
+        # never taken: a provider may use the same identifier again.
+        team = Team.objects.filter(
+            division__season=self.season, upstream_id=upstream_id
+        ).first()
         if team is not None:
             return team
         team = self.division.teams.filter(
@@ -643,7 +646,9 @@ class _DivisionReconciler:
             upstream_id = self.backend.identifier(remote.id)
             match = local.pop(upstream_id, None)
             if match is None:
-                match = Match.objects.filter(upstream_id=upstream_id).first()
+                match = Match.objects.filter(
+                    stage__division__season=self.season, upstream_id=upstream_id
+                ).first()
             if match is None:
                 match = Match(upstream_id=upstream_id)
                 created = True

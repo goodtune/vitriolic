@@ -68,7 +68,12 @@ from tournamentcontrol.competition.upstream.sync import (
     synchronise_all,
     synchronise_season,
 )
-from tournamentcontrol.competition.upstream.types import RemoteCompetition
+from tournamentcontrol.competition.upstream.types import (
+    ROUND_REGULAR,
+    RemoteCompetition,
+    RemoteMatch,
+    RemoteTeam,
+)
 
 ASSOCIATION_URL = "https://tfa.mysideline.com.au/competitions/association/6338"
 SEASON_URL = ASSOCIATION_URL + "?season=2026"
@@ -1629,6 +1634,102 @@ class DivisionChangeTests(SyncTestCase):
         self.assertEqual(
             Team.objects.get(upstream_id="mysideline:11").division.upstream_id,
             "mysideline:200",
+        )
+
+
+class SeasonScopeTests(TestCase):
+    """
+    A provider may use the same identifier in two seasons. Each season gets
+    its own row, and the sync of one never takes a row out of another (#685).
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.last = factories.SeasonFactory.create(
+            title="2025",
+            timezone=SYDNEY,
+            competition__upstream_url=ASSOCIATION_URL,
+            upstream_url=f"{ASSOCIATION_URL}?season=2025",
+        )
+        cls.this = factories.SeasonFactory.create(
+            title="2026",
+            timezone=SYDNEY,
+            competition=cls.last.competition,
+            upstream_url=SEASON_URL,
+        )
+
+    def snapshot(self, competition_id, when):
+        sharks = RemoteTeam(id="1", name="Sharks")
+        dolphins = RemoteTeam(id="2", name="Dolphins")
+        return [
+            RemoteCompetition(
+                id=competition_id,
+                name="Mens Div 1",
+                teams=(sharks, dolphins),
+                matches=(
+                    RemoteMatch(
+                        id="1001",
+                        round_number=1,
+                        round_type=ROUND_REGULAR,
+                        round_name="Round 1",
+                        start=when,
+                        home_team_id=sharks.id,
+                        away_team_id=dolphins.id,
+                    ),
+                ),
+            )
+        ]
+
+    def seasons_of(self, model, lookup, upstream_id):
+        return list(
+            model.objects.filter(upstream_id=upstream_id)
+            .order_by(lookup)
+            .values_list(lookup, flat=True)
+        )
+
+    def test_team_id_shared_between_seasons(self):
+        apply_snapshot(self.last, self.snapshot("100", sydney(2025, 9, 6, 18, 0)))
+        sharks = Team.objects.get(upstream_id="mysideline:1")
+        apply_snapshot(self.this, self.snapshot("200", sydney(2026, 9, 5, 18, 0)))
+        self.assertEqual(
+            self.seasons_of(Team, "division__season__title", "mysideline:1"),
+            ["2025", "2026"],
+        )
+        sharks.refresh_from_db()
+        self.assertEqual(
+            (sharks.division.season, sharks.division.upstream_id, sharks.order),
+            (self.last, "mysideline:100", 1),
+        )
+        # Synchronising last season again finds its own team.
+        result = apply_snapshot(
+            self.last, self.snapshot("100", sydney(2025, 9, 6, 18, 0))
+        )
+        self.assertEqual((result.created, result.updated), ({}, {}))
+
+    def test_match_id_shared_between_seasons(self):
+        apply_snapshot(self.last, self.snapshot("100", sydney(2025, 9, 6, 18, 0)))
+        match = Match.objects.get(upstream_id="mysideline:1001")
+        apply_snapshot(self.this, self.snapshot("200", sydney(2026, 9, 5, 18, 0)))
+        self.assertEqual(
+            self.seasons_of(Match, "stage__division__season__title", "mysideline:1001"),
+            ["2025", "2026"],
+        )
+        match.refresh_from_db()
+        self.assertEqual(
+            (match.stage.division.season, match.datetime),
+            (self.last, sydney(2025, 9, 6, 18, 0)),
+        )
+
+    def test_competition_id_shared_between_seasons(self):
+        apply_snapshot(self.last, self.snapshot("100", sydney(2025, 9, 6, 18, 0)))
+        apply_snapshot(self.this, self.snapshot("100", sydney(2026, 9, 5, 18, 0)))
+        self.assertEqual(
+            self.seasons_of(Division, "season__title", "mysideline:100"),
+            ["2025", "2026"],
+        )
+        self.assertEqual(
+            self.seasons_of(Team, "division__season__title", "mysideline:2"),
+            ["2025", "2026"],
         )
 
 
