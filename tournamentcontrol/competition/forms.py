@@ -1784,9 +1784,13 @@ class DrawGenerationMatchFormSet(BaseDrawGenerationMatchFormSet):
 class MatchResultForm(BootstrapFormControlMixin, ModelForm):
     """
     This form is used to make it easy to enter results for a match.
+
+    With ``prefill_live_score`` the form offers the live score (see
+    ``offer_live_score``). Only a page whose Save is for this one match may
+    ask: a formset saves every row that changed, offers included.
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, prefill_live_score=False, **kwargs):
         super().__init__(*args, **kwargs)
         home_team = self.instance.home_team
         away_team = self.instance.away_team
@@ -1828,15 +1832,13 @@ class MatchResultForm(BootstrapFormControlMixin, ModelForm):
                 self.fields.pop("is_forfeit")
                 self.fields.pop("forfeit_winner")
             self.fields.pop("bye_processed")
-        self.from_scoreboard = self.offer_live_score()
+        self.from_scoreboard = prefill_live_score and self.offer_live_score()
 
     def offer_live_score(self):
         """
         Offer the live score (the progress scores) as the result of a match
         that has none, marked on each input with ``data-from-scoreboard``. It
         is only the form's initial value: nothing is saved until the form is.
-        A bound form is not offered it, so a page of results counts the offer,
-        saved as it stands, as a change and saves it.
         """
         match = self.instance
         progress = (match.home_team_progress_score, match.away_team_progress_score)

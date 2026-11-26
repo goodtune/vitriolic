@@ -4243,12 +4243,11 @@ class MatchDetailQueryTests(WarmCachesMixin, TestCase):
 
     # The page costs the same however many players the teams have, with the
     # caches warm. The tree in the rail opens the folders down to the match's
-    # pool. One asks whether the match has statistics, before the points of
-    # its live score are offered (see ``Match.scoreboard_points``).
+    # pool.
     def assertDetailQueries(self, match):
         with self.login(self.superuser):
             self.warm_caches()
-            with self.assertNumQueries(23):
+            with self.assertNumQueries(22):
                 self.get_detail(match)
 
     def test_small_squads_query_count(self):

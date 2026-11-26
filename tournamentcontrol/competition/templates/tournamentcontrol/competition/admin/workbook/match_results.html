@@ -54,7 +54,6 @@
 									<span>{% if match.label %}{{ match.label }}{% else %}{% blocktrans with num=match.round %}Round {{ num }}{% endblocktrans %}{% endif %}</span>
 									<span>{% icon "map-pin" %} {{ match.play_at.title|default:_("No ground") }}</span>
 									{% if match.home_team_score == None and form.home_team_score %}<span class="wb-badge wb-badge-warn">{% trans "No result yet" %}</span>{% endif %}
-									{% if form.from_scoreboard %}<span class="wb-badge" title="{% trans "The live score: check it, then save." %}">{% trans "From the scoreboard" %}</span>{% endif %}
 								</div>
 								<div>
 									{% if form.home_team_score %}

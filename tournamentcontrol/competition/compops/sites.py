@@ -248,10 +248,16 @@ def result_form(match, data=None):
     """
     A styled ``MatchResultForm`` for ``match``. Its ids carry the match's pk:
     a page holds a form per pending match, and Datastar morphs by id, so
-    duplicate ids would pair a typed input with another row's.
+    duplicate ids would pair a typed input with another row's. It offers the
+    live score: each row posts only its own match (``match_result``).
     """
     return style_result_form(
-        MatchResultForm(data=data, instance=match, auto_id=f"m{match.pk}_%s")
+        MatchResultForm(
+            data=data,
+            instance=match,
+            auto_id=f"m{match.pk}_%s",
+            prefill_live_score=True,
+        )
     )
 
 

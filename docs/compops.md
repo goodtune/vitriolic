@@ -128,10 +128,15 @@ The browser keeps the choice in `localStorage` (see `compops/scorer.js`); the se
 
 ### The result and the scorers
 
-A match's live score is offered when its result is entered, and saved only when the operator saves it:
+Tournament Ops offers a match's live score when its result is entered, and saves it only when the operator saves it:
 
-- Where a match has no result and has a progress score, the result form (the admin's results page and the ops results panel) starts from the progress scores, marked "From the scoreboard".
-- Where a match has no player statistics, the points entry (the ops scorers modal and the admin's statistics page) starts from the live scores that name a player, marked the same way.
+- Where a match has no result and has a progress score, its row of the results panel starts from the progress scores, marked "From the scoreboard".
+- Where a match has no player statistics, the scorers modal starts each player's points from the live scores that name the player, marked the same way.
+
+Only Tournament Ops offers it, because there one Save is one match: each row of the results panel posts only its own match (`compops:match-result`), and the scorers modal is for one match.
+The admin's results page saves every row of a day with one Save, so an offer there would be saved with another match's result, even of a match still in play.
+The admin offers nothing: its results page and its statistics page start empty, as before.
+`MatchResultForm` offers the live score only when asked (`prefill_live_score=True`), and `MatchStatisticFormset` only when given `live_points`.
 
 A match with a result, or with statistics, is never changed by the live score.
 

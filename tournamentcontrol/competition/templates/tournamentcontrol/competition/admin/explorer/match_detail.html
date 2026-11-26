@@ -8,7 +8,6 @@
 
 {% block form-body %}
 	<p class="muted">{% trans "Who played, who scored, and the most valuable player votes." %}</p>
-	{% if formsets.0.from_scoreboard or formsets.1.from_scoreboard %}<p class="muted"><span class="tag">{% trans "From the scoreboard" %}</span> {% trans "The points of each scorer the scorer named. Check them, then save." %}</p>{% endif %}
 	<div class="cards">
 		{% for formset in formsets %}
 			{{ formset.management_form }}
