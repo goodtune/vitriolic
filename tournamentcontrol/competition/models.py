@@ -1097,10 +1097,14 @@ class UpstreamIdentifierMixin(models.Model):
     key -- ``mysideline:69295321``, ``revolutionise:2433163`` -- so that it
     is unique across providers and says where the record comes from without
     a foreign key to anything. See :mod:`tournamentcontrol.competition.upstream`.
+
+    A provider may use one identifier in more than one season, so it is unique
+    only within the record's parent: each model says so with a constraint, and
+    the synchronisation looks a record up within the season it reconciles.
     """
 
     upstream_id = models.CharField(
-        max_length=255, blank=True, null=True, unique=True, editable=False
+        max_length=255, blank=True, null=True, editable=False, db_index=True
     )
 
     class Meta:
@@ -1309,6 +1313,10 @@ class Division(
             UniqueConstraint(
                 fields=["slug", "season"],
                 name="competition_division_unique_slug_season",
+            ),
+            UniqueConstraint(
+                fields=["season", "upstream_id"],
+                name="competition_division_unique_season_upstream_id",
             ),
             CheckConstraint(
                 condition=Q(color__regex=r"^#[0-9a-fA-F]{6}$"),
@@ -2152,6 +2160,10 @@ class Team(AdminUrlMixin, UpstreamMixin, OrderedSitemapNode):
             UniqueConstraint(
                 fields=["division", "order"],
                 name="competition_team_unique_division_order",
+            ),
+            UniqueConstraint(
+                fields=["division", "upstream_id"],
+                name="competition_team_unique_division_upstream_id",
             ),
         ]
 
@@ -3051,6 +3063,12 @@ class Match(
             "pk",
         )
         verbose_name_plural = "matches"
+        constraints = [
+            UniqueConstraint(
+                fields=["stage", "upstream_id"],
+                name="competition_match_unique_stage_upstream_id",
+            ),
+        ]
 
     def _get_admin_namespace(self):
         return "admin:fixja:competition:season:division:stage:match"
