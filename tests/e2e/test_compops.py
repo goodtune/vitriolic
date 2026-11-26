@@ -911,7 +911,7 @@ def test_public_match_page_follows_the_live_score_without_a_reload(
         expect(live.locator(".points").last).to_have_text("1")
         expect(live.locator(".live-event")).to_have_count(3)
         expect(live.locator(".live-event .clock").first).to_have_text(
-            re.compile(r"^0[0-5]:\d\d · P1$")
+            re.compile(r"^0[0-5]:\d\d · 1st Half$")
         )
         page.screenshot(
             path=str(screenshot_dir / "match_page_live_score.png"), full_page=True
