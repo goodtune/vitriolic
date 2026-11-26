@@ -8,7 +8,7 @@ import touchtechnology.common.db.models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("competition", "0076_scoreboard"),
+        ("competition", "0077_upstream_id_within_parent"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
