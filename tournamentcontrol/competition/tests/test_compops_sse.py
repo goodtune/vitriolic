@@ -23,7 +23,8 @@ from touchtechnology.admin.tests.tenancy import schema_context
 from tournamentcontrol.competition.compops import events, streams
 from tournamentcontrol.competition.compops.scoreboard import SCOPE
 from tournamentcontrol.competition.compops.sites import CompOpsSite
-from tournamentcontrol.competition.models import Match
+from tournamentcontrol.competition.forms import MatchResultForm
+from tournamentcontrol.competition.models import Match, MatchEvent
 from tournamentcontrol.competition.tests import factories
 from tournamentcontrol.competition.tests.test_compops_results import HELD
 
@@ -1045,3 +1046,150 @@ class ScoreboardEventsTests(SseFixture, TestCase):
             headers={"Datastar-Request": "true"},
         )
         self.assert_http_404_not_found(response)
+
+
+@freeze_time("2026-10-08 10:50 +10:00", real_asyncio=True)
+class MatchLiveEventsTests(SseFixture, TestCase):
+    """The public match page is sent its live block as the match is scored."""
+
+    def setUp(self):
+        super().setUp()
+        self.venue = factories.VenueFactory.create(season=self.season)
+        self.field1 = factories.GroundFactory.create(venue=self.venue)
+        self.field2 = factories.GroundFactory.create(venue=self.venue)
+        when = timezone.make_aware(datetime.datetime(2026, 10, 8, 10, 40), TZ)
+        self.live = factories.MatchFactory.create(
+            stage=self.stage,
+            datetime=when,
+            date=when.date(),
+            time=when.time(),
+            play_at=self.field1,
+            home_team__title="Australia",
+        )
+        self.neighbour = factories.MatchFactory.create(
+            stage=self.stage, datetime=when, play_at=self.field2
+        )
+        self.scorer = factories.UserFactory.create(username="ground-scorer")
+        self.live.record_event(MatchEvent.Kind.SCORE, "home", recorded_by=self.scorer)
+
+    def live_url(self, match):
+        return reverse(
+            "compops:match-live",
+            kwargs={
+                "competition": "pacific-cup",
+                "season": "pc26",
+                "match_pk": match.pk,
+            },
+        )
+
+    async def connect(self, match=None):
+        return await self.async_client.get(
+            self.live_url(match or self.live), headers={"Datastar-Request": "true"}
+        )
+
+    async def tap(self, **data):
+        await self.publish(
+            self.season.pk, "scoreboard-changed", scope=SCOPE, actor="x", **data
+        )
+
+    async def test_anyone_is_sent_the_live_block_and_then_each_change(self):
+        response = await self.connect()
+        self.assert_http_200_ok(response)
+        reader = Reader(response)
+        try:
+            snapshot = "".join(await reader.until("</section>"))
+            self.assertIn('data: elements <section id="match-live"', snapshot)
+            self.assertIn('<span class="points">1</span>', snapshot)
+            self.assertNotIn("ground-scorer", snapshot)
+            await sync_to_async(self.live.record_event)(MatchEvent.Kind.SCORE, "home")
+            # Another match's score is not this page's news; this one's is.
+            await self.tap(ground=self.field2.pk, match=self.neighbour.pk)
+            await self.tap(ground=self.field1.pk, match=self.live.pk)
+            pushed = "".join(await reader.until("</section>"))
+            self.assertEqual(pushed.count('<span class="points">2</span>'), 1)
+            # A timekeeper starting the venue's clocks names the venue alone.
+            await self.tap(venue=self.venue.pk)
+            again = "".join(await reader.until("</section>"))
+            self.assertEqual(again.count('<span class="points">2</span>'), 1)
+        finally:
+            await reader.close()
+
+    async def test_match_with_a_result_is_sent_word_to_reload(self):
+        await Match.objects.filter(pk=self.live.pk).aupdate(
+            home_team_score=1, away_team_score=0
+        )
+        reader = Reader(await self.connect())
+        try:
+            snapshot = "".join(await reader.until("</section>"))
+            self.assertIn("Full time. Reload the page for the result.", snapshot)
+            self.assertNotIn('class="points"', snapshot)
+        finally:
+            await reader.close()
+
+    async def test_match_with_no_public_page_is_not_found(self):
+        bye = await sync_to_async(factories.MatchFactory.create)(
+            stage=self.stage, is_bye=True, away_team=None
+        )
+        elsewhere = await sync_to_async(factories.MatchFactory.create)()
+        for match in (bye, elsewhere):
+            with self.subTest(match=match):
+                response = await self.connect(match)
+                self.assert_http_404_not_found(response)
+
+    async def test_match_that_is_not_public_is_not_found(self):
+        division = self.stage.division
+        competition = self.season.competition
+        hidden = (
+            (competition, "enabled", False),
+            (self.season, "enabled", False),
+            (division, "draft", True),
+        )
+        for obj, field, value in hidden:
+            with self.subTest(obj=obj):
+                await type(obj).objects.filter(pk=obj.pk).aupdate(**{field: value})
+                response = await self.connect()
+                self.assert_http_404_not_found(response)
+                await type(obj).objects.filter(pk=obj.pk).aupdate(**{field: not value})
+        # Public again, it streams again.
+        response = await self.connect()
+        self.assert_http_200_ok(response)
+        await Reader(response).close()
+
+    async def test_division_put_back_to_draft_is_sent_an_empty_block(self):
+        reader = Reader(await self.connect())
+        try:
+            await reader.until("</section>")
+            await (
+                type(self.stage.division)
+                .objects.filter(pk=self.stage.division_id)
+                .aupdate(draft=True)
+            )
+            await self.tap(ground=self.field1.pk, match=self.live.pk)
+            pushed = "".join(await reader.until("</section>"))
+            self.assertIn(
+                'data: elements <section id="match-live" class="match-live" '
+                'aria-live="polite"></section>',
+                pushed,
+            )
+        finally:
+            await reader.close()
+
+    async def test_saving_the_result_tells_the_page(self):
+        reader = Reader(await self.connect())
+        try:
+            await reader.until("</section>")
+
+            def save_result():
+                with self.captureOnCommitCallbacks(execute=True):
+                    form = MatchResultForm(
+                        data={"home_team_score": 1, "away_team_score": 0},
+                        instance=Match.objects.get(pk=self.live.pk),
+                    )
+                    self.assertEqual(form.is_valid(), True)
+                    form.save()
+
+            await sync_to_async(save_result)()
+            pushed = "".join(await reader.until("</section>"))
+            self.assertIn("Full time. Reload the page for the result.", pushed)
+        finally:
+            await reader.close()
