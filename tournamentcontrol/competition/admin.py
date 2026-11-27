@@ -3073,33 +3073,8 @@ class CompetitionAdminComponent(AdminComponent):
 
         redirect_to = reverse("admin:index")
 
-        def team_faux_queryset(team):
-            # The team's players and their statistics for the match, in two
-            # queries rather than two for every player.
-            stats = FauxQueryset(SimpleScoreMatchStatistic, team=team)
-            players = list(team.people.filter(is_player=True).select_related("person"))
-            entered = {
-                statistic.player_id: statistic
-                for statistic in SimpleScoreMatchStatistic.objects.filter(
-                    match=match, player__in=[player.person_id for player in players]
-                )
-            }
-            for player in players:
-                statistic = entered.get(player.person_id)
-                if statistic is None:
-                    statistic = SimpleScoreMatchStatistic(
-                        match=match,
-                        player=player.person,
-                        number=player.number,
-                        played=1,
-                    )
-                else:
-                    statistic.player = player.person
-                stats.append(statistic)
-            return stats
-
-        home_queryset = team_faux_queryset(match.home_team)
-        away_queryset = team_faux_queryset(match.away_team)
+        home_queryset = match.statistics_roster(match.home_team)
+        away_queryset = match.statistics_roster(match.away_team)
 
         if request.method == "POST":
             home = MatchStatisticFormset(
