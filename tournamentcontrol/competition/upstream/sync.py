@@ -9,11 +9,14 @@ converges the local models onto that snapshot inside a single transaction:
 * remote entities that already exist locally (matched on their stable
   qualified ``upstream_id``) have their externally-managed fields updated,
   including renames, rescheduling, pool membership and results;
-* local entities that carry an ``upstream_id`` but no longer exist remotely
-  are removed. Where a removal is blocked because native Vitriolic data
-  depends on the record, the record is detached from the backend (its
-  identifier cleared, or the division marked as draft) instead of failing
-  the whole synchronisation.
+* local entities that carry an ``upstream_id`` but are no longer listed are
+  detached (their identifier cleared) and kept, or removed where nothing
+  would be lost. A division whose competition is no longer listed is
+  detached with everything in it, since a provider may list only the
+  competitions being played. Within a listed competition, a match with
+  history (a result, events, statistics) is detached, an unplayed fixture is
+  removed, and a team is removed unless a kept or native match or a
+  registration refers to it, when it is detached.
 
 Anything that does not carry an ``upstream_id`` is never touched, so native
 divisions, teams and matches can coexist with synchronised ones.
@@ -101,9 +104,11 @@ class SyncResult:
     detached: dict[str, int] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
 
-    def _bump(self, bucket: dict[str, int], model) -> None:
+    def _bump(self, bucket: dict[str, int], model, count: int = 1) -> None:
+        if not count:
+            return
         name = model._meta.model_name if hasattr(model, "_meta") else str(model)
-        bucket[name] = bucket.get(name, 0) + 1
+        bucket[name] = bucket.get(name, 0) + count
 
     def add_created(self, obj) -> None:
         self._bump(self.created, obj)
@@ -114,8 +119,8 @@ class SyncResult:
     def add_deleted(self, obj) -> None:
         self._bump(self.deleted, obj)
 
-    def add_detached(self, obj) -> None:
-        self._bump(self.detached, obj)
+    def add_detached(self, obj, count: int = 1) -> None:
+        self._bump(self.detached, obj, count)
 
     def warn(self, message: str, *args) -> None:
         logger.warning(message, *args)
@@ -327,6 +332,46 @@ def _remove_team(team: Team, result: SyncResult) -> bool:
     return True
 
 
+def _detach(obj, result: SyncResult) -> None:
+    """
+    Unlink ``obj`` from the backend and keep it. Its remote names stay, so a
+    later sync that finds the record listed again can adopt it. Nothing else
+    changes, so the row is updated without ``save()`` and its side effects
+    (a match's ladder is not rebuilt).
+    """
+    type(obj)._default_manager.filter(pk=obj.pk).update(upstream_id=None)
+    obj.upstream_id = None
+    result.add_detached(obj)
+
+
+def _adopt(queryset, upstream_id: str, name: str, result: SyncResult):
+    """
+    Link a record in ``queryset`` that has no ``upstream_id`` to the remote
+    one called ``name``, or return ``None``.
+
+    A record detached by an earlier sync still carries the remote name it had
+    (``upstream_title``), so it is found by that first, whatever an
+    administrator has called it since; its reconciled name is kept, so a
+    local title stays local. Otherwise a record made by hand with the same
+    title is adopted, and its title counts as reconciled.
+    """
+    candidates = queryset.filter(upstream_id__isnull=True)
+    obj = candidates.filter(upstream_title__iexact=name).first()
+    if obj is None:
+        obj = candidates.filter(title__iexact=name).first()
+    if obj is None:
+        return None
+    obj.upstream_id = upstream_id
+    obj.upstream_title = name
+    if obj.upstream_title_synced is None or obj.title.lower() == name.lower():
+        # Any difference in case is applied by the title reconciliation.
+        obj.upstream_title_synced = obj.title
+    obj.save(update_fields=["upstream_id", "upstream_title", "upstream_title_synced"])
+    result.add_updated(obj)
+    logger.info("Adopted %s %r as %s", obj._meta.verbose_name, obj, upstream_id)
+    return obj
+
+
 class _SeasonReconciler:
     def __init__(
         self, season: Season, backend: BaseUpstreamBackend, result: SyncResult
@@ -351,6 +396,7 @@ class _SeasonReconciler:
             division.upstream_id: division
             for division in self.season.divisions.filter(upstream_id__isnull=False)
         }
+        linked = len(existing)
         for snapshot in snapshots:
             upstream_id = self.backend.identifier(snapshot.id)
             division = existing.pop(upstream_id, None)
@@ -358,29 +404,27 @@ class _SeasonReconciler:
                 division = self._adopt_or_create_division(snapshot, upstream_id)
             _DivisionReconciler(self, division, snapshot).apply()
         for division in existing.values():
-            self._remove_division(division)
+            self._detach_division(division)
+        if existing and 2 * len(existing) >= linked:
+            self.result.warn(
+                "%d of the season's %d %s divisions are no longer listed; "
+                "check the provider before relying on this run.",
+                len(existing),
+                linked,
+                self.backend.name,
+            )
 
     def _adopt_or_create_division(
         self, snapshot: RemoteCompetition, upstream_id: str
     ) -> Division:
-        # A division created by hand with the same title is adopted rather
-        # than duplicated; this lets an administrator pre-configure ladder
-        # settings before linking a season to the backend.
-        division = self.season.divisions.filter(
-            upstream_id__isnull=True, title__iexact=snapshot.name
-        ).first()
+        # A division detached by an earlier sync, or created by hand with the
+        # same title, is adopted rather than duplicated; the latter lets an
+        # administrator pre-configure ladder settings before linking a season
+        # to the backend.
+        division = _adopt(
+            self.season.divisions, upstream_id, snapshot.name, self.result
+        )
         if division is not None:
-            division.upstream_id = upstream_id
-            division.upstream_title = snapshot.name
-            # Adoption asserts that this division *is* the remote one, so its
-            # title counts as reconciled; any difference in case is applied
-            # by the normal title reconciliation.
-            division.upstream_title_synced = division.title
-            division.save(
-                update_fields=["upstream_id", "upstream_title", "upstream_title_synced"]
-            )
-            self.result.add_updated(division)
-            logger.info("Adopted division %r as %s", division, upstream_id)
             return division
         template = snapshot.ladder_template or DEFAULT_LADDER_TEMPLATE
         division = Division(
@@ -404,38 +448,31 @@ class _SeasonReconciler:
             )
         return division
 
-    def _remove_division(self, division: Division) -> None:
+    def _detach_division(self, division: Division) -> None:
         """
-        The competition no longer exists upstream. Remove everything the
-        backend owned within the division and then the division itself; if
-        native data protects any of it, keep the division but mark it as
-        draft so it is hidden from the public site.
+        The competition is no longer listed. A provider may list only the
+        competitions being played, so this says nothing about what the
+        division holds: it is detached with its teams and matches, and its
+        stages, pools, results, ladders and statistics are kept as they are.
         """
-        blocked = False
-        for match in Match.objects.filter(
-            stage__division=division, upstream_id__isnull=False
-        ):
-            blocked |= not _remove(match, self.result)
-        for team in division.teams.filter(upstream_id__isnull=False):
-            if not _remove_team(team, self.result):
-                blocked = True
-                _set_attrs(team, self.result, upstream_id=None)
-                self.result.add_detached(team)
-        if not blocked:
-            for stage in division.stages.order_by("-order"):
-                for pool in stage.pools.all():
-                    blocked |= not _remove(pool, self.result)
-                blocked |= not _remove_stage(stage, self.result)
-        if not blocked and _remove(division, self.result):
-            return
         self.result.warn(
-            "Division %r (%s) no longer exists remotely but could not be "
-            "deleted because native data depends on it; marked as draft.",
+            "Division %r (%s) is no longer listed by %s; detached, with its "
+            "teams and matches kept.",
             division.title,
             division.upstream_id,
+            self.backend.name,
         )
-        _set_attrs(division, self.result, draft=True)
-        self.result.add_detached(division)
+        self.result.add_detached(
+            Match,
+            Match.objects.filter(
+                stage__division=division, upstream_id__isnull=False
+            ).update(upstream_id=None),
+        )
+        self.result.add_detached(
+            Team,
+            division.teams.filter(upstream_id__isnull=False).update(upstream_id=None),
+        )
+        _detach(division, self.result)
 
 
 class _DivisionReconciler:
@@ -513,8 +550,8 @@ class _DivisionReconciler:
             pool.teams.update(stage_group=None)
             if not _remove(pool, self.result):
                 self.result.warn(
-                    "Pool %r in %r no longer exists upstream but is still "
-                    "referenced by native matches; left in place.",
+                    "Pool %r in %r no longer exists upstream but still holds "
+                    "matches that are kept; left in place.",
                     pool.title,
                     self.division.title,
                 )
@@ -580,19 +617,8 @@ class _DivisionReconciler:
         ).first()
         if team is not None:
             return team
-        team = self.division.teams.filter(
-            upstream_id__isnull=True, title__iexact=name
-        ).first()
+        team = _adopt(self.division.teams, upstream_id, name, self.result)
         if team is not None:
-            team.upstream_id = upstream_id
-            team.upstream_title = name
-            # See _adopt_or_create_division.
-            team.upstream_title_synced = team.title
-            team.save(
-                update_fields=["upstream_id", "upstream_title", "upstream_title_synced"]
-            )
-            self.result.add_updated(team)
-            logger.info("Adopted team %r as %s", team, upstream_id)
             return team
         team = Team(
             division=self.division,
@@ -609,24 +635,23 @@ class _DivisionReconciler:
         return team
 
     def _remove_team(self, team: Team) -> None:
-        # Matches owned by the backend that reference the team are removed
-        # first (they cannot exist remotely if the team does not). Native
-        # matches referencing it will block the delete; detach instead.
+        # The team's unplayed fixtures from the backend go with it. A match
+        # with history is kept (the match reconciliation detaches it), and
+        # it, like a native match, protects the team: detach that instead.
         for match in Match.objects.filter(
             Q(home_team=team) | Q(away_team=team), upstream_id__isnull=False
-        ):
+        ).exclude(pk__in=Match.objects.history().values("pk")):
             _remove(match, self.result)
         if _remove_team(team, self.result):
             return
         self.result.warn(
-            "Team %r in %r no longer exists upstream but is referenced by "
-            "native matches; detached from %s.",
+            "Team %r in %r is no longer listed by %s but has matches that are "
+            "kept; detached.",
             team.title,
             self.division.title,
             self.backend.name,
         )
-        _set_attrs(team, self.result, upstream_id=None)
-        self.result.add_detached(team)
+        _detach(team, self.result)
 
     # -- matches -----------------------------------------------------------
 
@@ -650,13 +675,24 @@ class _DivisionReconciler:
                     stage__division__season=self.season, upstream_id=upstream_id
                 ).first()
             if match is None:
+                match = self._adopt_match(remote, upstream_id)
+            if match is None:
                 match = Match(upstream_id=upstream_id)
                 created = True
             else:
                 created = False
             self._apply_match(match, remote, created)
+        # A match no longer listed within a listed competition: one with
+        # history is kept and detached; an unplayed fixture was withdrawn or
+        # replaced, and is removed so it does not stand beside its successor.
+        history = set(
+            Match.objects.filter(pk__in=[m.pk for m in local.values()])
+            .history()
+            .values_list("pk", flat=True)
+        )
         for match in local.values():
-            _remove(match, self.result)
+            if match.pk in history or not _remove(match, self.result):
+                _detach(match, self.result)
 
         self._finish_pools()
 
@@ -666,6 +702,35 @@ class _DivisionReconciler:
             stale = self.division.stages.filter(title=FINALS_STAGE_TITLE).first()
             if stale is not None and not stale.matches.exists():
                 _remove_stage(stale, self.result)
+
+    def _adopt_match(self, remote: RemoteMatch, upstream_id: str) -> Optional[Match]:
+        """
+        A match detached by an earlier sync has no name to be found by, so it
+        is recognised by where it sits: the same stage and round, with the
+        same home and away teams. A fixture with a team still to be decided
+        cannot be told apart from its neighbours, so it is not adopted.
+        """
+        home = self.teams.get(remote.home_team_id) if remote.home_team_id else None
+        away = self.teams.get(remote.away_team_id) if remote.away_team_id else None
+        known = [team for team in (home, away) if team is not None]
+        if len(known) < (1 if remote.is_bye else 2):
+            return None
+        stage = self.finals_stage if remote.is_final_round else self.regular_stage
+        match = Match.objects.filter(
+            stage=stage,
+            round=remote.round_number,
+            home_team=home,
+            away_team=away,
+            is_bye=remote.is_bye,
+            upstream_id__isnull=True,
+        ).first()
+        if match is None:
+            return None
+        Match.objects.filter(pk=match.pk).update(upstream_id=upstream_id)
+        match.upstream_id = upstream_id
+        self.result.add_updated(match)
+        logger.info("Adopted match %r as %s", match, upstream_id)
+        return match
 
     def _apply_match(self, match: Match, remote: RemoteMatch, created: bool) -> None:
         home = self.teams.get(remote.home_team_id) if remote.home_team_id else None

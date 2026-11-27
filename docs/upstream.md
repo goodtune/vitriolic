@@ -106,6 +106,8 @@ A division is created with a points formula from the provider's ladder template 
 Ladder configuration is not overwritten by later syncs and may be changed freely.
 When defaults were applied the synchronisation says so in its warnings.
 A division or team created by hand with the same title as a remote one is *adopted* (linked) on the first synchronisation rather than duplicated, so ladder settings can be prepared before linking a season.
+A division or team that an earlier synchronisation detached is adopted again when the provider lists it once more: it is found by the remote name it kept (`upstream_title`), so a local title does not stop it, and the local title is kept.
+A detached match has no name, so it is adopted again when a listed match has the same stage, round, home team and away team; a fixture with a team still to be decided is not adopted.
 
 ## Naming
 
@@ -147,14 +149,21 @@ The whole snapshot is fetched before anything is written, then applied inside on
 * **scored** remotely: the scores are applied and the ladder is recalculated through the normal `Match` save signals.
   A result that is later changed or withdrawn is changed or cleared.
   A forfeit sets `is_forfeit`, `forfeit_winner` and the division's forfeit scores;
-* **removed** remotely: matches are deleted; teams are deleted once their upstream fixtures are gone, or detached (identifier cleared) when native matches or registrations reference them; pools and the finals stage are deleted once empty; a division is deleted when everything in it could be, otherwise it is kept, marked as *draft* and reported.
+* **no longer listed**: a division whose competition the provider no longer lists is *detached*, never deleted.
+  Its identifier is cleared, as are those of its teams and matches, and every row is kept: stages, pools, results, ladders, events and statistics.
+  A provider may list only the competitions being played (the revolutioniseSPORT index drops a competition once it finishes), so a missing competition says nothing about what it held.
+  Each detached division is reported, and so is a run in which at least half of the season's linked divisions are no longer listed;
+* **removed** within a competition that is still listed: a match with history (a result, a processed bye, a forfeit or washout, or any event, statistic or score sheet) is detached and kept; an unplayed fixture has been withdrawn or replaced, and is deleted so it does not stand beside its replacement.
+  A team is deleted with its unplayed fixtures when nothing else refers to it, and is detached otherwise (a kept match, a native match or a registration).
+  Pools and the finals stage are deleted once empty, and kept while a kept match is in them.
 
-Only records carrying an `upstream_id` are ever changed or removed; native divisions, teams and matches in the same season are untouched, and venues and grounds are never removed.
+Only records carrying an `upstream_id` are ever changed, detached or removed; native divisions, teams and matches in the same season are untouched, and venues and grounds are never removed.
+A detached record is a native one from then on, until the provider lists it again: its result may be edited by hand, and it appears in the admin's lists of matches awaiting results or details like any other.
 
 A transport failure, HTTP error, API error or a response that does not have the expected shape raises before the transaction starts, so a temporary outage never empties a competition.
 A database error during the apply rolls back the whole snapshot.
 
-Because the season URL selects what belongs to the season, moving a competition out of that selection upstream (re-tagging a MySideline competition to another year, or un-publishing a revolutioniseSPORT competition from the index when the season URL is the index) removes it locally on the next synchronisation, subject to the protection of native data above.
+Because the season URL selects what belongs to the season, moving a competition out of that selection upstream (re-tagging a MySideline competition to another year, or un-publishing a revolutioniseSPORT competition from the index when the season URL is the index) detaches it locally on the next synchronisation, keeping everything it holds.
 Mark a season *complete* once it is over; complete seasons are not synchronised by the periodic task.
 
 ## History

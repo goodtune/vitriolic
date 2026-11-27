@@ -185,6 +185,22 @@ class MatchQuerySet(QuerySet):
             has_result=has_result, needs_progressing=needs_progressing
         ).annotate(result_editable=result_editable)
 
+    def history(self):
+        """
+        The matches that hold a record of play: a result (``has_result`` of
+        :meth:`with_result_state`, which counts a processed bye, a forfeit and
+        a washout), or any event, statistic or score sheet recorded against
+        them. Deleting one of these would lose what happened.
+        """
+        records = (
+            apps.get_model("competition", model)
+            for model in ("MatchEvent", "SimpleScoreMatchStatistic", "MatchScoreSheet")
+        )
+        recorded = Q()
+        for model in records:
+            recorded |= Exists(model.objects.filter(match=OuterRef("pk")))
+        return self.with_result_state().filter(Q(has_result=True) | recorded)
+
     def public(self):
         """
         The matches the public may follow live: of a public competition and
