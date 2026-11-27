@@ -2264,13 +2264,14 @@ class MatchDetailViewQueryTests(WarmCachesMixin, TestCase):
                 match.pk,
             )
 
+    # One of them asks whether the match is being played, for its live score.
     def test_small_match_query_count(self):
-        self.get_match(self.small_match, 11)
+        self.get_match(self.small_match, 12)
 
     # Two more than the small match: Django skips a prefetch that has no rows
     # to follow, and here each team's players are fetched once.
     def test_large_match_query_count(self):
-        self.get_match(self.large_match, 13)
+        self.get_match(self.large_match, 14)
 
 
 @override_settings(ROOT_URLCONF="tournamentcontrol.competition.tests.urls")

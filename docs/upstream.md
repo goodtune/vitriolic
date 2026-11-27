@@ -30,6 +30,9 @@ Both URLs are also exposed by the MCP administration tools (`create_competition`
 * **Admin**: linked seasons show a button named after the provider in the season list which leads to the *Synchronise with …* page and queues a synchronisation.
 * **Celery**: `tournamentcontrol.competition.tasks.synchronise_upstream` synchronises every enabled, incomplete linked season, isolating failures per season; `synchronise_upstream_season(season_pk)` does one.
   Schedule the former with Celery beat in the deploying project, for example every 15 minutes on match days.
+  It takes two optional lists of backend keys (`mysideline`, `revolutionise`): `backends` keeps the run to the providers named, and `exclude_backends` leaves them out.
+  A provider that refuses requests from one worker's network can then be left to a worker on another: schedule `synchronise_upstream` with `exclude_backends=["revolutionise"]` on the first and with `backends=["revolutionise"]` on the second.
+  With neither, every provider is synchronised, and a backend named in both is left out.
 * **Management command**: `synchronise_upstream [season_pk ...]`.
 * **Python**: `tournamentcontrol.competition.upstream.sync.synchronise_season`.
 

@@ -237,7 +237,12 @@ def do_navigation(
     **kwargs,
 ):
     if sentry_sdk is not None:
-        span_ctx = sentry_sdk.start_span(op="template.tag", name="do_navigation")
+        if int(sentry_sdk.VERSION.partition(".")[0]) >= 3:
+            span_ctx = sentry_sdk.start_span(
+                name="do_navigation", attributes={"sentry.op": "template.tag"}
+            )
+        else:
+            span_ctx = sentry_sdk.start_span(op="template.tag", name="do_navigation")
     else:
         span_ctx = contextmanager(lambda: (yield))()
 

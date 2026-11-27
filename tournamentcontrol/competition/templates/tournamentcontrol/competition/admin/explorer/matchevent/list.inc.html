@@ -1,0 +1,32 @@
+{% extends "touchtechnology/admin/explorer/list.inc.html" %}
+{% load i18n admin_explorer %}
+
+{% block table-headings %}
+	<th>{% trans "Event" %}</th>
+	<th>{% trans "Player" %}</th>
+	<th>{% trans "Clock" %}</th>
+	<th>{% trans "Recorded" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	<td class="title-cell">
+		{% if change_perm in object_perms %}
+			<a href="{{ obj.urls.edit }}">{{ obj }}</a>
+		{% else %}
+			<span>{{ obj }}</span>
+		{% endif %}
+		{% if obj.is_reversed %}<span class="tag attention">{% trans "Corrected" %}</span>{% endif %}
+	</td>
+	<td>{{ obj.player.get_full_name|default:"" }}</td>
+	<td>{% if obj.period %}{% blocktrans with period=obj.period clock=obj.clock %}{{ clock }} left in period {{ period }}{% endblocktrans %}{% endif %}</td>
+	<td>{{ obj.recorded_at|time:"H:i:s" }}{% if obj.recorded_by %} · {{ obj.recorded_by.get_username }}{% endif %}</td>
+{% endblock %}
+
+{% block row-buttons-items %}
+	{{ block.super }}
+	{% if add_perm in object_perms and obj.kind != "correction" and not obj.is_reversed %}
+		<form method="post" action="{{ obj.urls.reverse }}">{% csrf_token %}<button type="submit">{% icon "undo" %}{% trans "Correct" %}</button></form>
+	{% endif %}
+{% endblock %}
+
+{% block empty-row-colspan %}5{% endblock %}

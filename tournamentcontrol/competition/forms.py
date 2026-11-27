@@ -78,6 +78,7 @@ from tournamentcontrol.competition.models import (
     LiveStreamEvent,
     LiveStreamKey,
     Match,
+    MatchEvent,
     Person,
     Place,
     Season,
@@ -1783,9 +1784,13 @@ class DrawGenerationMatchFormSet(BaseDrawGenerationMatchFormSet):
 class MatchResultForm(BootstrapFormControlMixin, ModelForm):
     """
     This form is used to make it easy to enter results for a match.
+
+    With ``prefill_live_score`` the form offers the live score (see
+    ``offer_live_score``). Only a page whose Save is for this one match may
+    ask: a formset saves every row that changed, offers included.
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, prefill_live_score=False, **kwargs):
         super().__init__(*args, **kwargs)
         home_team = self.instance.home_team
         away_team = self.instance.away_team
@@ -1827,6 +1832,30 @@ class MatchResultForm(BootstrapFormControlMixin, ModelForm):
                 self.fields.pop("is_forfeit")
                 self.fields.pop("forfeit_winner")
             self.fields.pop("bye_processed")
+        self.from_scoreboard = prefill_live_score and self.offer_live_score()
+
+    def offer_live_score(self):
+        """
+        Offer the live score (the progress scores) as the result of a match
+        that has none, marked on each input with ``data-from-scoreboard``. It
+        is only the form's initial value: nothing is saved until the form is.
+        """
+        match = self.instance
+        progress = (match.home_team_progress_score, match.away_team_progress_score)
+        if (
+            self.is_bound
+            or "home_team_score" not in self.fields
+            or progress == (None, None)
+            or match.home_team_score is not None
+            or match.away_team_score is not None
+            or match.is_forfeit
+            or match.is_washout
+        ):
+            return False
+        for name, score in zip(("home_team_score", "away_team_score"), progress):
+            self.initial[name] = score or 0
+            self.fields[name].widget.attrs["data-from-scoreboard"] = True
+        return True
 
     def clean_forfeit_winner(self):
         if not self.cleaned_data.get("is_forfeit"):
@@ -1878,6 +1907,68 @@ class MatchResultForm(BootstrapFormControlMixin, ModelForm):
 
 
 MatchResultFormSet = modelformset_factory(Match, extra=0, form=MatchResultForm)
+
+
+class MatchEventForm(BootstrapFormControlMixin, ModelForm):
+    """
+    Add an event to a match's log, or say who scored one already there. A
+    score is counted in the match's progress score as it is added, as the
+    scorer's page counts it (see ``Match.record_event``); a mistake is put
+    right with a correction, not here.
+    """
+
+    def __init__(self, *args, recorded_by=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.recorded_by = recorded_by
+        match = self.instance.match
+        if self.instance.pk is None:
+            self.fields["kind"].choices = [
+                choice
+                for choice in self.fields["kind"].choices
+                if choice[0] != MatchEvent.Kind.CORRECTION
+            ]
+            teams = (match.home_team, match.away_team)
+        else:
+            del self.fields["kind"]
+            del self.fields["side"]
+            teams = (self.instance_team(self.instance.side),)
+        self.fields["player"].queryset = Person.objects.playing_for(*teams)
+
+    def instance_team(self, side):
+        return getattr(self.instance.match, f"{side}_team", None) if side else None
+
+    def clean(self):
+        data = super().clean()
+        side = data.get("side", self.instance.side)
+        kind = data.get("kind", self.instance.kind)
+        player = data.get("player")
+        if kind in (MatchEvent.Kind.SCORE, MatchEvent.Kind.DISMISSAL) and not side:
+            self.add_error("side", _("Say which team this is for."))
+        elif player is not None:
+            team = self.instance_team(side)
+            if (
+                team is None
+                or not Person.objects.playing_for(team).filter(pk=player.pk).exists()
+            ):
+                self.add_error("player", _("This person does not play for that team."))
+        return data
+
+    def save(self, commit=True):
+        if self.instance.pk is not None:
+            self.instance.save(update_fields=["player"])
+            return self.instance
+        data = self.cleaned_data
+        self.instance = self.instance.match.record_event(
+            data["kind"],
+            data["side"],
+            recorded_by=self.recorded_by,
+            player=data["player"],
+        )
+        return self.instance
+
+    class Meta:
+        model = MatchEvent
+        fields = ("kind", "side", "player")
 
 
 class MatchWashoutForm(BootstrapFormControlMixin, ModelForm):
@@ -2704,9 +2795,18 @@ BaseMatchStatisticFormset = modelformset_factory(
 
 
 class MatchStatisticFormset(BaseMatchStatisticFormset):
-    def __init__(self, score, *args, **kwargs):
+    def __init__(self, score, *args, live_points=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.score = score
+        self.from_scoreboard = False
+        if live_points and not self.is_bound:
+            # The points of the live score's named scorers (see
+            # ``Match.scoreboard_points``), offered on the unsaved rows. They
+            # are saved with the formset, when the operator saves it.
+            for statistic in self.get_queryset():
+                if statistic.pk is None and statistic.player_id in live_points:
+                    statistic.points = live_points[statistic.player_id]
+                    self.from_scoreboard = True
 
     def _construct_form(self, i, **kwargs):
         if i < self.initial_form_count() and not kwargs.get("instance"):

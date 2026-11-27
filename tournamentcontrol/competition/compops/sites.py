@@ -17,12 +17,11 @@ from django import forms
 from django.apps import apps
 from django.conf import settings
 from django.contrib.auth.views import redirect_to_login
-from django.core.exceptions import ImproperlyConfigured
+from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.db import transaction
-from django.db.models import F
-from django.db.models.functions import Coalesce, Greatest
 from django.http import Http404, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect
+from django.template.loader import render_to_string
 from django.urls import include, path, re_path, reverse
 from django.utils import timezone
 
@@ -57,6 +56,7 @@ from tournamentcontrol.competition.forms import MatchResultForm, MatchStatisticF
 from tournamentcontrol.competition.models import (
     Ground,
     Match,
+    MatchEvent,
     Season,
     SimpleScoreMatchStatistic,
     Team,
@@ -67,6 +67,7 @@ from tournamentcontrol.competition.utils import FauxQueryset
 logger = logging.getLogger(__name__)
 
 DATASTAR_MIDDLEWARE = "touchtechnology.common.middleware.DatastarMiddleware"
+LIVE_TEMPLATE = "tournamentcontrol/competition/match_live.html"
 TEMPLATE_PARTIALS = "template_partials"
 
 
@@ -247,10 +248,16 @@ def result_form(match, data=None):
     """
     A styled ``MatchResultForm`` for ``match``. Its ids carry the match's pk:
     a page holds a form per pending match, and Datastar morphs by id, so
-    duplicate ids would pair a typed input with another row's.
+    duplicate ids would pair a typed input with another row's. It offers the
+    live score: each row posts only its own match (``match_result``).
     """
     return style_result_form(
-        MatchResultForm(data=data, instance=match, auto_id=f"m{match.pk}_%s")
+        MatchResultForm(
+            data=data,
+            instance=match,
+            auto_id=f"m{match.pk}_%s",
+            prefill_live_score=True,
+        )
     )
 
 
@@ -308,6 +315,11 @@ class CompOpsSite(Application):
             re_path(r"^(?P<datestr>\d{8})/", include(self.day_urls())),
             path("booth/", include(self.booth_urls())),
             path("scoreboard/", include(self.scoreboard_urls())),
+            path(
+                "match/<int:match_pk>/live/",
+                sse.match_events(self),
+                name="match-live",
+            ),
         ]
 
     def scoreboard_urls(self):
@@ -338,6 +350,11 @@ class CompOpsSite(Application):
                 "<slug:ground>/score/<int:match_pk>/start/",
                 self.scorer_start,
                 name="scorer-start",
+            ),
+            path(
+                "<slug:ground>/score/<int:match_pk>/event/<int:event_pk>/player/",
+                self.scorer_player,
+                name="scorer-player",
             ),
             path(
                 "<slug:ground>/score/<int:match_pk>/<str:side>/<str:step>/",
@@ -801,17 +818,20 @@ class CompOpsSite(Application):
                 stats.append(statistic)
             return stats
 
+        live_points = None if data is not None else match.scoreboard_points()
         home = MatchStatisticFormset(
             match.home_team_score,
             data=data,
             prefix="home",
             queryset=roster(match.home_team),
+            live_points=live_points,
         )
         away = MatchStatisticFormset(
             match.away_team_score,
             data=data,
             prefix="away",
             queryset=roster(match.away_team),
+            live_points=live_points,
         )
         for formset, side in ((home, "home"), (away, "away")):
             for form in formset.forms:
@@ -1359,11 +1379,39 @@ class CompOpsSite(Application):
             "scorer_url": reverse("compops:scorer", kwargs=names),
         }
 
+    def scorer_context(self, request, season, ground):
+        """
+        The board's context, and for the scorer's page each team's players
+        and its latest live score, so the page can ask who scored it.
+        """
+        context = self.scoreboard_context(request, season, ground)
+        match = context["match"]
+        if match is None:
+            return context
+        for side, team in context["sides"]:
+            linked = getattr(match, f"{side}_team")
+            team["players"] = (
+                list(linked.people.filter(is_player=True).select_related("person"))
+                if linked is not None
+                else []
+            )
+            team["latest"] = latest = match.latest_score(side)
+            if latest is not None and latest.player is not None:
+                named = [p for p in team["players"] if p.person_id == latest.player_id]
+                team["who"] = (
+                    named[0].numbered_name
+                    if named
+                    else f"{latest.player.first_name} {latest.player.last_name}"
+                )
+        context["asks"] = any(team["players"] for _side, team in context["sides"])
+        return context
+
     def scoreboard_fragments(self, request, season, ground, scorer=False):
         """The board, or the scorer's copy of it, as it is now."""
-        context = self.scoreboard_context(request, season, ground)
         if scorer:
+            context = self.scorer_context(request, season, ground)
             return [render_fragment(request, "scorer", **context)]
+        context = self.scoreboard_context(request, season, ground)
         if context["template_source"]:
             return [
                 scoreboard.render_custom(
@@ -1443,10 +1491,10 @@ class CompOpsSite(Application):
     @scorer_required
     def scorer(self, request, season, ground, **kwargs):
         """The scorer's page: the board's match, and the buttons that keep it."""
-        context = self.scoreboard_context(request, season, ground)
+        context = self.scorer_context(request, season, ground)
         return self.render(request, self.template_path("scorer.html"), context)
 
-    def _scorer_changed(self, request, season, ground, match):
+    def _scorer_changed(self, request, season, ground, match, signals=None):
         """Tell every board of the ground, and answer the scorer."""
         events.publish(
             season.pk,
@@ -1459,6 +1507,7 @@ class CompOpsSite(Application):
         return patches(
             request,
             lambda: self.scoreboard_fragments(request, season, ground, scorer=True),
+            signals=signals,
             redirect_to=reverse(
                 "compops:scorer",
                 kwargs={
@@ -1476,14 +1525,44 @@ class CompOpsSite(Application):
         if side not in ("home", "away") or step not in ("up", "down"):
             raise Http404("No such score button.")
         match = get_object_or_404(queries.ground_matches(ground), pk=match_pk)
-        field = f"{side}_team_progress_score"
-        change = 1 if step == "up" else -1
-        # In the database, so two scorers tapping at once both count; and a
-        # score never goes below nothing.
-        Match._base_manager.filter(pk=match.pk).update(
-            **{field: Greatest(Coalesce(F(field), 0) + change, 0)}
+        clock = scoreboard.clock_for(match, ground)
+        moment = clock.at(timezone.now()) if clock else None
+        # Each records an event and changes the score under the match's lock,
+        # so two scorers tapping at once both count; a score never goes below
+        # nothing.
+        signals = None
+        if step == "up":
+            event = match.record_event(
+                MatchEvent.Kind.SCORE, side, recorded_by=request.user, moment=moment
+            )
+            # Ask who scored, unless this scorer has turned the question off
+            # for the match (``scorer.js``) or the team has no players linked.
+            # The score is in already: the question never holds it up.
+            team = getattr(match, f"{side}_team")
+            if (
+                request.POST.get("ask") != "0"
+                and team is not None
+                and team.people.filter(is_player=True).exists()
+            ):
+                signals = {"pick": event.pk}
+        else:
+            match.take_back_score(side, recorded_by=request.user, moment=moment)
+        return self._scorer_changed(request, season, ground, match, signals)
+
+    @require_POST_m
+    @scoreboard_view
+    @scorer_required
+    def scorer_player(self, request, season, ground, match_pk, event_pk, **kwargs):
+        """Say who scored the side's latest score, or that nobody is named."""
+        match = get_object_or_404(queries.ground_matches(ground), pk=match_pk)
+        event = get_object_or_404(
+            match.events.filter(kind=MatchEvent.Kind.SCORE), pk=event_pk
         )
-        return self._scorer_changed(request, season, ground, match)
+        try:
+            match.name_player(event, request.POST.get("player"))
+        except ValidationError as exc:
+            return HttpResponseBadRequest(exc.messages[0])
+        return self._scorer_changed(request, season, ground, match, {"pick": 0})
 
     @require_POST_m
     @scoreboard_view
@@ -1491,10 +1570,55 @@ class CompOpsSite(Application):
     def scorer_start(self, request, season, ground, match_pk, **kwargs):
         match = get_object_or_404(queries.ground_matches(ground), pk=match_pk)
         # The first press starts the clock; a second changes nothing.
-        Match._base_manager.filter(pk=match.pk, clock_started_at=None).update(
-            clock_started_at=timezone.now()
+        scoreboard.start_clocks(
+            [(match, scoreboard.clock_for(match, ground))], request.user
         )
         return self._scorer_changed(request, season, ground, match)
+
+    # --- the public match page ---------------------------------------
+
+    async def live_match(self, season, pk):
+        """
+        The match of a public match page (not a bye, and both teams known),
+        with the venue it is played at: the timekeeper of a venue starts
+        every clock there with one event that names the venue alone.
+        """
+        try:
+            match = await Match.objects.public().aget(
+                pk=pk, stage__division__season=season
+            )
+        except Match.DoesNotExist:
+            raise Http404("No such match.")
+        # A match is played at a ground of a venue, or at the venue itself.
+        venue = await (
+            Ground.objects.filter(pk=match.play_at_id)
+            .values_list("venue_id", flat=True)
+            .afirst()
+        )
+        return match, venue or match.play_at_id
+
+    def match_live_fragments(self, request, match_pk):
+        """
+        The public match page's live block, as it is now: the same template
+        the page includes. A match no longer public (its division put back to
+        draft, say) is sent the block empty.
+        """
+        match = (
+            Match.objects.public()
+            .select_related("home_team", "away_team")
+            .filter(pk=match_pk)
+            .first()
+        )
+        if match is None:
+            context = {"hidden": True}
+        else:
+            in_progress = match.in_progress
+            context = {
+                "match": match,
+                "in_progress": in_progress,
+                "live_events": scoreboard.live_events(match) if in_progress else (),
+            }
+        return [render_to_string(LIVE_TEMPLATE, context, request=request)]
 
     # --- timekeeper -------------------------------------------------
 
@@ -1529,10 +1653,7 @@ class CompOpsSite(Application):
             raise Http404("No such round.")
         # One moment for every field. A clock a scorer has already started
         # keeps its own start.
-        started = Match._base_manager.filter(
-            pk__in=[match.pk for match in waiting], clock_started_at=None
-        ).update(clock_started_at=now)
-        if started:
+        if scoreboard.start_clocks(waiting, request.user, now):
             events.publish(
                 season.pk,
                 "scoreboard-changed",

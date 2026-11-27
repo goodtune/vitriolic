@@ -1,0 +1,8 @@
+{% extends "touchtechnology/admin/explorer/edit.html" %}
+{% load i18n admin_explorer %}
+
+{% block form-actions-extra %}
+	{% if object.pk and object.kind != "correction" and not object.is_reversed %}
+		<button type="submit" form="edit-form" class="button" formaction="{{ object.urls.reverse }}" formnovalidate title="{% trans "The event stays in the log, and a score is taken off the live score." %}">{% icon "undo" %}<span>{% trans "Correct this event" %}</span></button>
+	{% endif %}
+{% endblock form-actions-extra %}
