@@ -39,7 +39,11 @@
 			{% for match in matches %}
 				{% with home=match.get_home_team away=match.get_away_team %}
 					<tr class="{% if forloop.first %}first {% endif %}{% cycle "odd" "even" %}{% if forloop.last %} last{% endif %}">
-						<td class="date">{{ date }}</td>
+						{# Matches arrive grouped by day, and `ifchanged` binds its state to #}
+						{# the innermost loop, so the date is written against the first game #}
+						{# of a day and left out of the rest -- which is what makes the #}
+						{# number of games played on a day legible on a narrow screen. #}
+						<td class="date">{% ifchanged date %}{{ date|default:tba }}{% endifchanged %}</td>
 						<td class="time">{{ match.datetime|time|default:tba }}</td>
 						<td class="venue">{{ match.play_at.title|default:tba }}</td>
 						{% with match|opponent:team as opponent %}
