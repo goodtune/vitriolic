@@ -56,7 +56,7 @@
 				<span class="team away"></span>
 			{% else %}
 				<span class="pair">{{ form.home_team_score }}<span class="vs">–</span>{{ form.away_team_score }}</span>
-				<span class="team away">{{ match.get_away_team_plain }}</span>
+				<span class="team away">{{ match.get_away_team_plain }}{% if form.from_scoreboard %} <span class="pill">From the scoreboard</span>{% endif %}</span>
 			{% endif %}
 			<span class="acts">
 				{% if form.is_forfeit %}<details class="ff-d"{% if form.is_forfeit.value or form.forfeit_winner.errors %} open{% endif %}><summary>Forfeit</summary><span class="ff-body"><label class="ff-label">{{ form.is_forfeit }} forfeit</label> {{ form.forfeit_winner }}</span></details>{% endif %}
@@ -255,6 +255,7 @@
 	<form method="post" action="{% compops_url 'match-scorers' match_pk=match.pk %}"{% if not standalone %} data-on:submit="@post('{% compops_url 'match-scorers' match_pk=match.pk %}', {contentType: 'form'})"{% endif %} data-on:input="$home_total = [...el.querySelectorAll('input[data-side=home]')].reduce((s, i) => s + (+i.value || 0), 0); $away_total = [...el.querySelectorAll('input[data-side=away]')].reduce((s, i) => s + (+i.value || 0), 0)">
 		{% csrf_token %}
 		<div class="modal-b">
+			{% if formsets.0.from_scoreboard or formsets.1.from_scoreboard %}<p class="sub">From the scoreboard: the points of each scorer the scorer named. Check them, then save.</p>{% endif %}
 			<div class="cols">
 				{% for formset in formsets %}
 					{{ formset.management_form }}

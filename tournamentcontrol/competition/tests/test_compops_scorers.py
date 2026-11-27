@@ -259,9 +259,11 @@ class ScorersModalQueryTests(WarmCachesMixin, ScorersFixture):
             SimpleScoreMatchStatistic.objects.create(
                 match=self.match, player=person, played=1, points=0
             )
+        # One of them asks whether any statistic is entered yet, before the
+        # live points are offered; here some are, so no live points are read.
         with self.login(self.staff):
             self.warm_caches()
-            with self.assertNumQueries(11):
+            with self.assertNumQueries(12):
                 self.scorers("get", extra=DATASTAR)
                 body = self.body()
         self.assertIn(f'name="home-TOTAL_FORMS" value="{players}"', body)

@@ -1,0 +1,14 @@
+{% extends "touchtechnology/admin/workbook/edit.html" %}
+{% load i18n admin_workbook %}
+
+{% block form-buttons %}
+	{{ block.super }}
+	{% if object.pk and object.kind != "correction" and not object.is_reversed %}
+		<div class="wb-formfoot">
+			<p class="wb-muted">{% trans "A mistake is put right with a correction: the event stays in the log, and a score is taken off the live score." %}</p>
+			<div class="wb-actions">
+				<button type="submit" class="wb-button" formaction="{{ object.urls.reverse }}" formnovalidate>{% icon "undo-2" %}{% trans "Correct this event" %}</button>
+			</div>
+		</div>
+	{% endif %}
+{% endblock form-buttons %}

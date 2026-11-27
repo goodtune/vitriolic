@@ -4,6 +4,7 @@ by ``CompOpsSite``; nothing is connected when the site is never constructed.
 """
 
 from tournamentcontrol.competition.compops import events
+from tournamentcontrol.competition.compops.scoreboard import SCOPE
 from tournamentcontrol.competition.signals.custom import (
     score_updated,
     statistics_updated,
@@ -36,6 +37,11 @@ def on_score_updated(sender, match, **kwargs):
         summary=score_summary(match),
         match=match.pk,
         adjusted=bool(getattr(sender, "adjusted", False)),
+    )
+    # The public match page listens on the scoreboard's channel; a result
+    # ends its live block. The event names no ground, so no board redraws.
+    events.publish(
+        match.stage.division.season_id, "result-entered", scope=SCOPE, match=match.pk
     )
 
 
