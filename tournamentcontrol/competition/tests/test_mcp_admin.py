@@ -130,6 +130,9 @@ READ_TOOLS = {
     "list_division_exclusion_dates",
     "list_timeslots",
     "get_timeslots",
+    "get_competition",
+    "get_division",
+    "get_stage",
 }
 
 
@@ -844,6 +847,15 @@ UNTIMED_MATCH = {
 }
 
 
+def _scoreboard_keys(record):
+    """The scoreboard template entries of an MCP record, text or boolean."""
+    return {
+        name: record[name]
+        for name in ("scoreboard_template", "has_scoreboard_template")
+        if name in record
+    }
+
+
 @freeze_time(NOW)
 class ScoreboardTests(AdminFixtureMixin, TestCase):
     """The scoreboard fields of the admin forms, set and read through MCP (#681)."""
@@ -856,11 +868,44 @@ class ScoreboardTests(AdminFixtureMixin, TestCase):
         self.assertEqual(competition["scoreboard_template"], SCOREBOARD_TEMPLATE)
         res = admin.update_competition(competition["id"], scoreboard_template="")
         self.assertEqual(res["competition"]["scoreboard_template"], None)
+        self.season.scoreboard_template = SCOREBOARD_TEMPLATE
+        self.season.save()
+        res = admin.update_competition(
+            self.competition.pk, scoreboard_template=SCOREBOARD_TEMPLATE
+        )
+        self.assertEqual(
+            (
+                _scoreboard_keys(res["competition"]),
+                [_scoreboard_keys(s) for s in res["competition"]["seasons"]],
+            ),
+            (
+                {"scoreboard_template": SCOREBOARD_TEMPLATE},
+                [{"has_scoreboard_template": True}],
+            ),
+        )
         self.assertToolError(
             NO_BOARD,
             admin.update_competition,
             competition["id"],
             scoreboard_template="<html></html>",
+        )
+
+    def test_list_competitions_says_only_whether_a_template_is_set(self):
+        self.competition.scoreboard_template = SCOREBOARD_TEMPLATE
+        self.competition.save()
+        competitions = {
+            c["id"]: c for c in self.admin().list_competitions()["competitions"]
+        }
+        nationals = competitions[self.competition.pk]
+        self.assertEqual(
+            (
+                _scoreboard_keys(nationals),
+                [_scoreboard_keys(s) for s in nationals["seasons"]],
+            ),
+            (
+                {"has_scoreboard_template": True},
+                [{"has_scoreboard_template": False}],
+            ),
         )
 
     def test_season_template(self):
@@ -989,11 +1034,14 @@ class ScoreboardTests(AdminFixtureMixin, TestCase):
                     d["period_minutes"],
                     d["break_minutes"],
                     d["period_name"],
-                    d["scoreboard_template"],
+                    _scoreboard_keys(d),
                 )
                 for d in res["divisions"]
             ],
-            [(2, 7, 2, None, None), (6, 7, 0, "Chukka", SCOREBOARD_TEMPLATE)],
+            [
+                (2, 7, 2, None, {"has_scoreboard_template": False}),
+                (6, 7, 0, "Chukka", {"has_scoreboard_template": True}),
+            ],
         )
 
     def test_stage_timing(self):
@@ -1063,10 +1111,13 @@ class ScoreboardTests(AdminFixtureMixin, TestCase):
         )
         self.assertEqual(
             [
-                (s["title"], s["period_minutes"], s["scoreboard_template"])
+                (s["title"], s["period_minutes"], _scoreboard_keys(s))
                 for s in res["stages"]
             ],
-            [("Finals", None, None), ("Grand Final", 10, SCOREBOARD_TEMPLATE)],
+            [
+                ("Finals", None, {"has_scoreboard_template": False}),
+                ("Grand Final", 10, {"has_scoreboard_template": True}),
+            ],
         )
 
     def test_match_timing(self):
@@ -1139,32 +1190,179 @@ class ScoreboardTests(AdminFixtureMixin, TestCase):
         self.mens.save()
         self.mens_finals.period_minutes = 25
         self.mens_finals.period_name = "Half"
+        self.mens_finals.scoreboard_template = SCOREBOARD_TEMPLATE
         self.mens_finals.save()
         self.venue.scoreboard_auto_start = False
         self.venue.save()
         res = self.admin().get_season(self.season.pk)
-        self.assertEqual(res["scoreboard_template"], SCOREBOARD_TEMPLATE)
+        self.assertEqual(
+            _scoreboard_keys(res), {"scoreboard_template": SCOREBOARD_TEMPLATE}
+        )
+        # A season lists many divisions and stages, so each only says whether
+        # it has a template of its own.
         mens = res["divisions"][0]
         self.assertEqual(
-            {name: mens[name] for name in (*NO_TIMING, "scoreboard_template")},
+            {name: mens[name] for name in NO_TIMING} | _scoreboard_keys(mens),
             {
                 **NO_TIMING,
                 "periods": 2,
                 "period_minutes": 20,
                 "break_minutes": 0,
-                "scoreboard_template": None,
+                "has_scoreboard_template": False,
             },
         )
         self.assertEqual(
             [
-                (s["title"], s["period_minutes"], s["period_name"])
+                (s["title"], s["period_minutes"], s["period_name"], _scoreboard_keys(s))
                 for s in mens["stages"]
             ],
-            [("Pool Stage", None, None), ("Finals", 25, "Half")],
+            [
+                ("Pool Stage", None, None, {"has_scoreboard_template": False}),
+                ("Finals", 25, "Half", {"has_scoreboard_template": True}),
+            ],
         )
         self.assertEqual(
             [(v["title"], v["scoreboard_auto_start"]) for v in res["venues"]],
             [("Nottingham", False)],
+        )
+
+
+@freeze_time(NOW)
+class ReadOneTests(AdminFixtureMixin, TestCase):
+    """
+    One competition, division or stage in full, so that a scoreboard template
+    can be read back; the records listed inside it only say whether they have
+    one.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.competition.scoreboard_template = SCOREBOARD_TEMPLATE
+        cls.competition.save()
+        cls.mens.scoreboard_template = SCOREBOARD_TEMPLATE
+        cls.mens.period_minutes = 20
+        cls.mens.save()
+        cls.mens_finals.scoreboard_template = SCOREBOARD_TEMPLATE
+        cls.mens_finals.period_name = "Half"
+        cls.mens_finals.save()
+
+    def test_get_competition(self):
+        competition = self.admin().get_competition(self.competition.pk)["competition"]
+        self.assertEqual(
+            (
+                competition["title"],
+                _scoreboard_keys(competition),
+                [(s["title"], _scoreboard_keys(s)) for s in competition["seasons"]],
+            ),
+            (
+                "European Championships",
+                {"scoreboard_template": SCOREBOARD_TEMPLATE},
+                [("2026", {"has_scoreboard_template": False})],
+            ),
+        )
+
+    def test_get_competition_that_is_disabled(self):
+        disabled = factories.CompetitionFactory.create(title="Archive", enabled=False)
+        competition = self.admin().get_competition(disabled.pk)["competition"]
+        self.assertEqual(
+            (competition["title"], competition["enabled"]), ("Archive", False)
+        )
+
+    def test_get_division(self):
+        division = self.admin().get_division(self.mens.pk)["division"]
+        self.assertEqual(
+            (
+                division["title"],
+                {name: division[name] for name in NO_TIMING},
+                _scoreboard_keys(division),
+                [(s["title"], _scoreboard_keys(s)) for s in division["stages"]],
+            ),
+            (
+                "Men's Open",
+                {**NO_TIMING, "periods": 2, "period_minutes": 20, "break_minutes": 0},
+                {"scoreboard_template": SCOREBOARD_TEMPLATE},
+                [
+                    ("Pool Stage", {"has_scoreboard_template": False}),
+                    ("Finals", {"has_scoreboard_template": True}),
+                ],
+            ),
+        )
+
+    def test_get_division_that_is_a_draft(self):
+        division = self.admin().get_division(self.mixed.pk)["division"]
+        self.assertEqual((division["title"], division["draft"]), ("Mixed Open", True))
+
+    def test_get_stage(self):
+        stage = self.admin().get_stage(self.mens_finals.pk)["stage"]
+        self.assertEqual(
+            (
+                stage["title"],
+                stage["division"]["title"],
+                {name: stage[name] for name in NO_TIMING},
+                _scoreboard_keys(stage),
+            ),
+            (
+                "Finals",
+                "Men's Open",
+                {**NO_TIMING, "period_name": "Half"},
+                {"scoreboard_template": SCOREBOARD_TEMPLATE},
+            ),
+        )
+
+    def test_not_found(self):
+        admin = self.admin()
+        for message, tool in (
+            ("Competition 0 was not found.", admin.get_competition),
+            ("Division 0 was not found.", admin.get_division),
+            ("Stage 0 was not found.", admin.get_stage),
+        ):
+            with self.subTest(tool=tool.__name__):
+                self.assertToolError(message, tool, 0)
+
+    def test_staff_without_permission_is_refused(self):
+        admin = self.admin(self.staff)
+        for message, tool, pk in (
+            (
+                "Permission denied: change competition requires the "
+                "competition.change_competition permission for this competition.",
+                admin.get_competition,
+                self.competition.pk,
+            ),
+            (
+                "Permission denied: change division requires the "
+                "competition.change_division permission for this division.",
+                admin.get_division,
+                self.mens.pk,
+            ),
+            (
+                "Permission denied: change stage requires the "
+                "competition.change_stage permission for this stage.",
+                admin.get_stage,
+                self.mens_finals.pk,
+            ),
+        ):
+            with self.subTest(tool=tool.__name__):
+                self.assertToolError(message, tool, pk)
+
+    def test_object_permission(self):
+        assign_perm("change_competition", self.staff, self.competition)
+        assign_perm("change_division", self.staff, self.mens)
+        assign_perm("change_stage", self.staff, self.mens_finals)
+        admin = self.admin(self.staff)
+        self.assertEqual(
+            (
+                admin.get_competition(self.competition.pk)["competition"]["title"],
+                admin.get_division(self.mens.pk)["division"]["title"],
+                admin.get_stage(self.mens_finals.pk)["stage"]["title"],
+            ),
+            ("European Championships", "Men's Open", "Finals"),
+        )
+        self.assertToolError(
+            "Permission denied: change division requires the "
+            "competition.change_division permission for this division.",
+            admin.get_division,
+            self.womens.pk,
         )
 
 
