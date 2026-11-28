@@ -138,6 +138,7 @@ Every tool that changes data returns `saved: true` with the record as saved; a t
 | Tool | Does |
 | --- | --- |
 | `list_competitions()` | Every competition, enabled or not, with its seasons. |
+| `get_competition(competition_id)`, `get_division(division_id)`, `get_stage(stage_id)` | One record in full, as its `update_*` tool returns it, including the text of its scoreboard template; each needs the change permission that its `update_*` tool needs. |
 | `create_competition`, `update_competition(competition_id, …)`, `delete_competition(competition_id)` | Title, short title, enabled, notes, clubs, upstream URL (the organisation's page on MySideline or revolutioniseSPORT; `CompetitionForm`). |
 | `create_season(competition_id, title, …)`, `update_season(season_id, …)`, `delete_season(season_id)` | Time zone, start date, mode (season or tournament), hashtag, statistics, complete, live stream flag and privacy, YouTube credentials, upstream URL (the page listing the season's draws on the competition's provider; see [upstream.md](upstream.md)) (`SeasonForm`). |
 | `list_venues(season_id)` | Venues and grounds with time zones and coordinates. |
@@ -178,14 +179,19 @@ A scoreboard template is a whole page, so a response that lists many records giv
 | Tool | Template text | `has_scoreboard_template` |
 | --- | --- | --- |
 | `list_competitions` | | each competition and season |
+| `get_competition` | the competition | each of its seasons |
 | `get_season` | the season | each division and stage |
+| `get_division` | the division | each of its stages |
+| `get_stage` | the stage | |
 | `create_competition`, `update_competition` | the competition | each of its seasons |
 | `link_competition_clubs`, `unlink_competition_clubs` | the competition | |
 | `create_season`, `update_season` | the season | |
-| `create_division`, `update_division`, `create_stage`, `update_stage` | the division or stage | |
+| `create_division`, `update_division` | the division | each of its stages |
+| `create_stage`, `update_stage` | the stage | |
 | `create_divisions`, `create_stages` with `verbose=true` | | each division or stage |
 
 The results of the tools that create or update a record carry the text, so a change can be confirmed.
+To read a template back later, use `get_competition`, `get_season`, `get_division` or `get_stage`.
 
 #### Bulk creation
 

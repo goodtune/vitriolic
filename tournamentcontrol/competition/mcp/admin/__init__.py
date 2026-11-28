@@ -247,8 +247,9 @@ usual one, and a venue's `scoreboard_auto_start` starts each clock at the
 scheduled time. `get_season` and `get_match` report them. A template is a
 whole page, so a tool that lists many records (`list_competitions`, the
 divisions and stages of `get_season`, `create_divisions` and `create_stages`)
-gives `has_scoreboard_template` instead; the text comes back for one record,
-from `get_season` and from the tools that create or update it.
+gives `has_scoreboard_template` instead; the text comes back for one record:
+read it with `get_competition`, `get_season`, `get_division` or `get_stage`,
+and from the tools that create or update it.
 
 Withdrawals: `withdraw_team` takes a team out of its division part way
 through a season, turning its unplayed matches into byes for the opponents
@@ -797,7 +798,10 @@ def _division_summary(division, text=True):
         "include_forfeits_in_played": division.include_forfeits_in_played,
         "games_per_day": division.games_per_day,
         **_scoreboard(division, text),
-        "stages": [_ref(stage) for stage in division.stages.order_by("order")],
+        "stages": [
+            {**_ref(stage), **_scoreboard_template(stage, text=False)}
+            for stage in division.stages.order_by("order")
+        ],
         "team_count": division.teams.count(),
     }
 
@@ -1360,8 +1364,8 @@ class AdminToolset(CompetitionToolset):
         credentials are configured for each season. Each competition and
         season says only whether it has a scoreboard template
         (``has_scoreboard_template``); the text is a whole page, so it is
-        returned only for one record (``get_season``, and the results of the
-        tools that create or update a competition or season).
+        returned only for one record: read it with ``get_competition`` or
+        ``get_season``.
         """
         self._staff()
         return {
@@ -1370,6 +1374,18 @@ class AdminToolset(CompetitionToolset):
                 for c in Competition.objects.prefetch_related("clubs").order_by("order")
             ]
         }
+
+    def get_competition(self, competition_id: int) -> dict[str, Any]:
+        """
+        One competition, enabled or not, in full, as ``update_competition``
+        returns it: its ``scoreboard_template`` and clubs, and its seasons,
+        each saying only whether it has a template
+        (``has_scoreboard_template``). Requires change permission on the
+        competition, as ``update_competition`` does.
+        """
+        competition = self._competition(competition_id)
+        self._require("change", Competition, competition)
+        return {"competition": _competition_summary(competition)}
 
     @tool_annotations()
     def create_competition(
@@ -1858,7 +1874,8 @@ class AdminToolset(CompetitionToolset):
         The scoreboard settings are included: the season's
         ``scoreboard_template``, each division's and stage's timing (on a
         stage ``null`` is the division's) and ``has_scoreboard_template``,
-        whether it has a template of its own, and each venue's
+        whether it has a template of its own (read the text with
+        ``get_division`` or ``get_stage``), and each venue's
         ``scoreboard_auto_start``.
         """
         self._staff()
@@ -2475,6 +2492,18 @@ class AdminToolset(CompetitionToolset):
             user=self._user(),
         )
         return {"saved": True, "division": _division_summary(division)}
+
+    def get_division(self, division_id: int) -> dict[str, Any]:
+        """
+        One division, draft or not, in full, as ``update_division`` returns
+        it: its ladder settings, scoreboard timing and
+        ``scoreboard_template``, and its stages, each saying only whether it
+        has a template (``has_scoreboard_template``). Requires change
+        permission on the division, as ``update_division`` does.
+        """
+        division = self._division(division_id)
+        self._require("change", Division, division)
+        return {"division": _division_summary(division)}
 
     @tool_annotations(destructive=True)
     def delete_division(self, division_id: int) -> dict[str, Any]:
@@ -3212,6 +3241,17 @@ class AdminToolset(CompetitionToolset):
             user=self._user(),
         )
         return {"saved": True, "stage": _stage_summary(stage)}
+
+    def get_stage(self, stage_id: int) -> dict[str, Any]:
+        """
+        One stage in full, as ``update_stage`` returns it: its ladder
+        settings, scoreboard timing and ``scoreboard_template`` (``null`` is
+        the division's), and its pools. Requires change permission on the
+        stage, as ``update_stage`` does.
+        """
+        stage = self._stage(stage_id)
+        self._require("change", Stage, stage)
+        return {"stage": _stage_summary(stage)}
 
     @tool_annotations(destructive=True)
     def delete_stage(self, stage_id: int) -> dict[str, Any]:
