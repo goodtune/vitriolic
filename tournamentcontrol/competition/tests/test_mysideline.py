@@ -34,6 +34,7 @@ from tournamentcontrol.competition.models import (
     Ground,
     LadderSummary,
     Match,
+    MatchEvent,
     Stage,
     StageGroup,
     Team,
@@ -1395,25 +1396,93 @@ class RemovalTests(SyncTestCase):
         self.assertEqual(Match.objects.filter(upstream_id="mysideline:1003").count(), 0)
         self.assertEqual(Match.objects.count(), 7)
 
-    def test_team_removed_with_its_fixtures(self):
-        competition = self.remote.competition(100)
-        competition["teams"] = [t for t in competition["teams"] if t["_id"] != 3]
+    def drop_team(self, competition_id, team_id):
+        competition = self.remote.competition(competition_id)
+        competition["teams"] = [t for t in competition["teams"] if t["_id"] != team_id]
         competition["matches"] = [
             m
             for m in competition["matches"]
-            if 3 not in (m["homeTeam"]["_id"], m["awayTeam"]["_id"])
+            if team_id not in (m["homeTeam"]["_id"], m["awayTeam"]["_id"])
         ]
+
+    def drop_competition(self, competition_id):
+        self.remote.competitions = [
+            c for c in self.remote.competitions if c["_id"] != competition_id
+        ]
+
+    def test_team_removed_with_its_fixtures(self):
+        # A team with nothing played goes, with its unplayed fixtures.
+        self.remote.add_team(100, 4, "Orcas")
+        self.remote.add_match(100, 1006, 3, 4, 2, sydney(2026, 9, 26, 18, 0))
+        self.sync()
+        self.drop_team(100, 4)
         result = self.sync()
-        self.assertEqual(result.deleted, {"match": 2, "team": 1})
-        self.assertEqual(Team.objects.filter(upstream_id="mysideline:3").count(), 0)
+        self.assertEqual(result.deleted, {"match": 1, "team": 1})
+        self.assertEqual(result.detached, {})
+        self.assertEqual(Team.objects.filter(title="Orcas").count(), 0)
         self.assertEqual(
             list(
                 Team.objects.filter(division__upstream_id="mysideline:100").values_list(
                     "order", flat=True
                 )
             ),
-            [1, 2],
+            [1, 2, 3],
         )
+
+    def test_team_with_history_is_detached(self):
+        # Whales' processed bye (1002) counts on the ladder, so it is kept,
+        # and Whales with it; the unplayed fixture (1003) goes.
+        whales = Team.objects.get(upstream_id="mysideline:3")
+        bye = Match.objects.get(upstream_id="mysideline:1002")
+        self.drop_team(100, 3)
+        result = self.sync()
+        self.assertEqual(result.deleted, {"match": 1})
+        self.assertEqual(result.detached, {"team": 1, "match": 1})
+        self.assertEqual(Match.objects.filter(upstream_id="mysideline:1003").count(), 0)
+        whales.refresh_from_db()
+        bye.refresh_from_db()
+        self.assertEqual(
+            (whales.upstream_id, whales.division.upstream_id),
+            (None, "mysideline:100"),
+        )
+        self.assertEqual(
+            (bye.upstream_id, bye.home_team, bye.bye_processed), (None, whales, True)
+        )
+
+    def test_played_match_gone_from_a_listed_competition_is_detached(self):
+        match = Match.objects.get(upstream_id="mysideline:1001")
+        self.remote.competition(100)["matches"] = [
+            m for m in self.remote.competition(100)["matches"] if m["_id"] != 1001
+        ]
+        result = self.sync()
+        self.assertEqual(result.deleted, {})
+        self.assertEqual(result.detached, {"match": 1})
+        match.refresh_from_db()
+        self.assertEqual(
+            (match.upstream_id, match.home_team_score, match.away_team_score),
+            (None, 7, 3),
+        )
+
+    def test_match_with_events_gone_from_a_listed_competition_is_detached(self):
+        match = Match.objects.get(upstream_id="mysideline:1003")
+        MatchEvent.objects.create(match=match, kind=MatchEvent.Kind.START)
+        self.remote.competition(100)["matches"] = [
+            m for m in self.remote.competition(100)["matches"] if m["_id"] != 1003
+        ]
+        result = self.sync()
+        self.assertEqual(result.deleted, {})
+        self.assertEqual(result.detached, {"match": 1})
+        self.assertEqual(Match.objects.get(pk=match.pk).events.count(), 1)
+
+    def test_detached_played_match_is_adopted_again(self):
+        match = Match.objects.get(upstream_id="mysideline:1001")
+        listed = self.remote.match(100, 1001)
+        self.remote.competition(100)["matches"].remove(listed)
+        self.sync()
+        self.remote.competition(100)["matches"].append(listed)
+        result = self.sync()
+        self.assertEqual(result.created, {})
+        self.assertEqual(Match.objects.get(pk=match.pk).upstream_id, "mysideline:1001")
 
     def test_team_protected_by_native_match_is_detached(self):
         whales = Team.objects.get(upstream_id="mysideline:3")
@@ -1423,40 +1492,96 @@ class RemovalTests(SyncTestCase):
             home_team=whales,
             away_team=sharks,
         )
-        competition = self.remote.competition(100)
-        competition["teams"] = [t for t in competition["teams"] if t["_id"] != 3]
-        competition["matches"] = [
-            m
-            for m in competition["matches"]
-            if 3 not in (m["homeTeam"]["_id"], m["awayTeam"]["_id"])
-        ]
+        self.drop_team(100, 3)
         result = self.sync()
-        self.assertEqual(result.deleted, {"match": 2})
-        self.assertEqual(result.detached, {"team": 1})
+        self.assertEqual(result.deleted, {"match": 1})
+        self.assertEqual(result.detached, {"team": 1, "match": 1})
         self.assertEqual(len(result.warnings), 1)
         whales.refresh_from_db()
         self.assertEqual(whales.upstream_id, None)
         self.assertEqual(whales.division.upstream_id, "mysideline:100")
         self.assertEqual(Match.objects.filter(pk=native.pk).count(), 1)
 
-    def test_division_removed(self):
-        self.remote.competitions = [
-            c for c in self.remote.competitions if c["_id"] != 200
-        ]
+    def test_unlisted_division_is_detached_with_its_history(self):
+        # A provider's index may list only the competitions being played; a
+        # competition that drops off it keeps everything it had.
+        womens = self.season.divisions.get(upstream_id="mysideline:200")
+        ladder = LadderSummary.objects.filter(stage__division=womens).count()
+        self.drop_competition(200)
         result = self.sync()
+        self.assertEqual(result.deleted, {})
+        self.assertEqual(result.detached, {"division": 1, "team": 4, "match": 3})
         self.assertEqual(
-            result.deleted,
-            {"division": 1, "stage": 1, "stagegroup": 2, "team": 4, "match": 3},
+            result.warnings,
+            [
+                "Division 'Womens Div 1' (mysideline:200) is no longer listed by "
+                "MySideline; detached, with its teams and matches kept.",
+                "1 of the season's 2 MySideline divisions are no longer listed; "
+                "check the provider before relying on this run.",
+            ],
         )
+        womens.refresh_from_db()
+        self.assertEqual((womens.upstream_id, womens.draft), (None, False))
+        self.assertCountEqual(
+            womens.teams.values_list("title", "upstream_id"),
+            [("Reds", None), ("Blues", None), ("Greens", None), ("Golds", None)],
+        )
+        self.assertCountEqual(
+            Match.objects.filter(stage__division=womens).values_list(
+                "upstream_id", "home_team_score", "away_team_score"
+            ),
+            [(None, 5, 5), (None, 2, 1), (None, None, None)],
+        )
+        self.assertEqual(womens.stages.get().pools.count(), 2)
         self.assertEqual(
-            Division.objects.filter(upstream_id="mysideline:200").count(), 0
+            LadderSummary.objects.filter(stage__division=womens).count(), ladder
         )
-        self.assertEqual(Division.objects.count(), 1)
-        self.assertEqual(Match.objects.count(), 5)
         # Venues are shared with native data and never removed.
         self.assertEqual(Venue.objects.count(), 1)
 
-    def test_division_with_native_data_is_marked_draft(self):
+    def test_detached_division_is_adopted_again(self):
+        womens = self.season.divisions.get(upstream_id="mysideline:200")
+        teams = dict(womens.teams.values_list("title", "pk"))
+        matches = dict(
+            Match.objects.filter(stage__division=womens).values_list(
+                "upstream_id", "pk"
+            )
+        )
+        listed = self.remote.competition(200)
+        self.drop_competition(200)
+        self.sync()
+        self.remote.competitions.append(listed)
+        result = self.sync()
+        self.assertEqual(result.created, {})
+        self.assertEqual(result.deleted, {})
+        womens.refresh_from_db()
+        self.assertEqual(womens.upstream_id, "mysideline:200")
+        self.assertEqual(dict(womens.teams.values_list("title", "pk")), teams)
+        self.assertEqual(
+            dict(
+                Match.objects.filter(stage__division=womens).values_list(
+                    "upstream_id", "pk"
+                )
+            ),
+            matches,
+        )
+
+    def test_renamed_detached_division_is_adopted_again(self):
+        womens = self.season.divisions.get(upstream_id="mysideline:200")
+        womens.title = "Womens Premier"
+        womens.save()
+        listed = self.remote.competition(200)
+        self.drop_competition(200)
+        self.sync()
+        self.remote.competitions.append(listed)
+        result = self.sync()
+        self.assertEqual(result.created, {})
+        womens.refresh_from_db()
+        self.assertEqual(
+            (womens.title, womens.upstream_id), ("Womens Premier", "mysideline:200")
+        )
+
+    def test_division_with_native_data_is_detached(self):
         division = self.season.divisions.get(upstream_id="mysideline:200")
         native_team = factories.TeamFactory.create(
             division=division, title="Locals", order=10
@@ -1470,11 +1595,10 @@ class RemovalTests(SyncTestCase):
             c for c in self.remote.competitions if c["_id"] != 200
         ]
         result = self.sync()
-        self.assertEqual(result.deleted, {"match": 3, "team": 3})
-        self.assertEqual(result.detached, {"team": 1, "division": 1})
+        self.assertEqual(result.deleted, {})
+        self.assertEqual(result.detached, {"division": 1, "team": 4, "match": 3})
         division.refresh_from_db()
-        self.assertEqual(division.draft, True)
-        self.assertEqual(division.upstream_id, "mysideline:200")
+        self.assertEqual((division.draft, division.upstream_id), (False, None))
         self.assertEqual(Match.objects.filter(pk=native.pk).count(), 1)
         self.assertEqual(Team.objects.filter(pk=native_team.pk).count(), 1)
         self.assertEqual(
@@ -1511,6 +1635,28 @@ class RemovalTests(SyncTestCase):
             Stage.objects.filter(division__upstream_id="mysideline:100").count(), 1
         )
 
+    def test_finals_stage_with_a_played_final_is_kept(self):
+        grand_final = self.remote.match(100, 1005)
+        grand_final.update(
+            status="final",
+            homeTeam={"_id": 1, "name": "Sharks"},
+            awayTeam={"_id": 2, "name": "Dolphins"},
+            scores={"homeTeam": 6, "awayTeam": 4},
+        )
+        grand_final["meta"]["isTba"] = False
+        self.sync()
+        self.remote.competition(100)["matches"].remove(grand_final)
+        result = self.sync()
+        self.assertEqual(result.deleted, {})
+        self.assertEqual(result.detached, {"match": 1})
+        finals = Stage.objects.get(
+            division__upstream_id="mysideline:100", title=FINALS_STAGE_TITLE
+        )
+        self.assertEqual(
+            list(finals.matches.values_list("home_team_score", "away_team_score")),
+            [(6, 4)],
+        )
+
     def test_native_data_is_never_touched(self):
         native_division = factories.DivisionFactory.create(
             season=self.season, title="Locals only"
@@ -1519,8 +1665,8 @@ class RemovalTests(SyncTestCase):
         native_match = factories.MatchFactory.create(stage=native_stage)
         self.remote.competitions = []
         result = self.sync()
-        self.assertEqual(result.deleted["division"], 2)
-        self.assertEqual(Division.objects.count(), 1)
+        self.assertEqual(result.detached["division"], 2)
+        self.assertEqual(Division.objects.count(), 3)
         self.assertEqual(Match.objects.filter(pk=native_match.pk).count(), 1)
 
 
@@ -1860,20 +2006,25 @@ class SelectionTests(SyncTestCase):
             {"mysideline:100", "mysideline:200"},
         )
 
+        # A competition that leaves the selection is detached, not deleted.
         self.season.upstream_url = ASSOCIATION_URL + "?season=2026&seasonTag=1"
         self.season.save()
         self.sync()
-        self.assertEqual(
-            set(self.season.divisions.values_list("upstream_id", flat=True)),
-            {"mysideline:100"},
+        self.assertCountEqual(
+            self.season.divisions.values_list("title", "upstream_id"),
+            [("Winter 2026", "mysideline:100"), ("Summer 2026/27", None)],
         )
 
         self.season.upstream_url = ASSOCIATION_URL + "?season=2025"
         self.season.save()
         self.sync()
-        self.assertEqual(
-            set(self.season.divisions.values_list("upstream_id", flat=True)),
-            {"mysideline:300"},
+        self.assertCountEqual(
+            self.season.divisions.values_list("title", "upstream_id"),
+            [
+                ("Winter 2026", None),
+                ("Summer 2026/27", None),
+                ("Winter 2025", "mysideline:300"),
+            ],
         )
 
     def test_sibling_seasons_share_the_association(self):
