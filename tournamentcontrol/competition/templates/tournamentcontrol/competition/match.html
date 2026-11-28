@@ -10,7 +10,7 @@
 	{% block heading %}
 		<h1>{% trans competition.title %} - {% trans season.title %}</h1>
 		{% if match.label or not match.is_final %}
-			<h2>{% trans division.title %} - {% if match.label %}{% trans match.label %}{% else %}{% blocktrans with num=match.round %}Round {{ num }}{% endblocktrans %}{% endif %}</h2>
+			<h2>{% trans division.title %}{% if match.label %} - {% trans match.label %}{% elif match.round is not None %} - {% blocktrans with num=match.round %}Round {{ num }}{% endblocktrans %}{% endif %}</h2>
 		{% endif %}
 	{% endblock %}
 
@@ -50,9 +50,9 @@
 			<tfoot>
 				<tr>
 					<td colspan="2"></td>
-					<td class="points">{{ match.home_team_score }}</td>
+					<td class="points">{{ match.home_team_score|default_if_none:"" }}</td>
 					<td colspan="2"></td>
-					<td class="points">{{ match.away_team_score }}</td>
+					<td class="points">{{ match.away_team_score|default_if_none:"" }}</td>
 				</tr>
 			</tfoot>
 			<tbody>
