@@ -1,0 +1,32 @@
+{% extends "touchtechnology/admin/workbook/list.inc.html" %}
+{% load i18n admin_workbook %}
+
+{% block table-headings %}
+	<th scope="col">{% trans "Event" %}</th>
+	<th scope="col">{% trans "Player" %}</th>
+	<th scope="col">{% trans "Clock" %}</th>
+	<th scope="col">{% trans "Recorded" %}</th>
+{% endblock %}
+
+{% block table-columns %}
+	<td class="wb-title-cell">
+		{% if change_perm in object_perms %}
+			<a href="{{ obj.urls.edit }}">{{ obj }}</a>
+		{% else %}
+			<span>{{ obj }}</span>
+		{% endif %}
+		{% if obj.is_reversed %}<span class="wb-badge wb-badge-warn">{% trans "Corrected" %}</span>{% endif %}
+	</td>
+	<td data-label="{% trans "Player" %}">{{ obj.player.get_full_name|default:"" }}</td>
+	<td data-label="{% trans "Clock" %}">{% if obj.period %}{% blocktrans with period=obj.period clock=obj.clock %}{{ clock }} left in period {{ period }}{% endblocktrans %}{% endif %}</td>
+	<td data-label="{% trans "Recorded" %}">{{ obj.recorded_at|time:"H:i:s" }}{% if obj.recorded_by %} · {{ obj.recorded_by.get_username }}{% endif %}</td>
+{% endblock %}
+
+{% block row-buttons-items %}
+	{{ block.super }}
+	{% if add_perm in object_perms and obj.kind != "correction" and not obj.is_reversed %}
+		<li><form method="post" action="{{ obj.urls.reverse }}">{% csrf_token %}<button type="submit">{% icon "undo-2" %}{% trans "Correct" %}</button></form></li>
+	{% endif %}
+{% endblock %}
+
+{% block empty-row-colspan %}5{% endblock %}

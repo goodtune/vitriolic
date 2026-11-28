@@ -980,17 +980,17 @@ class SettingsFormTests(TestCase):
         superuser = factories.UserFactory.create(is_staff=True, is_superuser=True)
         with self.login(superuser):
             self.get_check_200(division.urls["edit"])
-        content = self.last_response.content.decode()
-        field = content.index('name="period_minutes"')
+        # The page as it opens, before the first folded group. The Explorer
+        # folds nothing, so that is the whole page.
+        unfolded = self.last_response.content.decode().partition(
+            '<details class="wb-group wb-group-folded"'
+        )[0]
         self.assertEqual(
-            by_shell(
-                workbook=(
-                    content.count('<h3 class="wb-group-title">Match timing'),
-                    field < content.index('<details class="wb-group wb-group-folded"'),
-                ),
-                explorer=(1, True),
+            (
+                unfolded.count('<h3 class="wb-group-title">Match timing'),
+                unfolded.count('name="period_minutes"'),
             ),
-            (1, True),
+            by_shell(workbook=(1, 1), explorer=(0, 1)),
         )
 
     def test_stage_and_match_forms_have_a_timing_of_their_own(self):

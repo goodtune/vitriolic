@@ -26,7 +26,17 @@ from tournamentcontrol.competition.utils import (
 )
 
 
+class CompetitionQuerySet(QuerySet):
+    def public(self):
+        """The competitions the public site shows: those enabled."""
+        return self.filter(enabled=True)
+
+
 class SeasonQuerySet(QuerySet):
+    def public(self):
+        """The seasons the public may see: those enabled."""
+        return self.filter(enabled=True)
+
     def navigation(self):
         """
         Only what a list of seasons needs to link to, order and filter each
@@ -175,6 +185,91 @@ class MatchQuerySet(QuerySet):
             has_result=has_result, needs_progressing=needs_progressing
         ).annotate(result_editable=result_editable)
 
+    def history(self):
+        """
+        The matches that hold a record of play: a result (``has_result`` of
+        :meth:`with_result_state`, which counts a processed bye, a forfeit and
+        a washout), or any event, statistic or score sheet recorded against
+        them. Deleting one of these would lose what happened.
+        """
+        records = (
+            apps.get_model("competition", model)
+            for model in ("MatchEvent", "SimpleScoreMatchStatistic", "MatchScoreSheet")
+        )
+        recorded = Q()
+        for model in records:
+            recorded |= Exists(model.objects.filter(match=OuterRef("pk")))
+        return self.with_result_state().filter(Q(has_result=True) | recorded)
+
+    def public(self):
+        """
+        The matches the public may follow live: of a public competition and
+        season (``CompetitionQuerySet.public``, ``SeasonQuerySet.public``),
+        of a division out of draft (``DivisionQuerySet.public``), not a bye,
+        and with both teams known, as a match page needs. A site that shows
+        only some competitions narrows the competitions further; that is the
+        site's, and is not known here.
+        """
+        Competition = apps.get_model("competition", "Competition")
+        Season = apps.get_model("competition", "Season")
+        Division = apps.get_model("competition", "Division")
+        return self.filter(
+            stage__division__season__competition__in=Competition.objects.public(),
+            stage__division__season__in=Season.objects.public(),
+            stage__division__in=Division.objects.public(),
+            is_bye=False,
+            home_team__isnull=False,
+            away_team__isnull=False,
+        )
+
+    def in_progress(self):
+        """
+        The matches being played: not a bye, no result yet, and started. A
+        match has started once it has a start event or a live score event
+        (see ``MatchEvent``), or its scoreboard clock was started by hand.
+
+        A venue whose clocks start by themselves on schedule records no start
+        event, so a match there is in progress from its first score.
+        """
+        MatchEvent = apps.get_model("competition", "MatchEvent")
+        started = MatchEvent.objects.live().filter(
+            match=OuterRef("pk"),
+            kind__in=(MatchEvent.Kind.START, MatchEvent.Kind.SCORE),
+        )
+        return (
+            self.filter(is_bye=False, is_forfeit=False, is_washout=False)
+            .exclude(home_team_score__isnull=False, away_team_score__isnull=False)
+            .filter(Q(clock_started_at__isnull=False) | Exists(started))
+        )
+
+
+class MatchEventQuerySet(QuerySet):
+    def live(self):
+        """
+        The events that stand: neither a correction nor reversed by one. A
+        mistake is put right by a correction that reverses it, never by
+        editing or deleting it, so these are what the log now says.
+        """
+        return self.exclude(kind=self.model.Kind.CORRECTION).filter(
+            ~self.model.reversed_expression()
+        )
+
+    def totals(self):
+        """The points of each side's live score events."""
+        scores = self.live().filter(kind=self.model.Kind.SCORE)
+        return scores.aggregate(
+            home=Sum("points", filter=Q(side="home"), default=0),
+            away=Sum("points", filter=Q(side="away"), default=0),
+        )
+
+    def points_by_player(self):
+        """The points of the live score events that name a player, by person."""
+        scores = self.live().filter(kind=self.model.Kind.SCORE, player__isnull=False)
+        return {
+            row["player"]: row["total"]
+            for row in scores.order_by().values("player").annotate(total=Sum("points"))
+        }
+
 
 class LadderEntryQuerySet(QuerySet):
     def _all(self):
@@ -210,6 +305,13 @@ class StatisticQuerySet(QuerySet):
 
 
 class PersonQuerySet(QuerySet):
+    def playing_for(self, *teams):
+        """The people linked as players to any of ``teams``."""
+        return self.filter(
+            teamassociation__team__in=[team for team in teams if team is not None],
+            teamassociation__is_player=True,
+        ).distinct()
+
     def deletable(self):
         """
         The people who can be deleted: those with no statistics recorded, who

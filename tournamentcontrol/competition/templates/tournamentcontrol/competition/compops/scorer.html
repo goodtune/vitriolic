@@ -2,7 +2,7 @@
 {% load static tz %}
 {% block title %}Scorer · {{ ground.title }}{% endblock %}
 {% block extracss %}<link rel="stylesheet" href="{% static 'tournamentcontrol/competition/compops/scoreboard.css' %}">{% endblock %}
-{% block body_attrs %}class="scorer" data-signals__ifmissing="{board: 'scorer'}" data-indicator="connected" data-effect="@get('{{ events_url }}', {retryMaxCount: 1000})"{% endblock %}
+{% block body_attrs %}class="scorer" data-signals__ifmissing="{board: 'scorer', pick: 0}" data-indicator="connected" data-effect="@get('{{ events_url }}', {retryMaxCount: 1000})"{% endblock %}
 {% block body %}{% timezone tzinfo %}
 <header class="topbar">
 	<span class="brand">SCORER</span>
@@ -23,10 +23,35 @@
 					<form method="post" action="{{ down_url }}" data-on:submit="@post('{{ down_url }}', {contentType: 'form'})">{% csrf_token %}<button class="sc-btn" type="submit" aria-label="Take one off {{ team.name }}"{% if not team.score %} disabled{% endif %}>−</button></form>
 					<output class="sc-score" id="sc-{{ side }}-score">{{ team.score }}</output>
 					{% url 'compops:scorer-score' competition=season.competition.slug season=season.slug ground=ground.slug match_pk=match.pk side=side step='up' as up_url %}
-					<form method="post" action="{{ up_url }}" data-on:submit="@post('{{ up_url }}', {contentType: 'form'})">{% csrf_token %}<button class="sc-btn sc-up" type="submit" aria-label="Add one to {{ team.name }}">+</button></form>
+					<form method="post" action="{{ up_url }}" data-on:submit="@post('{{ up_url }}', {contentType: 'form'})">{% csrf_token %}<input type="hidden" name="ask" value="1"><button class="sc-btn sc-up" type="submit" aria-label="Add one to {{ team.name }}">+</button></form>
 				</div>
+				{% if team.players and team.latest %}
+					{# Who scored the team's latest score: asked after "+" (the pick signal), or when the scorer opens it. #}
+					{% with latest=team.latest %}
+						{% url 'compops:scorer-player' competition=season.competition.slug season=season.slug ground=ground.slug match_pk=match.pk event_pk=latest.pk as player_url %}
+						<p class="sc-who">
+							{% if team.who %}<span class="sc-who-name">{{ team.who }}</span>{% else %}<span class="sc-who-none">Scorer not named</span>{% endif %}
+							<button class="sc-link" type="button" data-on:click="$pick = {{ latest.pk }}">{% if team.who %}Change{% else %}Who scored?{% endif %}</button>
+						</p>
+						<div class="sc-pick" id="sc-pick-{{ side }}" role="group" aria-label="Who scored for {{ team.name }}?" style="display: none" data-show="$pick == {{ latest.pk }}">
+							<p class="sc-pick-q">Who scored for {{ team.name }}?</p>
+							<div class="sc-players">
+								{% for player in team.players %}
+									<form method="post" action="{{ player_url }}" data-on:submit="@post('{{ player_url }}', {contentType: 'form'})">{% csrf_token %}<input type="hidden" name="player" value="{{ player.person_id }}"><button class="sc-player{% if player.person_id == latest.player_id %} on{% endif %}" type="submit">{{ player.numbered_name }}</button></form>
+								{% endfor %}
+							</div>
+							<div class="sc-pick-acts">
+								<form method="post" action="{{ player_url }}" data-on:submit="@post('{{ player_url }}', {contentType: 'form'})">{% csrf_token %}<input type="hidden" name="player" value=""><button class="sc-link" type="submit">Nobody named</button></form>
+								<button class="sc-link" type="button" data-on:click="$pick = 0">Skip</button>
+							</div>
+						</div>
+					{% endwith %}
+				{% endif %}
 			</section>
 		{% endfor %}
+		{% if asks %}
+			<button class="sc-ask" type="button" data-ask-match="{{ match.pk }}" aria-pressed="true"><span class="on">Asking who scored · turn off</span><span class="off">Not asking who scored · turn on</span></button>
+		{% endif %}
 		{% if clock %}
 			<section id="sb-clock" class="sb-clock sc-clock {{ moment.kind }}" data-match="{{ match.pk }}" data-now="{{ now_ms }}" data-start="{{ clock.start_ms|default_if_none:'' }}" data-periods="{{ clock.periods }}" data-period="{{ clock.period }}" data-pause="{{ clock.pause }}" data-names="{{ clock.names_json }}" data-phases="{{ clock.phases_json }}">
 				<div class="sb-label" id="sb-label">{{ moment.label }}</div>
@@ -43,4 +68,4 @@
 </main>
 {% endpartialdef %}
 {% endtimezone %}{% endblock %}
-{% block extrajs %}<script src="{% static 'tournamentcontrol/competition/compops/scoreboard.js' %}"></script>{% endblock %}
+{% block extrajs %}<script src="{% static 'tournamentcontrol/competition/compops/scoreboard.js' %}"></script><script src="{% static 'tournamentcontrol/competition/compops/scorer.js' %}"></script>{% endblock %}

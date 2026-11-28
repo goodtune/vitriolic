@@ -17,6 +17,7 @@ from django.forms.models import _get_foreign_key
 from django.http import (
     Http404,
     HttpResponse,
+    HttpResponseBadRequest,
     HttpResponseGone,
     HttpResponseRedirect,
 )
@@ -70,6 +71,7 @@ from tournamentcontrol.competition.forms import (
     LiveStreamEventForm,
     LiveStreamKeyForm,
     MatchEditForm,
+    MatchEventForm,
     MatchLiveStreamFormSet,
     MatchRefereeForm,
     MatchResultFormSet,
@@ -109,6 +111,7 @@ from tournamentcontrol.competition.models import (
     LiveStreamEvent,
     LiveStreamKey,
     Match,
+    MatchEvent,
     MatchScoreSheet,
     OrderedSitemapNode,
     Person,
@@ -861,6 +864,15 @@ class CompetitionAdminComponent(AdminComponent):
             self.app_name,
         )
 
+        matchevent_urls = (
+            [
+                path("add/", self.edit_matchevent, name="add"),
+                path("<int:pk>/", self.edit_matchevent, name="edit"),
+                path("<int:pk>/reverse/", self.reverse_matchevent, name="reverse"),
+            ],
+            self.app_name,
+        )
+
         match_urls = (
             [
                 path("add/", self.edit_match, name="add"),
@@ -880,6 +892,10 @@ class CompetitionAdminComponent(AdminComponent):
                 path(
                     "<int:match_id>/scoresheet/",
                     include(matchscoresheet_urls, namespace="matchscoresheet"),
+                ),
+                path(
+                    "<int:match_id>/event/",
+                    include(matchevent_urls, namespace="matchevent"),
                 ),
                 # FIXME - these just prevent template rendering failures
                 path(
@@ -1587,6 +1603,49 @@ class CompetitionAdminComponent(AdminComponent):
             permission_required=True,
             post_delete_redirect=self.redirect(f"{match.urls['edit']}#scoresheets-tab"),
         )
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    def edit_matchevent(self, request, pk=None, **extra_context):
+        match = extra_context.get("match")
+
+        if pk is None:
+            instance = MatchEvent(match=match)
+        else:
+            instance = get_object_or_404(match.events, pk=pk)
+
+        return self.generic_edit(
+            request,
+            MatchEvent,
+            instance=instance,
+            form_class=MatchEventForm,
+            form_kwargs={"recorded_by": request.user},
+            permission_required=True,
+            post_save_redirect=self.redirect(f"{match.urls['edit']}#events-tab"),
+            extra_context=extra_context,
+        )
+
+    @competition_by_pk_m
+    @staff_login_required_m
+    @require_POST_m
+    def reverse_matchevent(self, request, pk, **extra_context):
+        """Put a live event right with a correction that reverses it."""
+        match = extra_context.get("match")
+        event = get_object_or_404(match.events, pk=pk)
+        has_permission = get_40x_or_None(
+            request,
+            get_perms_for_model(MatchEvent, add=True),
+            return_403=True,
+            accept_global_perms=True,
+        )
+        if has_permission is not None:
+            return has_permission
+        try:
+            match.reverse_event(event, recorded_by=request.user)
+        except ValidationError as error:
+            return HttpResponseBadRequest(error.messages[0])
+        messages.success(request, _("The event has been corrected."))
+        return self.redirect(f"{match.urls['edit']}#events-tab")
 
     @staff_login_required_m
     def list_drawformat(self, request, **extra_context):
@@ -3014,33 +3073,8 @@ class CompetitionAdminComponent(AdminComponent):
 
         redirect_to = reverse("admin:index")
 
-        def team_faux_queryset(team):
-            # The team's players and their statistics for the match, in two
-            # queries rather than two for every player.
-            stats = FauxQueryset(SimpleScoreMatchStatistic, team=team)
-            players = list(team.people.filter(is_player=True).select_related("person"))
-            entered = {
-                statistic.player_id: statistic
-                for statistic in SimpleScoreMatchStatistic.objects.filter(
-                    match=match, player__in=[player.person_id for player in players]
-                )
-            }
-            for player in players:
-                statistic = entered.get(player.person_id)
-                if statistic is None:
-                    statistic = SimpleScoreMatchStatistic(
-                        match=match,
-                        player=player.person,
-                        number=player.number,
-                        played=1,
-                    )
-                else:
-                    statistic.player = player.person
-                stats.append(statistic)
-            return stats
-
-        home_queryset = team_faux_queryset(match.home_team)
-        away_queryset = team_faux_queryset(match.away_team)
+        home_queryset = match.statistics_roster(match.home_team)
+        away_queryset = match.statistics_roster(match.away_team)
 
         if request.method == "POST":
             home = MatchStatisticFormset(
